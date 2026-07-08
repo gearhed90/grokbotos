@@ -55,6 +55,35 @@ class AuthRequired(ProviderNotReady):
 
 
 @dataclass
+class ExternalLoginRequired(ProviderNotReady):
+    """Cloud path, CLI-credential-reuse variant (see xai_grok.py): unlike
+    AuthRequired, we are not driving an OAuth flow ourselves -- an official
+    vendor CLI already has its own login command, and we just read the
+    credential cache it writes. Raised when that cache doesn't exist yet,
+    so the user needs to run the vendor's login command (in their own
+    terminal / however the Phase 4 shell chooses to shell out to it)."""
+
+    provider_id: str
+    login_command: str
+    detail: str = ""
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.provider_id}: run `{self.login_command}` first. {self.detail}".strip()
+
+
+@dataclass
+class SecretRequired(ProviderNotReady):
+    """API-key path: no key found in the configured SecretStore."""
+
+    provider_id: str
+    secret_name: str
+    detail: str = ""
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.provider_id}: missing secret '{self.secret_name}'. {self.detail}".strip()
+
+
+@dataclass
 class ModelNotInstalled(ProviderNotReady):
     """Local path: the model isn't pulled yet. ensure_ready() is expected
     to trigger the download itself rather than just raising this -- it's

@@ -78,6 +78,65 @@ Which specific cloud providers to support, and the actual routing rule for
 only fixes the *shape* of both connection paths, not provider selection or
 routing policy.
 
+## Concrete cloud providers (2026-07-08, revised same day): wrap the official CLIs as subprocesses, don't touch their credentials
+
+Anthropic and xAI both get the "install it, log in with your own account,
+it just works" treatment the user asked for -- via the same mechanism for
+both, `providers/cli_subprocess.py`: install the vendor's own official CLI,
+let the user run its own login command, and call it as a subprocess
+(`<cli> -p "<prompt>"`) for every completion. Neither provider reads a
+credential file or calls a vendor REST API directly. The CLI handles 100%
+of its own auth, invisibly to us, exactly as it would from a human's
+terminal.
+
+This replaces an earlier same-day version of this decision that had two
+*different* mechanisms per vendor (Anthropic via a raw `x-api-key` REST
+call, xAI via directly reading `~/.grok/auth.json` and calling
+`api.x.ai` ourselves with the extracted token). That design was wrong for
+what was actually being asked, not just suboptimal: reading and reusing a
+CLI's own stored OAuth credential in a separate unofficial HTTP client is
+the "spoof a client's identity" pattern Anthropic's Jan-Apr 2026
+enforcement specifically targets (see below) -- running the official
+binary itself is not that at all, and there was never a good reason to
+treat xAI differently once that was clear.
+
+- **`providers/claude_cli.py` (`ClaudeCliProvider`)**: wraps `claude -p`.
+  Installed via `npm install -g @anthropic-ai/claude-code` if missing.
+  This is unambiguously fine -- it's the same Claude Code binary and the
+  same login (`claude login`) a user would use directly, just invoked by
+  our orchestrator instead of typed by hand. The thing that *would* violate
+  Anthropic's Consumer Terms of Service, and is enforced server-side since
+  January 2026 (escalated April 2026, with account bans): extracting
+  Claude Code's stored OAuth token and presenting it directly to
+  `api.anthropic.com` from a separate, unofficial HTTP client -- which is
+  what the previous version of this decision (and `AnthropicApiKeyProvider`
+  used generically, not for that purpose) did not do, but is worth naming
+  explicitly since it's the actual line. Sources: [Anthropic clarifies ban
+  on third-party tool access to Claude (The
+  Register)](https://www.theregister.com/2026/02/20/anthropic_clarifies_ban_third_party_claude_access/),
+  [Anthropic Ends Paid Access for Claude in Third-Party Tools Like OpenClaw
+  (MLQ News)](https://mlq.ai/news/anthropic-ends-paid-access-for-claude-in-third-party-tools-like-openclaw/).
+  `providers/anthropic_api_key.py` (official `x-api-key` REST auth, via
+  the `SecretStore` interface) is kept as a fallback for setups without
+  Claude Code installed -- this remains explicitly fine per Anthropic's own
+  guidance, it's just no longer the primary path.
+
+- **`providers/xai_grok.py` (`GrokCliProvider`)**: wraps
+  `grok --no-auto-update -p`. Installed via
+  `npm install -g @xai-official/grok` if missing. `--no-auto-update` is
+  confirmed from the CLI's own documented smoke-test example
+  (`grok --no-auto-update -p "Say ok."`). This also sidesteps the
+  `~/.grok/auth.json` schema uncertainty the previous version of this
+  provider had to work around -- we no longer read that file at all.
+
+Both share `providers/cli_subprocess.py`'s `CliSubprocessProvider`:
+`ensure_ready()` installs the CLI if absent, then runs a cheap real prompt
+as a login-state smoke test (there's no reliably-named side-effect-free
+"am I logged in" subcommand confirmed for either CLI) and caches success;
+`complete_json()` embeds the JSON-schema instruction in the prompt text
+(same pattern as the Ollama/xAI-REST/Anthropic-REST providers) and parses
+stdout.
+
 ## Environment/CI limitations of this dev sandbox
 
 This repo was scaffolded from a cloud dev container with no `/dev/kvm`, no

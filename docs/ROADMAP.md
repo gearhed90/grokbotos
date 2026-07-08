@@ -87,7 +87,7 @@
 
 ### 2.2 의도 분석 (Intent Router)
 
-- [x] LLM 연동 방식 결정: **하이브리드**, 단 클라우드는 API 키가 아닌 로그인/인증(OAuth device flow) 방식으로 연결, 로컬은 선택 시 자동 다운로드/설치 (`docs/DECISIONS.md` 참고). `orchestrator/orchestrator/providers/`에 연결 방식의 골격(cloud_oauth.py, local_ollama.py)은 구현했으나, 구체적인 클라우드 제공자(Anthropic/OpenAI 등)의 실제 OAuth 엔드포인트 연동과 클라우드/로컬 라우팅 기준은 아직 미구현
+- [x] LLM 연동 방식 결정: **하이브리드**. 클라우드(Anthropic, xAI/Grok)는 공식 CLI를 설치하고 사용자가 직접 로그인(`claude login`/`grok login`)한 뒤, 그 CLI를 서브프로세스로 호출하는 방식 — 우리가 OAuth 토큰을 직접 다루지 않음 (`docs/DECISIONS.md` 참고, `providers/claude_cli.py`, `providers/xai_grok.py`, 공통 골격 `providers/cli_subprocess.py`). 로컬은 선택 시 Ollama 자동 설치(`providers/local_ollama.py`). 남은 것: 클라우드/로컬 라우팅 기준("언제 어떤 걸 쓸지")
 - [x] 사용자 요청 → 구조화된 Task Spec(목표, 입력/출력 형식, 제약조건, 필요 권한 추정)으로 변환하는 프롬프트/스키마 설계 — `orchestrator/orchestrator/task_spec.py` (dataclass) + `task_spec.schema.json` (LLM 계약용 JSON Schema)
 - [ ] 모호한 요청에 대한 재질문(clarification) 규칙 정의 — `needs_clarification`/`clarification_questions` 필드와 상태 머신 단락(short-circuit) 배선은 완료, 그러나 "언제 재질문해야 하는지" 판단하는 실제 LLM 규칙은 미구현 (현재 `StubIntentAnalyzer`는 항상 `needs_clarification=False`)
 
