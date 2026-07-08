@@ -4,7 +4,7 @@
 
 **진행 원칙**: 아래 Phase는 순서대로 진행하되, 각 Phase는 독립적으로 검증 가능한 결과물(Deliverable)을 갖는다. 한 Phase를 완료(체크리스트 전부 완료 + Acceptance Criteria 통과)하기 전에는 다음 Phase로 넘어가지 않는다.
 
-> **진행 현황 메모 (2026-07-08)**: 이 저장소(`head77x/oais`)에서 Phase 0/1 스캐폴딩 작업을 진행 중. 상세 배경/결정 사항은 [`DECISIONS.md`](./DECISIONS.md), 로컬 머신에서만 가능한 작업은 [`LOCAL_SETUP.md`](./LOCAL_SETUP.md) 참고. 이 파일의 체크박스는 실제 진행 상태를 반영하도록 계속 갱신한다.
+> **진행 현황 메모 (2026-07-08)**: 이 저장소(`head77x/oais`)에서 Phase 0/1 스캐폴딩을 완료하고, Phase 1의 로컬 머신 전용 검증(부팅/설치 테스트)이 막힌 상태에서 Phase 2 오케스트레이터 프로토타입(`orchestrator/`) 착수. Task Spec 스키마, 앱 레지스트리 SQLite 스키마, tier-1 태그 매칭, 폐쇄루프 상태 머신 골격까지 구현하고 자동 테스트로 검증했다 — LLM 연동, 임베딩, 개발/테스트/등록 에이전트(2.5-2.8)는 아직 미착수. 상세 배경/결정 사항은 [`DECISIONS.md`](./DECISIONS.md), 로컬 머신에서만 가능한 작업은 [`LOCAL_SETUP.md`](./LOCAL_SETUP.md), 프로토타입의 실제/스텁 여부 표는 [`../orchestrator/README.md`](../orchestrator/README.md) 참고. 이 파일의 체크박스는 실제 진행 상태를 반영하도록 계속 갱신한다.
 
 ---
 
@@ -87,24 +87,24 @@
 
 ### 2.2 의도 분석 (Intent Router)
 
-- [ ] LLM 연동 방식 결정: 클라우드 API(Claude/GPT) / 로컬 모델(Ollama, llama.cpp, vLLM) / 하이브리드(라우팅 기준 포함)
-- [ ] 사용자 요청 → 구조화된 Task Spec(목표, 입력/출력 형식, 제약조건, 필요 권한 추정)으로 변환하는 프롬프트/스키마 설계
-- [ ] 모호한 요청에 대한 재질문(clarification) 규칙 정의 (에이전트가 멋대로 추측하지 않고 확인 후 진행하는 기준 포함)
+- [ ] LLM 연동 방식 결정: 클라우드 API(Claude/GPT) / 로컬 모델(Ollama, llama.cpp, vLLM) / 하이브리드(라우팅 기준 포함) — **미결정, 다음 증분에서 사용자 확인 필요**
+- [x] 사용자 요청 → 구조화된 Task Spec(목표, 입력/출력 형식, 제약조건, 필요 권한 추정)으로 변환하는 프롬프트/스키마 설계 — `orchestrator/orchestrator/task_spec.py` (dataclass) + `task_spec.schema.json` (LLM 계약용 JSON Schema)
+- [ ] 모호한 요청에 대한 재질문(clarification) 규칙 정의 — `needs_clarification`/`clarification_questions` 필드와 상태 머신 단락(short-circuit) 배선은 완료, 그러나 "언제 재질문해야 하는지" 판단하는 실제 LLM 규칙은 미구현 (현재 `StubIntentAnalyzer`는 항상 `needs_clarification=False`)
 
 ### 2.3 앱 레지스트리 검색 (기존 자산 재사용)
 
-- [ ] **`apps` 메타데이터 테이블 스키마 확정** (SQLite): `app_id`, `name`, `description`, `capability_tags`(JSON), `input_schema`/`output_schema`(JSON Schema), `exec_manifest`(실행 명령/런타임/샌드박스 프로파일 ID/의존성), `creation_source`(generated\|opensource_installed\|hybrid), `source_ref`, `version`, `created_at`/`updated_at`, `usage_count`, `last_used_at`, `success_rate`
-- [ ] **벡터 인덱스 엔진 선정**: `sqlite-vec`(단일 파일, 별도 서버 불필요 — 불변 OS 업데이트 모델과 궁합 좋아 기본 권장) vs LanceDB(대용량 확장성 우선 시) 중 결정
-- [ ] **임베딩 모델 선정**: 로컬 실행 필수(프라이버시+지연시간+오프라인 대응), 한국어 포함 다국어 지원 모델(`bge-m3`, `multilingual-e5-small` 등) 후보 검증, ONNX Runtime/llama.cpp 기반 CPU 추론 벤치마크
-- [ ] **2단계 매칭 파이프라인 구현**: (1) capability_tags 사전 필터 → (2) 임베딩 코사인 유사도 Top-K 후보 추출 → (3) LLM이 input/output schema까지 포함해 실제 기능 일치 여부와 신뢰도 점수 재검증 (벡터 유사도 단독 판정 금지 — 설명은 비슷하나 기능이 다른 오탐 방지)
-- [ ] **임계값 정책 구현**: 신뢰도 ≥0.85 → 기존 앱 바로 실행(2.4) / 0.6~0.85 → 어댑터 생성 경로(기존 앱을 감싸는 얇은 변환 레이어만 개발, MVP 이후 확장 가능한 별도 트랙으로 분리) / <0.6 → 신규 개발(2.5)
-- [ ] 동점 후보 발생 시 `success_rate` 기준 우선순위 결정 로직 추가
-- [ ] 벡터 인덱스 갱신 전략: 2.8 신규 등록 시 임베딩 재계산, 앱 버전 업데이트/폐기(deprecate) 시 인덱스 정합성 유지 절차 수립
+- [x] **`apps` 메타데이터 테이블 스키마 확정** (SQLite): `orchestrator/orchestrator/registry/schema.sql` — ToDo 필드 전부 포함 (`app_id`, `name`, `description`, `capability_tags`, `input_schema`/`output_schema`, `exec_manifest`, `creation_source`, `source_ref`, `version`, `created_at`/`updated_at`, `usage_count`, `last_used_at`, `success_rate`)
+- [ ] **벡터 인덱스 엔진 선정**: `sqlite-vec` vs LanceDB — 미결정
+- [ ] **임베딩 모델 선정**: 미결정
+- [ ] **2단계 매칭 파이프라인 구현**: (1) capability_tags 사전 필터만 구현됨 (`registry/matcher.py`, `registry/db.py:find_by_tags`) / (2) 임베딩 유사도, (3) LLM 재검증은 미구현 — 지금 신뢰도 점수는 태그 겹침 비율로만 계산되는 임시 근사치
+- [x] **임계값 정책 구현**: `state_machine.py`의 `CONFIDENCE_EXECUTE=0.85`/`CONFIDENCE_ADAPTER=0.6` 분기 — 다만 위 항목대로 신뢰도 점수 자체가 아직 근사치라 실사용 임계값 튜닝은 임베딩 도입 후 재검토 필요
+- [x] 동점 후보 발생 시 `success_rate` 기준 우선순위 결정 로직 추가 — `registry/db.py:find_by_tags`의 `ORDER BY overlap DESC, success_rate DESC`
+- [ ] 벡터 인덱스 갱신 전략 — 벡터 인덱스 자체가 없어 해당 없음, 엔진 선정 후 진행
 
 ### 2.4 기존 앱 실행 경로
 
-- [ ] 매칭된 앱을 Phase 3 샌드박스(연동 전까지는 임시 로컬 실행)로 호출하는 인터페이스 구현
-- [ ] 실행 결과를 2.9와 공통되는 "결과 반환 포맷"으로 변환
+- [x] 매칭된 앱을 호출하는 인터페이스 구현 — `state_machine.py:_execute_existing` (Phase 3 샌드박스가 없어 실제 실행 대신 스텁 결과 반환 + `usage_count`/`success_rate` 갱신)
+- [x] 실행 결과를 2.9와 공통되는 "결과 반환 포맷"으로 변환 — `ResultEnvelope`
 
 ### 2.5 개발 플래닝 에이전트 (신규 앱 필요 시)
 
@@ -137,24 +137,26 @@
 
 ### 2.9 결과 반환
 
-- [ ] "결과 전달" 표준 포맷 정의 (텍스트 요약 / 파일 / 구조화된 산출물 등)
-- [ ] 2.4(기존 앱)와 2.8 이후(신규 앱) 경로가 동일한 결과 반환 인터페이스를 공유하도록 통합
+- [x] "결과 전달" 표준 포맷 정의 — `state_machine.py:ResultEnvelope` (`status`/`kind`/`summary`/`payload`/`source_app_id`)
+- [ ] 2.4(기존 앱)와 2.8 이후(신규 앱) 경로가 동일한 결과 반환 인터페이스를 공유하도록 통합 — 2.4 쪽은 `ResultEnvelope` 공유 완료, 2.8(신규 앱 등록 후 실행)이 아직 없어 전체 통합은 미완료
 
 ### 폐쇄루프 컨트롤러
 
-- [ ] 전체 흐름을 관리하는 상태 머신(State Machine) 구현: `RECEIVED → INTENT_ANALYSIS → REGISTRY_SEARCH → (EXECUTE_EXISTING | PLAN → DEVELOP → TEST → (REGISTER_AND_EXECUTE | RETRY_DEVELOP)) → DELIVER_RESULT`
-- [ ] 각 상태 전이에 타임아웃/재시도 상한 설정 (무한루프·무한과금 방지)
-- [ ] 세션/메모리 관리 설계 (현재 요청 컨텍스트 vs 레지스트리에 누적되는 영구 지식 구분)
+- [x] 전체 흐름을 관리하는 상태 머신(State Machine) 구현 — `orchestrator/orchestrator/state_machine.py:Orchestrator` (`RECEIVED → INTENT_ANALYSIS → REGISTRY_SEARCH → (EXECUTE_EXISTING | PLAN → DEVELOP → TEST → ...)`; PLAN 이후 분기는 `OrchestratorNotReady` 스텁)
+- [ ] 각 상태 전이에 타임아웃/재시도 상한 설정 — 전체 `process()` 호출 단위 타임아웃(`OrchestratorTimeout`)은 구현됨; `max_retries`는 상수로 배선만 해두었고 실제 재시도 루프는 DEVELOP 단계가 없어 아직 동작하지 않음
+- [ ] 세션/메모리 관리 설계 — 미착수
 
 ### End-to-End 검증
 
-- [ ] 프로토타입: systemd unit으로 동작하는 오케스트레이터 데몬 초안 작성 (개발 머신에서만, 샌드박스 스텁 사용)
-- [ ] 시나리오 A (기존 앱 재사용 경로): 레지스트리에 미리 등록해둔 앱으로 "있음 → 바로 실행" 경로 검증
-- [ ] 시나리오 B (신규 개발 경로): 레지스트리에 없는 요청으로 "개발 → 테스트 → 등록 → 실행" 전체 경로 1회 완주
-- [ ] 시나리오 C (재요청): 시나리오 B와 동일한 요청을 다시 보내 2.3에서 즉시 매칭되어 재개발 없이 실행되는지 확인
+- [ ] 프로토타입: systemd unit으로 동작하는 오케스트레이터 데몬 초안 작성 — **아직 아님**. `orchestrator/`는 CLI로만 실행되는 순수 Python 패키지이고 systemd 유닛으로 배선되지 않음
+- [x] 시나리오 A 유사 검증: `orchestrator/tests/test_state_machine.py::test_scenario_a_full_tag_overlap_executes_existing_app` — 레지스트리에 미리 등록된 앱이 태그 매칭으로 바로 실행됨을 자동 테스트로 확인 (실제 STT/LLM 의도분석이 아닌 고정 Task Spec으로 상태 머신 분기만 검증한 축소판)
+- [ ] 시나리오 B (신규 개발 경로): 개발/테스트/등록 에이전트(2.5-2.8)가 없어 전체 경로 완주 불가 — 매칭 실패 시 `OrchestratorNotReady`를 던지는 지점까지만 확인됨 (`test_no_registry_match_raises_not_ready_naming_dev_pipeline`)
+- [x] 시나리오 C 유사 검증: `test_scenario_c_repeat_request_reuses_same_app_without_redevelopment` — 동일 요청 재처리 시 재개발 없이 REGISTRY_SEARCH에서 즉시 매칭되는지 확인
 
 **Deliverable**: 오케스트레이터 데몬 프로토타입 코드 + 앱 레지스트리 DB 스키마 + 아키텍처 문서(상태 다이어그램 포함)
 **Acceptance Criteria**: 시나리오 A/B/C 세 가지가 모두 개발 머신에서 실제로 재현됨 (특히 C: 한 번 개발된 앱이 재사용되어 두 번째 요청부터는 개발 단계를 건너뜀)
+
+> **미충족 상태**: `orchestrator/` (코드 + DB 스키마)는 있으나 아키텍처 문서(상태 다이어그램)는 아직 없고, systemd 데몬화도 안 됐고, 2.5-2.8(개발/테스트/등록 에이전트)이 없어 시나리오 B가 실제로는 완주되지 않는다 (매칭 실패 시점까지만 검증). 즉 Phase 2는 아직 완료가 아니다 — 다음 단계로 자연스럽게 이어지는 것은 (1) LLM 연동 방식 결정, (2) 2.5-2.8 개발/테스트/등록 에이전트 구현, (3) 아키텍처 문서 작성 중 하나.
 
 ---
 
