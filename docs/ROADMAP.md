@@ -4,7 +4,7 @@
 
 **진행 원칙**: 아래 Phase는 순서대로 진행하되, 각 Phase는 독립적으로 검증 가능한 결과물(Deliverable)을 갖는다. 한 Phase를 완료(체크리스트 전부 완료 + Acceptance Criteria 통과)하기 전에는 다음 Phase로 넘어가지 않는다.
 
-> **진행 현황 메모 (2026-07-08)**: 이 저장소(`head77x/oais`)에서 Phase 0/1 스캐폴딩을 완료하고, Phase 1의 로컬 머신 전용 검증(부팅/설치 테스트)이 막힌 상태에서 Phase 2 오케스트레이터 프로토타입(`orchestrator/`) 착수. Task Spec 스키마, 앱 레지스트리 SQLite 스키마, tier-1 태그 매칭, 폐쇄루프 상태 머신 골격까지 구현하고 자동 테스트로 검증했다 — LLM 연동, 임베딩, 개발/테스트/등록 에이전트(2.5-2.8)는 아직 미착수. 상세 배경/결정 사항은 [`DECISIONS.md`](./DECISIONS.md), 로컬 머신에서만 가능한 작업은 [`LOCAL_SETUP.md`](./LOCAL_SETUP.md), 프로토타입의 실제/스텁 여부 표는 [`../orchestrator/README.md`](../orchestrator/README.md) 참고. 이 파일의 체크박스는 실제 진행 상태를 반영하도록 계속 갱신한다.
+> **진행 현황 메모 (2026-07-08)**: 이 저장소(`head77x/oais`)에서 Phase 0/1 스캐폴딩을 완료하고, Phase 1의 로컬 머신 전용 검증(부팅/설치 테스트)이 막힌 상태에서 Phase 2 오케스트레이터 프로토타입(`orchestrator/`) 착수. Task Spec 스키마, 앱 레지스트리 SQLite 스키마, tier-1 태그 매칭, 폐쇄루프 상태 머신 골격을 구현했고, LLM 연동 방식(하이브리드: 클라우드=인증 로그인, 로컬=자동 설치)도 결정해 골격 코드까지 구현, 총 23개 자동 테스트로 검증했다. 구체적인 클라우드 제공자 연동, 임베딩, 개발/테스트/등록 에이전트(2.5-2.8)는 아직 미착수. 상세 배경/결정 사항은 [`DECISIONS.md`](./DECISIONS.md), 로컬 머신에서만 가능한 작업은 [`LOCAL_SETUP.md`](./LOCAL_SETUP.md), 프로토타입의 실제/스텁 여부 표는 [`../orchestrator/README.md`](../orchestrator/README.md) 참고. 이 파일의 체크박스는 실제 진행 상태를 반영하도록 계속 갱신한다.
 
 ---
 
@@ -87,7 +87,7 @@
 
 ### 2.2 의도 분석 (Intent Router)
 
-- [ ] LLM 연동 방식 결정: 클라우드 API(Claude/GPT) / 로컬 모델(Ollama, llama.cpp, vLLM) / 하이브리드(라우팅 기준 포함) — **미결정, 다음 증분에서 사용자 확인 필요**
+- [x] LLM 연동 방식 결정: **하이브리드**, 단 클라우드는 API 키가 아닌 로그인/인증(OAuth device flow) 방식으로 연결, 로컬은 선택 시 자동 다운로드/설치 (`docs/DECISIONS.md` 참고). `orchestrator/orchestrator/providers/`에 연결 방식의 골격(cloud_oauth.py, local_ollama.py)은 구현했으나, 구체적인 클라우드 제공자(Anthropic/OpenAI 등)의 실제 OAuth 엔드포인트 연동과 클라우드/로컬 라우팅 기준은 아직 미구현
 - [x] 사용자 요청 → 구조화된 Task Spec(목표, 입력/출력 형식, 제약조건, 필요 권한 추정)으로 변환하는 프롬프트/스키마 설계 — `orchestrator/orchestrator/task_spec.py` (dataclass) + `task_spec.schema.json` (LLM 계약용 JSON Schema)
 - [ ] 모호한 요청에 대한 재질문(clarification) 규칙 정의 — `needs_clarification`/`clarification_questions` 필드와 상태 머신 단락(short-circuit) 배선은 완료, 그러나 "언제 재질문해야 하는지" 판단하는 실제 LLM 규칙은 미구현 (현재 `StubIntentAnalyzer`는 항상 `needs_clarification=False`)
 

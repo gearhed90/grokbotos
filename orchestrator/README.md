@@ -21,7 +21,10 @@ external deps are added deliberately, not by default.
 | Stage | Status |
 |---|---|
 | 2.2 Task Spec schema | Implemented (`task_spec.py`) |
-| 2.2 LLM-based intent analysis | **Stubbed** -- `llm.py` has a `StubIntentAnalyzer` that does keyword extraction, not an LLM call. No cloud/local/hybrid LLM provider has been chosen yet (see open question in `docs/ROADMAP.md`) |
+| 2.2 LLM connection *shape* | Decided (`docs/DECISIONS.md`): cloud = auth/login flow, local = auto-install. `providers/base.py` + `providers/cloud_oauth.py` (generic RFC 8628 device flow) + `providers/local_ollama.py` (real Ollama HTTP API + CLI pull) |
+| 2.2 Concrete cloud provider | **Not implemented** -- no provider's real OAuth endpoints (Anthropic/OpenAI/...) confirmed yet, see `providers/cloud_oauth.py` docstring |
+| 2.2 Cloud/local routing policy | **Not decided** -- "하이브리드" routing rule doesn't exist yet |
+| 2.2 LLM-based intent analysis | `llm.py:LLMBackedIntentAnalyzer` implemented against the `LLMProvider` interface, but nothing calls it with a real (non-fake) provider yet since none exists. `StubIntentAnalyzer` (keyword extraction, not an LLM) is still what `cli.py` uses |
 | 2.3 Registry DB schema | Implemented (`registry/schema.sql`), matches the field list in `ROADMAP.md` 2.3 exactly |
 | 2.3 Tier-1 capability-tag filter | Implemented (`registry/matcher.py`) |
 | 2.3 Tier-2 embedding similarity | **Not implemented** -- no embedding model chosen yet |
