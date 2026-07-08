@@ -32,7 +32,15 @@ external deps are added deliberately, not by default.
 | 2.3 Tier-2 embedding similarity | **Not implemented** -- no embedding model chosen yet |
 | 2.3 Tier-3 LLM re-verification | **Not implemented** -- depends on the LLM decision above |
 | 2.4 Execute existing app | **Stubbed** -- returns a fake result, no Phase 3 sandbox to call into yet |
-| 2.5-2.8 Plan/Develop/Test/Register | **Not implemented** -- `state_machine.py` raises `NotImplementedError` with a clear message when a request falls through to this path, instead of pretending to succeed |
+| 2.5 Development planning | Implemented: `dev_agent/planning.py` (one LLM call -> work items + search keywords) |
+| 2.6 Candidate search | Implemented: `dev_agent/candidates.py` -- real npm/crates.io/GitHub search APIs; PyPI via `lookup_pypi()` (name lookup, not search -- PyPI has no official search API) |
+| 2.6 Candidate evaluation | Implemented: `dev_agent/evaluation.py` -- license allowlist (unknown/missing license fails closed, isn't assumed safe), maintenance thresholds, real OSV.dev vulnerability query, LLM functional-fit score |
+| 2.6 Path A/B/C decision + exec_manifest | Implemented: `dev_agent/path_decision.py`, `dev_agent/codegen.py`, `dev_agent/agent.py:develop()`. Every exec_manifest this produces has `sandbox_profile_id="phase3-not-implemented"` -- code gets *generated*, never installed/run/tested |
+| 2.6 "3 paths only inside Phase 3 sandbox" | **Not applicable yet** -- there's no sandbox to be inside of; `develop()` only ever generates text |
+| 2.6 retry-on-test-failure | **Not implemented** -- nothing to retry against without 2.7 |
+| `develop()` wired into the state machine | **Not implemented** -- `state_machine.py`'s no-match branch still raises `OrchestratorNotReady`, unaware `dev_agent` exists. They're separate pieces until this is done |
+| 2.7 테스트/검수 에이전트 | **Not implemented** |
+| 2.8 앱 레지스트리 등록 | **Not implemented** |
 | 2.9 Result format | Implemented (`ResultEnvelope` in `state_machine.py`) |
 | Closed-loop controller / state machine | Implemented (`state_machine.py`), including retry-count and simple wall-clock timeout guards |
 
@@ -42,6 +50,19 @@ external deps are added deliberately, not by default.
 cd orchestrator
 python3 -m orchestrator.cli "이미지에서 텍스트 추출해줘"     # no matching app -> NotImplementedError (expected, honest)
 python3 -m orchestrator.cli --seed-demo-app "hello demo app"  # seeds a matching app first -> EXECUTE_EXISTING path
+```
+
+`dev_agent.agent.develop()` isn't wired into `cli.py` yet (see table above), but can be exercised directly with a real provider -- this makes real network calls to npm/crates.io/GitHub/OSV.dev and real LLM calls, so it costs actual API usage:
+
+```python
+from orchestrator.dev_agent.agent import develop
+from orchestrator.providers.claude_cli import ClaudeCliProvider
+from orchestrator.task_spec import TaskSpec
+
+provider = ClaudeCliProvider()
+provider.ensure_ready()  # requires `claude login` already done
+result = develop(TaskSpec(raw_prompt="pdf에서 텍스트 추출", goal="extract text from a pdf"), provider)
+print(result.path, result.exec_manifest)
 ```
 
 ## Tests
