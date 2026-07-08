@@ -147,3 +147,14 @@ install test, `bootc switch` test) had to be left unchecked here and pushed
 to `docs/LOCAL_SETUP.md` for the user's own machine. GitHub Actions
 (`build.yml`/`build-disk.yml`) run on real `ubuntu-24.04` runners and don't
 have this limitation — those are expected to work once secrets are set up.
+
+## `build-disk.yml` fix: explicit `podman pull` before bootc-image-builder (2026-07-08)
+
+First real run of `build-disk.yml` failed with `ghcr.io/head77x/oais:latest:
+image not known` -- newer `bootc-image-builder` versions stopped pulling
+the target image themselves and expect it already present in the same
+podman storage the build step mounts. Added a `docker/login-action` step
+(the package is private, tied to this private repo) plus an explicit
+`sudo podman pull ...` step before the build step, matching the error
+message's own suggested fix. Only found by actually running the workflow
+-- this wasn't something to catch by reading the template beforehand.
