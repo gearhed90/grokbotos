@@ -32,6 +32,18 @@ class TestClaudeCliProvider(unittest.TestCase):
 
         self.assertEqual(result, {"goal": "summarize"})
 
+    def test_authenticate_with_token_sets_oauth_env_var_for_subsequent_calls(self):
+        seen_envs = []
+
+        def fake_run(argv):
+            return _ok(argv, stdout="ok")
+
+        provider = ClaudeCliProvider(run=fake_run)
+        provider.authenticate_with_token("test-token-abc")
+
+        self.assertEqual(provider._extra_env["CLAUDE_CODE_OAUTH_TOKEN"], "test-token-abc")
+        self.assertFalse(provider._verified_ready)  # must re-verify, not trust a stale check
+
 
 if __name__ == "__main__":
     unittest.main()

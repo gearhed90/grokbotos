@@ -217,3 +217,65 @@ Two bugs found while wiring this up, both in `disk_config/iso.toml`:
   to log in** -- silently failing Phase 1's actual acceptance criterion.
   Removed from the disable list so Anaconda's normal interactive
   account-creation screen runs.
+
+## Phase 4 boot shell + LLM connection onboarding (2026-07-09)
+
+Reordered ahead of 2.7/2.8 at the user's direction: the closed-loop
+pipeline is moot if there's no working way to actually connect an LLM
+provider on a real installed system, so that gate needed to be solid
+first, wired into the actual boot flow -- not just exercised as library
+calls from a dev machine like everything in `orchestrator/` so far.
+
+**`orchestrator/orchestrator/onboarding.py` + `onboarding_cli.py`**: the
+provider-agnostic connection logic (pick a provider, drive its
+install/login, remember the choice in `~/.config/oais/provider.json`) is
+separated from the console UI on top of it, same DI-for-testability
+pattern as the rest of `orchestrator/`. `onboarding_cli.py` is a real,
+runnable, text-based flow verified in this dev sandbox (piped stdin) --
+it's the console-only OS's actual Phase 2.1 입력 레이어 for now, not a
+placeholder. Wrapping it in graphical chrome is a presentation-layer
+concern the logic underneath doesn't care about.
+
+**Claude vs. Grok connection shape, revised same day**: originally
+(see the Anthropic/xAI research further up this doc) Claude was going to
+use a pasted `claude setup-token` since this OS had no browser and
+`claude login` needs a local one. The user then decided the OS should
+just ship a browser by default rather than route around not having one --
+`docs/DECISIONS.md`'s job is to keep this kind of reversal visible, not
+just the latest state. `connect_claude_via_browser()` is now the primary
+path, same shape as `connect_grok()` (try silently, then run the login
+command with real stdio so the CLI's own browser-opening behavior takes
+over); `connect_claude_with_token()` stays as a fallback for before a
+graphical session exists yet.
+
+**Browser + minimal Wayland session baked into the image**: `firefox` +
+`sway` (compositor) + `foot` (terminal) installed via `build_files/build.sh`,
+matching Phase 4's "전용 컴포지터 기반 풀스크린 셸" -- one thing running
+fullscreen (a terminal running `onboarding_cli.py`), no panel, no window
+chrome; Firefox gets fullscreen too when the shell spawns it for login,
+and focus returns to the shell when it closes. A dedicated `aios` system
+account runs this, independent of whatever admin username Anaconda's
+interactive kickstart creates at install time (nothing in the image can
+know that name in advance).
+
+**Caught before committing, not after another failed CI-style round
+trip**: `/opt` and `/home` are symlinked to `/var/opt`/`/var/home` on
+this ostree/bootc base, and `/var` content written during the image
+build isn't guaranteed to survive into the shipped image (the
+Containerfile template this project started from even has a comment
+about exactly this for `/opt`). The original draft of this change put
+the app under `/opt/oais` and the kiosk config under
+`~aios/.config/sway/` and `~aios/.bash_profile` -- all of which could
+have silently vanished on first boot. Moved to `/usr/lib/oais/orchestrator`
+(app code), `/etc/sway/config` (system-wide sway config instead of
+per-user), and a login-shell script at `/usr/local/bin/oais-shell-launch`
+(instead of `.bash_profile`) -- `/usr` and `/etc` are the parts of an
+ostree/bootc image actually guaranteed to persist.
+
+**Still genuinely unverified**: this dev sandbox has no display to boot
+a graphical session against at all. Autologin-into-sway pattern, the
+sway config, SELinux policy (Fedora bootc ships enforcing by default,
+and none of this was written with a specific SELinux module in mind) --
+all written from documented patterns, none boot-tested. Expect at least
+one round of fixes once actually tried in the VM, same as
+`build.yml`/`build-disk.yml` needed.

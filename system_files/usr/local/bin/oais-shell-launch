@@ -1,0 +1,15 @@
+#!/bin/bash
+# Login shell for the `aios` kiosk account (ROADMAP.md Phase 4). Not
+# /bin/bash + .bash_profile on purpose -- that would live under
+# /home/aios, which isn't guaranteed to survive into the shipped image
+# (see build_files/build.sh's comment on /var persistence). This script
+# itself lives under /usr/local/bin, which is.
+set -e
+
+if [ "$(tty)" = "/dev/tty1" ]; then
+    exec sway
+fi
+
+# Any other tty (recovery, `machinectl login`, etc.): behave like a
+# normal login shell instead of silently doing nothing.
+exec /bin/bash --login

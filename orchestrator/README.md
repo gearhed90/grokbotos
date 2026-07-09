@@ -43,6 +43,8 @@ external deps are added deliberately, not by default.
 | 2.8 앱 레지스트리 등록 | **Not implemented** |
 | 2.9 Result format | Implemented (`ResultEnvelope` in `state_machine.py`) |
 | Closed-loop controller / state machine | Implemented (`state_machine.py`), including retry-count and simple wall-clock timeout guards |
+| Phase 4 boot shell (`onboarding.py`, `onboarding_cli.py`) | Implemented: provider picker (Claude/Grok/Ollama/custom CLI), `connect_claude_via_browser()`/`connect_grok_via_browser()` try each CLI's real `login` subcommand first (spawns a real browser via the OS's baked-in Firefox), fall back to token paste (`authenticate_with_token`) only if that fails; saved connection persisted to `~/.config/oais/provider.json`; once connected, drops into a real prompt loop backed by `Orchestrator`. **Logic-level only** -- 95 unit tests pass with fake subprocess/http runners, but nothing has actually run inside a booted VM with a display yet |
+| Phase 4 OS image integration (`Containerfile`, `build_files/build.sh`, `system_files/etc/sway/`, `system_files/usr/local/bin/oais-shell-launch`) | Implemented: `sway`+`foot`+`firefox` installed via `dnf5`, orchestrator package copied to `/usr/lib/oais/orchestrator` (not `/opt` -- see `docs/DECISIONS.md` on `/var` persistence), `aios` user's login shell execs `sway` on tty1 (autologin via a systemd getty override) which execs `onboarding_cli` fullscreen in `foot`. **Fully unverified end-to-end** -- this dev sandbox has no display to boot-test against; needs a real rebuild + UTM boot test |
 
 ## Running it
 

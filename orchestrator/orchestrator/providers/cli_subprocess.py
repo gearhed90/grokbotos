@@ -22,6 +22,7 @@ this object afterward.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from typing import Callable
 
@@ -30,22 +31,49 @@ from .base import ExternalLoginRequired, LLMProvider, ProviderNotReady, Provider
 Runner = Callable[[list[str]], subprocess.CompletedProcess]
 
 
-def _real_run(argv: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(argv, capture_output=True, text=True, check=False, timeout=120)
-
-
 class CliSubprocessProvider(LLMProvider):
     """Subclasses set provider_id/cli_binary/login_command/install_argv and
     only need to implement _build_prompt_argv() if their CLI's flags for
-    non-interactive single-shot prompting differ from `<cli> -p <prompt>`."""
+    non-interactive single-shot prompting differ from `<cli> -p <prompt>`.
+
+    `extra_env`/`set_env()` exist for providers whose only headless-friendly
+    auth path is an env var carrying a pre-generated token (Claude:
+    `CLAUDE_CODE_OAUTH_TOKEN`, see providers/claude_cli.py) rather than a
+    device-code flow the CLI can drive itself.
+    """
 
     cli_binary: str
     login_command: str
     install_argv: list[str] | None = None  # None if there's nothing to auto-install
 
-    def __init__(self, run: Runner = _real_run):
-        self._run = run
+    def __init__(self, run: Runner | None = None, extra_env: dict[str, str] | None = None):
+        self._run = run or self._default_run
         self._verified_ready = False
+        self._extra_env: dict[str, str] = dict(extra_env or {})
+
+    def set_env(self, key: str, value: str) -> None:
+        """Add/override an environment variable for every subprocess call
+        this provider makes from here on. Does not touch the parent
+        process's real environment."""
+        self._extra_env[key] = value
+        self._verified_ready = False  # re-verify with the new credential
+
+    def _default_run(self, argv: list[str]) -> subprocess.CompletedProcess:
+        env = {**os.environ, **self._extra_env} if self._extra_env else None
+        return subprocess.run(argv, capture_output=True, text=True, check=False, timeout=120, env=env)
+
+    def interactive_login(self) -> bool:
+        """Run `login_command` with the CLI's real stdio (not captured), so
+        a device-code URL/prompt (Grok) is visible on screen and reaches
+        the real terminal, blocking until the CLI exits. Not something a
+        unit test can meaningfully fake -- this needs a real terminal and
+        a human on the other end of the login URL; verify on a real
+        machine. Returns whether the login command itself exited 0
+        (callers should still confirm with ensure_ready() after)."""
+        argv = self.login_command.split()
+        env = {**os.environ, **self._extra_env} if self._extra_env else None
+        result = subprocess.run(argv, env=env, timeout=600)
+        return result.returncode == 0
 
     def status(self) -> ProviderStatus:
         if self._verified_ready:

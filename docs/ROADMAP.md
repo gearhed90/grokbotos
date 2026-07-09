@@ -4,7 +4,7 @@
 
 **진행 원칙**: 아래 Phase는 순서대로 진행하되, 각 Phase는 독립적으로 검증 가능한 결과물(Deliverable)을 갖는다. 한 Phase를 완료(체크리스트 전부 완료 + Acceptance Criteria 통과)하기 전에는 다음 Phase로 넘어가지 않는다.
 
-> **진행 현황 메모 (최종 갱신 2026-07-09)**: **Phase 1 완료** — `head77x/oais` 저장소에서 빌드한 `oais-arm64` 이미지를 사용자가 Apple Silicon Mac(UTM)에 클린 설치 → 재부팅 → 로그인까지 실제로 검증함 (`bootc status`로 확인). 베이스 이미지는 도중에 `ghcr.io/ublue-os/base-main`(amd64 전용으로 밝혀짐) → `quay.io/fedora/fedora-bootc`(amd64+arm64 멀티아키텍처)로 교체, `build.yml`도 amd64/arm64 매트릭스 빌드로 확장했다 (`docs/DECISIONS.md` 참고). Phase 2는 오케스트레이터 프로토타입(`orchestrator/`) 진행 중 — Task Spec 스키마, 앱 레지스트리 SQLite 스키마, tier-1 태그 매칭, 폐쇄루프 상태 머신 골격, LLM 연동(클라우드 = 공식 CLI(`claude`/`grok`)를 서브프로세스로 실행, 로컬 = Ollama 자동 설치), 2.5~2.6 개발 플래닝/후보 검색·평가/경로 A·B·C 결정(`dev_agent/`)까지 구현, 총 70개 자동 테스트로 검증했다. 아직 미착수인 것: 임베딩/벡터 검색(2.3 tier 2~3), 2.7~2.8(테스트/검수·등록 에이전트), Phase 3 샌드박스(그래서 2.6이 만든 코드는 생성만 되고 설치/실행/검증은 전혀 안 됨), 클라우드/로컬 라우팅 정책, systemd 데몬화, 아키텍처 문서. 상세 배경/결정 사항은 [`DECISIONS.md`](./DECISIONS.md), 로컬 머신에서만 가능한 작업은 [`LOCAL_SETUP.md`](./LOCAL_SETUP.md), 프로토타입의 실제/스텁 여부 표는 [`../orchestrator/README.md`](../orchestrator/README.md) 참고. 이 파일의 체크박스는 실제 진행 상태를 반영하도록 계속 갱신한다.
+> **진행 현황 메모 (최종 갱신 2026-07-09)**: **Phase 1 완료** — `head77x/oais` 저장소에서 빌드한 `oais-arm64` 이미지를 사용자가 Apple Silicon Mac(UTM)에 클린 설치 → 재부팅 → 로그인까지 실제로 검증함 (`bootc status`로 확인). 베이스 이미지는 도중에 `ghcr.io/ublue-os/base-main`(amd64 전용으로 밝혀짐) → `quay.io/fedora/fedora-bootc`(amd64+arm64 멀티아키텍처)로 교체, `build.yml`도 amd64/arm64 매트릭스 빌드로 확장했다 (`docs/DECISIONS.md` 참고). Phase 2는 오케스트레이터 프로토타입(`orchestrator/`) 진행 중 — Task Spec 스키마, 앱 레지스트리 SQLite 스키마, tier-1 태그 매칭, 폐쇄루프 상태 머신 골격, LLM 연동(클라우드 = 공식 CLI(`claude`/`grok`)를 서브프로세스로 실행, 로컬 = Ollama 자동 설치), 2.5~2.6 개발 플래닝/후보 검색·평가/경로 A·B·C 결정(`dev_agent/`), 그리고 `develop()`을 상태 머신에 실제로 연결(`DevelopmentPending`)까지 구현했다. 사용자 요청으로 순서를 바꿔 Phase 4의 부팅 셸(전용 컴포지터 fullscreen 세션 + LLM 연결 온보딩)도 먼저 만들었다: `sway`+`foot`+`firefox`를 이미지에 기본 포함(브라우저 없이 토큰 붙여넣기만 되는 것은 사용자가 명시적으로 거부함), `aios` 계정이 tty1에 autologin → sway → `orchestrator.onboarding_cli`가 뜨고, Claude/Grok 선택 시 각 CLI의 `login` 서브커맨드(브라우저 리다이렉트 방식)를 우선 시도하고 실패 시에만 토큰 붙여넣기로 폴백한다. 이 부팅 셸/온보딩 부분은 **개발 샌드박스에 디스플레이가 없어 로직 단위 테스트(95개 통과)만 검증됐고, 실제 부팅→sway→로그인 end-to-end는 전혀 검증되지 않았다** — 사용자가 이미지를 재빌드해서 VM에서 직접 확인해야 한다. 아직 미착수인 것: 임베딩/벡터 검색(2.3 tier 2~3), 2.7~2.8(테스트/검수·등록 에이전트), Phase 3 샌드박스(그래서 2.6이 만든 코드는 생성만 되고 설치/실행/검증은 전혀 안 됨), 클라우드/로컬 라우팅 정책, systemd 데몬화, 아키텍처 문서. 상세 배경/결정 사항은 [`DECISIONS.md`](./DECISIONS.md), 로컬 머신에서만 가능한 작업은 [`LOCAL_SETUP.md`](./LOCAL_SETUP.md), 프로토타입의 실제/스텁 여부 표는 [`../orchestrator/README.md`](../orchestrator/README.md) 참고. 이 파일의 체크박스는 실제 진행 상태를 반영하도록 계속 갱신한다.
 
 ---
 
@@ -82,10 +82,11 @@
 
 ### 2.1 입력 레이어 (프롬프트 + 음성)
 
-- [ ] 부팅 직후 자동 실행되는 전용 풀스크린 세션 설계 (Plymouth 스플래시 종료 직후 즉시 전환, 데스크톱 아이콘/작업표시줄 등 일체 노출 안 함)
-- [ ] 텍스트 프롬프트 입력창 구현
-- [ ] 음성 입력(STT) 연동: 로컬(Whisper.cpp 등) / 클라우드 STT 중 결정, 오프라인 우선 여부 정책 수립
-- [ ] 입력 완료 트리거(엔터/음성 종료 감지) 정의
+- [x] 부팅 직후 자동 실행되는 전용 풀스크린 세션 설계 — `sway`(컴포지터, 데스크톱 요소 없음) + `foot`(터미널) + `orchestrator.onboarding_cli`, `aios` 계정으로 tty1 자동 로그인. **미검증**: 이 개발 샌드박스엔 디스플레이가 없어 부팅 테스트 못 함 (`docs/DECISIONS.md`) — Plymouth 스플래시와의 실제 전환 시퀀스도 미검증
+- [x] 텍스트 프롬프트 입력창 구현 — `onboarding_cli.py`의 `_prompt_loop` (텍스트 전용, 콘솔 기반)
+- [ ] 음성 입력(STT) 연동: 로컬(Whisper.cpp 등) / 클라우드 STT 중 결정, 오프라인 우선 여부 정책 수립 — 미착수
+- [x] 입력 완료 트리거(엔터/음성 종료 감지) 정의 — 텍스트는 엔터(줄 단위 `input()`), 음성 트리거는 미착수 (STT 자체가 없음)
+- [x] **(ToDo 원문엔 없던 항목, 사용자 지시로 선행)** LLM 연동 온보딩: Claude/Grok 선택 → 설치 → 로그인 → 저장, `orchestrator/orchestrator/onboarding.py` + `onboarding_cli.py`, 24개 자동 테스트로 검증 (연결 로직만; 실제 브라우저 로그인 자체는 미검증)
 
 ### 2.2 의도 분석 (Intent Router)
 
@@ -182,11 +183,11 @@
 
 **목표**: "결과만 사용자가 원하는 방식으로 제공"하는 사용자 경험을 구현한다. (Phase 2에서 확정: 부팅 즉시 프롬프트+음성 입력만 노출되는 전용 풀스크린 셸)
 
-- [ ] Plymouth 스플래시 → 전용 컴포지터 기반 풀스크린 셸(Gamescope 유사 구조)로의 전환 시퀀스 구현 (일반 데스크톱 UI 요소 노출 안 함)
-- [ ] 결과 렌더링 방식 설계 (텍스트, 파일 다운로드, 인라인 미리보기 등)
-- [ ] 세션 히스토리/재실행/피드백(수정 요청) 흐름 설계
-- [ ] 기본 세션으로 자동 실행되는 systemd 서비스 또는 디스플레이 매니저 세션 등록
-- [ ] Phase 2~3 파이프라인과 UI 연결, End-to-End 데모 완성
+- [x] 전용 컴포지터 기반 풀스크린 셸 구현 (일반 데스크톱 UI 요소 노출 안 함) — `sway` 커스텀 config(`system_files/etc/sway/config`), 텍스트 기반 (그래픽 UI 아님, 콘솔 전용 OS라 텍스트로 우선 구현). Plymouth 스플래시와의 전환 시퀀스는 미검증
+- [ ] 결과 렌더링 방식 설계 (텍스트, 파일 다운로드, 인라인 미리보기 등) — 텍스트 요약만 구현됨(`ResultEnvelope.summary` 출력), 파일/인라인 미리보기 미착수
+- [ ] 세션 히스토리/재실행/피드백(수정 요청) 흐름 설계 — 미착수
+- [x] 기본 세션으로 자동 실행되는 systemd 서비스 또는 디스플레이 매니저 세션 등록 — `getty@tty1` 자동 로그인(`system_files/etc/systemd/system/getty@tty1.service.d/autologin.conf`) + `aios` 계정의 로그인 셸이 바로 `sway` 실행. **미검증** (실제 부팅 안 해봄)
+- [x] Phase 2~3 파이프라인과 UI 연결 — `onboarding_cli.py`가 연결된 provider로 실제 `Orchestrator`(2.1~2.6 전부) 호출, End-to-End 데모는 아직 아님 (Phase 3 샌드박스 없어 2.6 이후 결과가 실행/검증 안 됨, 이건 이 파일 다른 섹션에 이미 기록된 기존 제약)
 
 **Deliverable**: 부팅 시 자동으로 뜨는 AI 에이전트 셸/UI
 **Acceptance Criteria**: 신규 설치된 시스템에서 로그인 직후 별도 설정 없이 프롬프트 입력이 가능한 상태
@@ -284,9 +285,10 @@
 
 ~~지금 시작할 것: Phase 0 → Phase 1.~~ (완료, 2026-07-08 — 아래로 대체)
 
-**현재 상태**: **Phase 0/1 완료** (2026-07-09, Apple Silicon Mac + UTM에서 ISO 설치 → 재부팅 → 로그인 → `bootc status` 확인까지 실제 검증). Phase 2는 오케스트레이터 프로토타입(Task Spec, 앱 레지스트리, 상태 머신, LLM 연동, 2.5/2.6 개발 플래닝·후보 검색/평가·경로 A/B/C)까지 진행 중.
+**현재 상태**: **Phase 0/1 완료** (2026-07-09, Apple Silicon Mac + UTM에서 ISO 설치 → 재부팅 → 로그인 → `bootc status` 확인까지 실제 검증). Phase 2는 오케스트레이터 프로토타입(Task Spec, 앱 레지스트리, 상태 머신, LLM 연동, 2.5/2.6 개발 플래닝·후보 검색/평가·경로 A/B/C, `develop()`↔상태 머신 연결)까지 진행. 사용자 요청으로 Phase 4 부팅 셸(sway 기반 fullscreen 세션 + 브라우저 baked-in + Claude/Grok OAuth 온보딩)을 앞당겨 구현했으나 **디스플레이가 있는 환경에서의 실제 부팅 검증은 아직 안 됨** (다음 할 일 1순위).
 
 **다음 후보**(아직 순서 미확정, 상세는 각 Phase의 미체크 항목 참고):
+- **Phase 4 부팅 셸 실기 검증 (최우선)**: 이미지 재빌드 → UTM 재설치/재부팅 → tty1 autologin → sway 기동 → `onboarding_cli` fullscreen 표시 → Claude/Grok 선택 시 firefox가 실제로 뜨고 브라우저 로그인이 완료되는지 → 재부팅 후에도 연결이 유지되는지, 전부 미검증. CI 빌드/부팅 로그를 사용자가 붙여넣으면 그걸 보고 고치는 식으로 최소 한 차례 이상의 수정 라운드가 필요할 가능성이 높다 (Phase 1도 그랬음).
 - Phase 2.7: 테스트/검수 에이전트 — 2.6이 만든 코드는 지금 아무 검증 없이 그냥 텍스트로만 존재
 - Phase 2.8: 앱 레지스트리 등록 파이프라인 — 검증 통과한 결과를 2.3 DB에 실제로 등록
 - Phase 2.3 tier 2~3: 임베딩 모델/벡터 인덱스 선정 — 지금 앱 매칭은 태그 겹침만으로 계산되는 임시 근사치

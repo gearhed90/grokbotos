@@ -1,5 +1,6 @@
 import subprocess
 import unittest
+from unittest.mock import patch
 
 from orchestrator.providers.base import ExternalLoginRequired, ProviderNotReady, ProviderStatus
 from orchestrator.providers.cli_subprocess import CliSubprocessProvider
@@ -102,6 +103,40 @@ class TestCliSubprocessProvider(unittest.TestCase):
 
         with self.assertRaises(ExternalLoginRequired):
             provider.ensure_ready()
+
+    def test_set_env_merged_into_default_runner_and_invalidates_ready_cache(self):
+        provider = _FakeCliProvider(run=lambda argv: _ok(argv, stdout="ok"))
+        provider._verified_ready = True
+
+        provider.set_env("SOME_TOKEN", "secret-value")
+
+        self.assertFalse(provider._verified_ready)
+        self.assertEqual(provider._extra_env["SOME_TOKEN"], "secret-value")
+
+    @patch("subprocess.run")
+    def test_default_runner_passes_extra_env_merged_with_os_environ(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess([], returncode=0, stdout="ok", stderr="")
+        provider = _FakeCliProvider()  # no injected run -> uses real _default_run
+        provider.set_env("SOME_TOKEN", "secret-value")
+
+        provider._default_run(["fakecli", "--version"])
+
+        called_env = mock_run.call_args.kwargs["env"]
+        self.assertEqual(called_env["SOME_TOKEN"], "secret-value")
+
+    @patch("subprocess.run")
+    def test_interactive_login_streams_real_stdio_and_reports_exit_code(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess([], returncode=0)
+        provider = _FakeCliProvider()
+        provider.set_env("SOME_TOKEN", "secret-value")
+
+        success = provider.interactive_login()
+
+        self.assertTrue(success)
+        args, kwargs = mock_run.call_args
+        self.assertEqual(args[0], ["fakecli", "login"])
+        self.assertNotIn("capture_output", kwargs)  # real stdio, not captured
+        self.assertEqual(kwargs["env"]["SOME_TOKEN"], "secret-value")
 
 
 if __name__ == "__main__":

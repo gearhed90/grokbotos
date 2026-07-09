@@ -2,6 +2,7 @@
 FROM scratch AS ctx
 COPY build_files /
 COPY system_files /system_files
+COPY orchestrator /orchestrator
 
 # Base Image
 # quay.io/fedora/fedora-bootc: minimal Fedora Atomic (bootc) image with no

@@ -1,0 +1,17 @@
+# Minimal kiosk config for the AI-OS shell (ROADMAP.md Phase 4).
+# One fullscreen terminal running the onboarding/prompt shell -- no bar,
+# no window borders, no other desktop chrome. Firefox (spawned by the
+# shell for OAuth login, e.g. `claude login`/`grok login`) also runs
+# fullscreen; closing it returns focus to the shell terminal.
+
+exec foot -e sh -c 'cd /usr/lib/oais/orchestrator && exec python3 -m orchestrator.onboarding_cli'
+
+default_border none
+default_floating_border none
+
+bar {
+    mode invisible
+}
+
+for_window [app_id="foot"] fullscreen enable
+for_window [app_id="firefox"] fullscreen enable
