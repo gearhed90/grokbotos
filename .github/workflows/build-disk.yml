@@ -126,6 +126,11 @@ jobs:
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          # Matrix legs default to the same artifact name ("artifact") if
+          # not set explicitly -- with overwrite: true below that means
+          # whichever leg (qcow2 vs anaconda-iso) finishes last silently
+          # replaces the other's upload instead of both being kept.
+          name: oais-${{ env.DISK_TYPE }}-${{ inputs.platform }}
           path: ${{ steps.build.outputs.output-directory }}
           if-no-files-found: error
           retention-days: 0
