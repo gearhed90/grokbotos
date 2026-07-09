@@ -77,12 +77,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # docker/login-action authenticates the runner user's config, but the
+      # pull below (and bootc-image-builder itself) run as root via sudo,
+      # which has its own separate credential store -- so login has to
+      # happen as root too, or the pull sees no credentials at all.
+      - name: Login to GitHub Container Registry (as root, matches sudo podman below)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
       # bootc-image-builder no longer pulls the target image itself -- it
       # expects it already present in the same podman storage the build
