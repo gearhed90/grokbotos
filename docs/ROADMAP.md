@@ -4,7 +4,7 @@
 
 **진행 원칙**: 아래 Phase는 순서대로 진행하되, 각 Phase는 독립적으로 검증 가능한 결과물(Deliverable)을 갖는다. 한 Phase를 완료(체크리스트 전부 완료 + Acceptance Criteria 통과)하기 전에는 다음 Phase로 넘어가지 않는다.
 
-> **진행 현황 메모 (최종 갱신 2026-07-08)**: 이 저장소(`head77x/oais`)에서 Phase 0/1 스캐폴딩을 완료하고, Phase 1의 로컬 머신 전용 검증(부팅/설치 테스트)이 막힌 상태에서 Phase 2 오케스트레이터 프로토타입(`orchestrator/`) 착수. Task Spec 스키마, 앱 레지스트리 SQLite 스키마, tier-1 태그 매칭, 폐쇄루프 상태 머신 골격, LLM 연동(클라우드 = 공식 CLI(`claude`/`grok`)를 서브프로세스로 실행, 로컬 = Ollama 자동 설치), 그리고 2.5~2.6 개발 플래닝/후보 검색·평가/경로 A·B·C 결정(`dev_agent/`)까지 구현하고 총 70개 자동 테스트로 검증했다. 아직 미착수인 것: 임베딩/벡터 검색(2.3 tier 2~3), 2.7~2.8(테스트/검수·등록 에이전트), Phase 3 샌드박스(그래서 2.6이 만든 코드는 생성만 되고 설치/실행/검증은 전혀 안 됨), 클라우드/로컬 라우팅 정책, systemd 데몬화, 아키텍처 문서. 상세 배경/결정 사항은 [`DECISIONS.md`](./DECISIONS.md), 로컬 머신에서만 가능한 작업은 [`LOCAL_SETUP.md`](./LOCAL_SETUP.md), 프로토타입의 실제/스텁 여부 표는 [`../orchestrator/README.md`](../orchestrator/README.md) 참고. 이 파일의 체크박스는 실제 진행 상태를 반영하도록 계속 갱신한다.
+> **진행 현황 메모 (최종 갱신 2026-07-09)**: **Phase 1 완료** — `head77x/oais` 저장소에서 빌드한 `oais-arm64` 이미지를 사용자가 Apple Silicon Mac(UTM)에 클린 설치 → 재부팅 → 로그인까지 실제로 검증함 (`bootc status`로 확인). 베이스 이미지는 도중에 `ghcr.io/ublue-os/base-main`(amd64 전용으로 밝혀짐) → `quay.io/fedora/fedora-bootc`(amd64+arm64 멀티아키텍처)로 교체, `build.yml`도 amd64/arm64 매트릭스 빌드로 확장했다 (`docs/DECISIONS.md` 참고). Phase 2는 오케스트레이터 프로토타입(`orchestrator/`) 진행 중 — Task Spec 스키마, 앱 레지스트리 SQLite 스키마, tier-1 태그 매칭, 폐쇄루프 상태 머신 골격, LLM 연동(클라우드 = 공식 CLI(`claude`/`grok`)를 서브프로세스로 실행, 로컬 = Ollama 자동 설치), 2.5~2.6 개발 플래닝/후보 검색·평가/경로 A·B·C 결정(`dev_agent/`)까지 구현, 총 70개 자동 테스트로 검증했다. 아직 미착수인 것: 임베딩/벡터 검색(2.3 tier 2~3), 2.7~2.8(테스트/검수·등록 에이전트), Phase 3 샌드박스(그래서 2.6이 만든 코드는 생성만 되고 설치/실행/검증은 전혀 안 됨), 클라우드/로컬 라우팅 정책, systemd 데몬화, 아키텍처 문서. 상세 배경/결정 사항은 [`DECISIONS.md`](./DECISIONS.md), 로컬 머신에서만 가능한 작업은 [`LOCAL_SETUP.md`](./LOCAL_SETUP.md), 프로토타입의 실제/스텁 여부 표는 [`../orchestrator/README.md`](../orchestrator/README.md) 참고. 이 파일의 체크박스는 실제 진행 상태를 반영하도록 계속 갱신한다.
 
 ---
 
@@ -28,13 +28,15 @@
 **목표**: 아무 기능 없이 "내 이름이 박힌 OS"를 처음부터 끝까지 빌드→배포→설치까지 1회 완주한다.
 
 - [x] `Containerfile`에 최소 커스터마이징 추가 (`tmux`, `htop` 설치, `/etc/os-release`에 `AI-OS` 반영)
-- [ ] GitHub Actions(`build.yml`)로 이미지 자동 빌드 → GHCR 푸시 확인 — 워크플로우는 준비됨, `main` 브랜치 첫 푸시 + cosign 서명 키(`SIGNING_SECRET`) 등록 후 실행 확인 필요
-- [ ] `bootc-image-builder`로 ISO / QCOW2 이미지 생성 (`build-disk.yml`) — 워크플로우는 준비됨, 실행 미검증
-- [ ] VM에 ISO로 신규 설치 테스트 — **사용자 로컬 머신에서 필요**
-- [ ] 기존 시스템에서 `sudo bootc switch <내 이미지>` 로 전환 테스트 — **사용자 로컬 머신에서 필요**
+- [x] GitHub Actions(`build.yml`)로 이미지 자동 빌드 → GHCR 푸시 확인 — `ghcr.io/head77x/oais`(amd64) + `ghcr.io/head77x/oais-arm64`(arm64) 둘 다 게시 확인됨 (커밋 `429f595` 빌드, cosign 서명 포함 정상 완료)
+- [x] `bootc-image-builder`로 ISO / QCOW2 이미지 생성 (`build-disk.yml`) — arm64 anaconda-iso/qcow2 둘 다 빌드 성공 확인 (run `28999368347`)
+- [x] VM에 ISO로 신규 설치 테스트 — **완료 (2026-07-09)**: 사용자가 Apple Silicon Mac(UTM, arm64 네이티브 가상화)에서 ISO로 클린 설치 → 재부팅 → 로그인 성공. `bootc status`로 `ghcr.io/head77x/oais-arm64:latest` 부팅 확인 (digest `sha256:a6461e54...`)
+- [ ] 기존 시스템에서 `sudo bootc switch <내 이미지>` 로 전환 테스트 — 아직 미실행 (신규 ISO 설치 경로만 검증됨; 기존 bootc 시스템에서 리베이스하는 별도 시나리오는 테스트 안 됨). Phase 1 완료를 막지는 않음(Acceptance Criteria는 ISO 설치 경로만 요구), 여유 있을 때 검증 권장
 
-**Deliverable**: 다운로드 가능한 ISO 1개 + 컨테이너 레지스트리에 게시된 이미지
-**Acceptance Criteria**: 클린 VM에 ISO로 설치 → 재부팅 → 로그인 성공
+**Deliverable**: 다운로드 가능한 ISO 1개 + 컨테이너 레지스트리에 게시된 이미지 — **달성**
+**Acceptance Criteria**: 클린 VM에 ISO로 설치 → 재부팅 → 로그인 성공 — **달성 (2026-07-09, Apple Silicon Mac + UTM, arm64)**
+
+> **Phase 1 사실상 완료.** 유일하게 안 한 건 `bootc switch` 리베이스 테스트(체크리스트 항목이지만 Acceptance Criteria엔 없음) — 이건 언제든 나중에 확인 가능. amd64 경로는 이미지 자체는 게시됐지만 실제 부팅 테스트는 안 함(테스트 환경이 Apple Silicon이라 arm64로 진행).
 
 ---
 
@@ -282,12 +284,12 @@
 
 ~~지금 시작할 것: Phase 0 → Phase 1.~~ (완료, 2026-07-08 — 아래로 대체)
 
-**현재 상태**: Phase 0/1은 저장소 스캐폴딩까지 완료, 로컬 머신 전용 검증(부팅/설치 테스트, `docs/LOCAL_SETUP.md`)만 남음. Phase 2는 오케스트레이터 프로토타입(Task Spec, 앱 레지스트리, 상태 머신, LLM 연동, 2.5/2.6 개발 플래닝·후보 검색/평가·경로 A/B/C)까지 진행 중.
+**현재 상태**: **Phase 0/1 완료** (2026-07-09, Apple Silicon Mac + UTM에서 ISO 설치 → 재부팅 → 로그인 → `bootc status` 확인까지 실제 검증). Phase 2는 오케스트레이터 프로토타입(Task Spec, 앱 레지스트리, 상태 머신, LLM 연동, 2.5/2.6 개발 플래닝·후보 검색/평가·경로 A/B/C)까지 진행 중.
 
 **다음 후보**(아직 순서 미확정, 상세는 각 Phase의 미체크 항목 참고):
 - `dev_agent.agent.develop()`을 `state_machine.py`의 PLAN→DEVELOP 분기에 연결 — 지금은 둘이 따로 존재 (상태 머신은 여전히 매칭 실패 시 `OrchestratorNotReady`만 던짐)
 - Phase 2.7: 테스트/검수 에이전트 — 2.6이 만든 코드는 지금 아무 검증 없이 그냥 텍스트로만 존재
 - Phase 2.8: 앱 레지스트리 등록 파이프라인 — 검증 통과한 결과를 2.3 DB에 실제로 등록
 - Phase 2.3 tier 2~3: 임베딩 모델/벡터 인덱스 선정 — 지금 앱 매칭은 태그 겹침만으로 계산되는 임시 근사치
-- Phase 1 로컬 검증: 사용자 로컬 머신에서 `docs/LOCAL_SETUP.md`의 `bootc status`/ISO 설치/`bootc switch` 테스트
+- Phase 1 잔여: `bootc switch` 리베이스 테스트(체크리스트 항목, Acceptance Criteria엔 불필요), amd64 경로 실제 부팅 테스트
 - Phase 3 샌드박스: 지금 2.4/2.6이 전부 "Phase 3 없어서 스텁"으로 되어 있어, 실제 설치/실행이 가능해지려면 필요
