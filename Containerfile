@@ -4,13 +4,15 @@ COPY build_files /
 COPY system_files /system_files
 
 # Base Image
-# ublue-os/base-main: minimal Fedora Atomic (bootc) image with no desktop
-# environment baked in. Chosen over desktop-oriented images (Bazzite/Aurora/
-# Bluefin) because Phase 4 of the roadmap replaces the desktop entirely with
-# a dedicated fullscreen prompt/voice shell -- carrying GNOME/KDE this early
-# would just be dead weight to strip out later.
-# See docs/DECISIONS.md for the full rationale.
-FROM ghcr.io/ublue-os/base-main:latest@sha256:3d8051d4ce422083a133ee84e36ed417aa11f996d2cf1e1d7df3eef47ce32d86
+# quay.io/fedora/fedora-bootc: minimal Fedora Atomic (bootc) image with no
+# desktop environment, published multi-arch (x86_64 + aarch64). Switched
+# from ghcr.io/ublue-os/base-main (2026-07-09): base-main is amd64-only,
+# which blocks building/testing this image on arm64 (e.g. Apple Silicon
+# Macs via UTM). See docs/DECISIONS.md for the full history.
+# Not pinned to a digest yet -- quay.io isn't reachable from this dev
+# sandbox to resolve one; pin it once resolvable (from CI logs or a
+# machine with normal network access).
+FROM quay.io/fedora/fedora-bootc:latest
 
 ### MODIFICATIONS
 ## make modifications desired in your image and install packages by modifying the build.sh script

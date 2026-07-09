@@ -25,7 +25,7 @@ sudo bootc status   # should print your current booted image
 just build-qcow2       # or: just spawn-vm
 just run-vm-qcow2
 ```
-Confirms `ghcr.io/ublue-os/base-main` boots cleanly before any of this
+Confirms `quay.io/fedora/fedora-bootc` boots cleanly before any of this
 repo's customizations are layered on top.
 
 ## 3. First CI build (Phase 1)
@@ -44,17 +44,36 @@ git commit -m "Add cosign public key"
 
 ## 4. ISO install test (Phase 1)
 
-1. Trigger `build-disk.yml` (workflow_dispatch, or push to `disk_config/*.toml`).
-2. Download the `anaconda-iso` artifact.
-3. `just build-qcow2` locally, or boot the ISO in `virt-manager`/`virsh` on
-   your machine, and run through the Anaconda installer.
-4. Reboot into the installed system and confirm login works.
+1. Trigger `build-disk.yml` manually (Actions tab → "Build disk images" →
+   "Run workflow"). Pick `platform` matching **the machine you'll boot the
+   VM on**, not the machine running the CI job -- `amd64` for Intel/most
+   PCs, `arm64` for Apple Silicon Macs. `build.yml` publishes both
+   `ghcr.io/head77x/oais` (amd64) and `ghcr.io/head77x/oais-arm64` (arm64)
+   as separate images; `build-disk.yml` picks the right one automatically
+   from this input.
+2. Download the `anaconda-iso` artifact from the completed run.
+3. Boot the ISO in a VM:
+   - **Linux**: `just build-qcow2` locally, or boot the ISO in
+     `virt-manager`/`virsh`.
+   - **Mac (Apple Silicon)**: install [UTM](https://mac.getutm.app/)
+     (`brew install --cask utm`), create a new VM → "Virtualize" (native,
+     not "Emulate") → Linux → boot the downloaded arm64 ISO. 4GB+ RAM,
+     20GB+ disk (matches `disk_config/disk.toml`'s `minsize`).
+4. Run through the Anaconda installer (accept default partitioning is
+   fine for a VM; **do** set a user account/password when prompted --
+   without one there'd be nothing to log in with).
+5. Reboot into the installed system and confirm login works, then:
+   ```bash
+   sudo bootc status   # should show ghcr.io/head77x/oais(-arm64):latest
+   ```
 
 ## 5. `bootc switch` rebase test (Phase 1)
 
-From an existing bootc system (e.g. a Bazzite or Fedora Silverblue install):
+From an existing bootc system (e.g. a Fedora Silverblue install), matching
+its architecture:
 ```bash
-sudo bootc switch ghcr.io/head77x/oais:latest
+sudo bootc switch ghcr.io/head77x/oais:latest        # amd64
+sudo bootc switch ghcr.io/head77x/oais-arm64:latest  # arm64
 sudo systemctl reboot
 ```
 Confirms the "rebase an existing install" path works, not just fresh ISO

@@ -23,7 +23,17 @@ concurrency:
 jobs:
   build_push:
     name: Build and push image
-    runs-on: ubuntu-24.04
+    # quay.io/fedora/fedora-bootc is multi-arch (x86_64 + aarch64), so we
+    # build both natively rather than emulate. amd64 and arm64 are pushed
+    # as distinctly-named images (oais / oais-arm64) rather than merged
+    # into one multi-arch manifest list -- simpler and easier to debug for
+    # now; revisit if a single `oais:latest` that resolves per-client-arch
+    # is worth the added complexity later.
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [amd64, arm64]
 
     permissions:
       contents: read
@@ -36,6 +46,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Maximize build space
+        if: matrix.platform != 'arm64'
         uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
 
       - name: Install just
@@ -50,6 +61,9 @@ jobs:
         id: image-name
         run: |
           IMAGE_NAME=$(just image_name)
+          if [ "${{ matrix.platform }}" = "arm64" ]; then
+            IMAGE_NAME="${IMAGE_NAME}-arm64"
+          fi
 
           echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
 

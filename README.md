@@ -23,8 +23,14 @@ This document only covers what's specific to AI-OS.
 
 ## Base image
 
-`ghcr.io/ublue-os/base-main:latest` -- Universal Blue's minimal Fedora Atomic
-base with no desktop environment. See `docs/DECISIONS.md` for why.
+`quay.io/fedora/fedora-bootc:latest` -- upstream Fedora's minimal bootc
+base, no desktop environment, published multi-arch (x86_64 + aarch64).
+See `docs/DECISIONS.md` for why (and why it's not `ghcr.io/ublue-os/base-main`
+anymore -- that one's amd64-only).
+
+Built for both architectures: `build.yml` pushes `ghcr.io/head77x/oais`
+(amd64) and `ghcr.io/head77x/oais-arm64` (arm64) as separate images, not
+one multi-arch manifest -- see `docs/DECISIONS.md`.
 
 ## Repository contents
 

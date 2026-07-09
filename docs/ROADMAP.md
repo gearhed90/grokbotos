@@ -14,7 +14,7 @@
 
 - [x] GitHub Repository 생성 — `head77x/oais` (조직 대신 개인 계정 저장소로 진행)
 - [ ] 로컬 개발 머신에 Podman, `bootc`, `just`, `git` 설치 — **사용자 로컬 머신에서 필요** (`docs/LOCAL_SETUP.md` 참고, 이 개발 샌드박스는 KVM/특권 컨테이너 미지원)
-- [x] 베이스 배포판 결정: **Fedora Atomic (Universal Blue) — `ghcr.io/ublue-os/base-main`** (데스크톱 없는 최소 베이스, 근거는 `DECISIONS.md`)
+- [x] 베이스 배포판 결정: **Fedora Atomic (bootc) — `quay.io/fedora/fedora-bootc`** (데스크톱 없는 최소 베이스, 멀티아키텍처(amd64+arm64) 지원. 처음엔 `ghcr.io/ublue-os/base-main`이었으나 amd64 전용이라 arm64(Apple Silicon) 빌드/테스트가 막혀서 2026-07-09에 변경 — 근거는 `DECISIONS.md`)
 - [x] `ublue-os/image-template` 베이스 템플릿 확보 — 별도 포크 대신 템플릿 내용을 이 저장소에 직접 이식 (동일 목적 달성, 저장소 단일화)
 - [ ] 로컬 VM(QEMU/libvirt)에서 베이스 이미지 부팅 테스트 — **사용자 로컬 머신에서 필요**
 

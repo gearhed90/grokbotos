@@ -10,21 +10,38 @@ vector index, sandbox tech, etc.) rather than losing them in commit messages.
 because Universal Blue has the most mature bootc tooling, docs, and
 community. No reason to deviate for an MVP.
 
-## Base image: `ghcr.io/ublue-os/base-main` (not Bazzite/Aurora/Bluefin)
+## Base image: `quay.io/fedora/fedora-bootc` (was `ghcr.io/ublue-os/base-main`, reversed 2026-07-09)
 
-`ublue-os/image-template`'s default `Containerfile` points at
-`ghcr.io/ublue-os/bazzite:stable`, a full gaming-oriented desktop image.
-That's the wrong foundation here: Phase 4 of the roadmap throws away the
-desktop entirely and replaces it with a dedicated fullscreen
-prompt/voice shell (no icons, no taskbar). Starting from a full GNOME/KDE
-desktop today just means stripping it back out later.
+**Superseded, see below for the current choice.** Original reasoning
+(still valid for why not Bazzite/Aurora/Bluefin): `ublue-os/image-template`'s
+default `Containerfile` points at `ghcr.io/ublue-os/bazzite:stable`, a full
+gaming-oriented desktop image. That's the wrong foundation here: Phase 4 of
+the roadmap throws away the desktop entirely and replaces it with a
+dedicated fullscreen prompt/voice shell (no icons, no taskbar). Starting
+from a full GNOME/KDE desktop today just means stripping it back out later.
+`base-main` was chosen as Universal Blue's minimal image with no desktop
+environment, meant as a starting point for exactly this kind of build.
 
-`base-main` is Universal Blue's minimal image with no desktop environment,
-meant as a starting point for exactly this kind of custom build. Pinned by
-digest in `Containerfile` for reproducible builds
-(`sha256:3d8051d4ce422083a133ee84e36ed417aa11f996d2cf1e1d7df3eef47ce32d86`
-as of 2026-07-08 — Renovate/Dependabot will need a manual rule or periodic
-re-pin since `base-main` isn't auto-tracked by the template's default bots).
+**Why it was reversed**: `ghcr.io/ublue-os/base-main` only publishes an
+amd64 build (confirmed directly -- `docker manifest inspect` returns a
+single-architecture manifest, not a multi-arch index). That silently
+blocks building or testing this image on arm64 at all, which only surfaced
+once the user (on an Apple Silicon Mac) actually tried to build an arm64
+disk image and `bootc-image-builder` failed on the architecture mismatch.
+This should have been checked before recommending an arm64 test path in
+the first place, not discovered several failed CI runs in.
+
+Switched to `quay.io/fedora/fedora-bootc:latest` -- plain upstream Fedora's
+bootc image, published multi-arch (x86_64 + aarch64, per Fedora bootc/CoreOS
+infrastructure and corroborated via web search; **not independently
+verified by digest inspection**, since this dev sandbox's network policy
+blocks `quay.io` outbound -- see `curl -sS "$HTTPS_PROXY/__agentproxy/status"`).
+Not pinned to a digest yet for the same reason; pin it once resolvable from
+an unrestricted network (CI logs, or the user's own machine). Cost of this
+switch: lose Universal Blue's own tooling/update scripts baked into
+`base-main` -- acceptable since the current Containerfile doesn't use any
+of it (`dnf5 install` + a `systemctl enable`), and Phase 4 replaces the
+desktop/update UX anyway.
 
 ## Template source: inlined, not forked separately
 
@@ -172,4 +189,31 @@ actually executing the workflow):
   `missing required info: DefaultRootFs`. This is a known issue with
   Universal Blue-derived images (confirmed via their own Discourse forum,
   not guessed) -- fixed by passing `--rootfs ext4` explicitly via
-  `additional-args`.
+  `additional-args`. (Left in place after switching to fedora-bootc too --
+  explicit is still fine even if no longer strictly required.)
+
+## arm64 image build + two more bugs found testing it (2026-07-09)
+
+Following the base image switch above, `build.yml` now builds both
+architectures natively via a `platform: [amd64, arm64]` matrix
+(`ubuntu-24.04` / `ubuntu-24.04-arm` runners). amd64 and arm64 are pushed
+as **separately-named images** (`oais` / `oais-arm64`), not merged into one
+multi-arch manifest list -- simpler to reason about and debug than wiring
+up cross-job digest aggregation for a manifest-list push, at the cost of
+the registry not "just resolving the right arch" from a single tag.
+Revisit if that's worth it later. `build-disk.yml` picks the matching
+image name based on its `platform` input.
+
+Two bugs found while wiring this up, both in `disk_config/iso.toml`:
+
+- The kickstart's `bootc switch` target was hardcoded to
+  `ghcr.io/head77x/oais:latest` -- on an arm64 build this would have
+  switched an arm64-installed system to an amd64 image. `build-disk.yml`
+  now `sed`s the correct image name in before the build step.
+- `org.fedoraproject.Anaconda.Modules.Users` was in the installer's
+  disabled-modules list (inherited from the `ublue-os/image-template`
+  example this was based on, uncaught until now). With it disabled and no
+  `user`/`rootpw` in the kickstart, an install would finish with **no way
+  to log in** -- silently failing Phase 1's actual acceptance criterion.
+  Removed from the disable list so Anaconda's normal interactive
+  account-creation screen runs.
