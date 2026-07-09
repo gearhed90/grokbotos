@@ -144,7 +144,7 @@
 
 ### 폐쇄루프 컨트롤러
 
-- [x] 전체 흐름을 관리하는 상태 머신(State Machine) 구현 — `orchestrator/orchestrator/state_machine.py:Orchestrator` (`RECEIVED → INTENT_ANALYSIS → REGISTRY_SEARCH → (EXECUTE_EXISTING | PLAN → DEVELOP → TEST → ...)`; PLAN 이후 분기는 `OrchestratorNotReady` 스텁)
+- [x] 전체 흐름을 관리하는 상태 머신(State Machine) 구현 — `orchestrator/orchestrator/state_machine.py:Orchestrator` (`RECEIVED → INTENT_ANALYSIS → REGISTRY_SEARCH → (EXECUTE_EXISTING | PLAN → DEVELOP → TEST → ...)`; `dev_provider=` 지정 시 PLAN→DEVELOP까지 `dev_agent.develop()`로 실제 실행, TEST 이후는 `DevelopmentPending` 예외로 결과(`DevelopmentResult`) 노출)
 - [ ] 각 상태 전이에 타임아웃/재시도 상한 설정 — 전체 `process()` 호출 단위 타임아웃(`OrchestratorTimeout`)은 구현됨; `max_retries`는 상수로 배선만 해두었고 실제 재시도 루프는 DEVELOP 단계가 없어 아직 동작하지 않음
 - [ ] 세션/메모리 관리 설계 — 미착수
 
@@ -152,13 +152,13 @@
 
 - [ ] 프로토타입: systemd unit으로 동작하는 오케스트레이터 데몬 초안 작성 — **아직 아님**. `orchestrator/`는 CLI로만 실행되는 순수 Python 패키지이고 systemd 유닛으로 배선되지 않음
 - [x] 시나리오 A 유사 검증: `orchestrator/tests/test_state_machine.py::test_scenario_a_full_tag_overlap_executes_existing_app` — 레지스트리에 미리 등록된 앱이 태그 매칭으로 바로 실행됨을 자동 테스트로 확인 (실제 STT/LLM 의도분석이 아닌 고정 Task Spec으로 상태 머신 분기만 검증한 축소판)
-- [ ] 시나리오 B (신규 개발 경로): 개발/테스트/등록 에이전트(2.5-2.8)가 없어 전체 경로 완주 불가 — 매칭 실패 시 `OrchestratorNotReady`를 던지는 지점까지만 확인됨 (`test_no_registry_match_raises_not_ready_naming_dev_pipeline`)
+- [ ] 시나리오 B (신규 개발 경로): `dev_agent.develop()`이 상태 머신에 연결되어 PLAN→DEVELOP까지는 실제로 실행되고 결과(exec_manifest 등)가 `DevelopmentPending` 예외로 노출됨 확인 (`test_dev_agent_wiring.py`) — 그러나 2.7(테스트/검수)·2.8(등록)이 없어 "등록 → 실행"까지 전체 경로 완주는 여전히 불가
 - [x] 시나리오 C 유사 검증: `test_scenario_c_repeat_request_reuses_same_app_without_redevelopment` — 동일 요청 재처리 시 재개발 없이 REGISTRY_SEARCH에서 즉시 매칭되는지 확인
 
 **Deliverable**: 오케스트레이터 데몬 프로토타입 코드 + 앱 레지스트리 DB 스키마 + 아키텍처 문서(상태 다이어그램 포함)
 **Acceptance Criteria**: 시나리오 A/B/C 세 가지가 모두 개발 머신에서 실제로 재현됨 (특히 C: 한 번 개발된 앱이 재사용되어 두 번째 요청부터는 개발 단계를 건너뜀)
 
-> **미충족 상태**: `orchestrator/` (코드 + DB 스키마 + LLM 연동 + 2.5/2.6 개발 에이전트)는 있으나 아키텍처 문서(상태 다이어그램)는 아직 없고, systemd 데몬화도 안 됐고, `dev_agent.agent.develop()`이 아직 상태 머신(`state_machine.py`)에 연결되지 않았다 (2.6까지 만든 것과 2.2~2.4 폐쇄루프가 별도로 존재). 2.7(테스트/검수)·2.8(등록)이 없어 시나리오 B가 실제로는 완주되지 않는다 — 이제 "개발"까지는 진행하지만 그 결과물이 검증도 등록도 안 된 채로 끝난다. 즉 Phase 2는 아직 완료가 아니다 — 다음 단계로 자연스럽게 이어지는 것은 (1) `develop()`을 상태 머신에 연결, (2) 2.7 테스트/검수 에이전트, (3) 2.8 등록 파이프라인, (4) 아키텍처 문서 작성 중 하나.
+> **미충족 상태**: `orchestrator/` (코드 + DB 스키마 + LLM 연동 + 2.5/2.6 개발 에이전트 + 상태 머신 연결)는 있으나 아키텍처 문서(상태 다이어그램)는 아직 없고, systemd 데몬화도 안 됐다. `dev_agent.agent.develop()`은 이제 상태 머신에 연결됐지만(`Orchestrator(dev_provider=...)`), 2.7(테스트/검수)·2.8(등록)이 없어 시나리오 B가 "개발"까지만 진행되고 그 결과물이 검증도 등록도 안 된 채로 끝난다(`DevelopmentPending`). 즉 Phase 2는 아직 완료가 아니다 — 다음 단계로 자연스럽게 이어지는 것은 (1) 2.7 테스트/검수 에이전트, (2) 2.8 등록 파이프라인, (3) 아키텍처 문서 작성 중 하나.
 
 ---
 
@@ -287,7 +287,6 @@
 **현재 상태**: **Phase 0/1 완료** (2026-07-09, Apple Silicon Mac + UTM에서 ISO 설치 → 재부팅 → 로그인 → `bootc status` 확인까지 실제 검증). Phase 2는 오케스트레이터 프로토타입(Task Spec, 앱 레지스트리, 상태 머신, LLM 연동, 2.5/2.6 개발 플래닝·후보 검색/평가·경로 A/B/C)까지 진행 중.
 
 **다음 후보**(아직 순서 미확정, 상세는 각 Phase의 미체크 항목 참고):
-- `dev_agent.agent.develop()`을 `state_machine.py`의 PLAN→DEVELOP 분기에 연결 — 지금은 둘이 따로 존재 (상태 머신은 여전히 매칭 실패 시 `OrchestratorNotReady`만 던짐)
 - Phase 2.7: 테스트/검수 에이전트 — 2.6이 만든 코드는 지금 아무 검증 없이 그냥 텍스트로만 존재
 - Phase 2.8: 앱 레지스트리 등록 파이프라인 — 검증 통과한 결과를 2.3 DB에 실제로 등록
 - Phase 2.3 tier 2~3: 임베딩 모델/벡터 인덱스 선정 — 지금 앱 매칭은 태그 겹침만으로 계산되는 임시 근사치

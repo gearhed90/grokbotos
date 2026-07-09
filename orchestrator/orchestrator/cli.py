@@ -9,8 +9,13 @@ import datetime
 import sys
 
 from .llm import StubIntentAnalyzer
+from .providers.base import ExternalLoginRequired, ProviderNotReady
+from .providers.claude_cli import ClaudeCliProvider
+from .providers.xai_grok import GrokCliProvider
 from .registry.db import AppRecord, AppRegistry
-from .state_machine import Orchestrator, OrchestratorNotReady, OrchestratorTimeout
+from .state_machine import DevelopmentPending, Orchestrator, OrchestratorNotReady, OrchestratorTimeout
+
+_DEV_PROVIDERS = {"claude": ClaudeCliProvider, "grok": GrokCliProvider}
 
 
 def _seed_demo_app(registry: AppRegistry) -> None:
@@ -46,17 +51,46 @@ def main(argv: list[str] | None = None) -> int:
         help="Register a fake app first so a tag match is possible",
     )
     parser.add_argument("--db", default=":memory:", help="SQLite path (default: in-memory)")
+    parser.add_argument(
+        "--dev-provider",
+        choices=sorted(_DEV_PROVIDERS),
+        default=None,
+        help=(
+            "Enable PLAN->DEVELOP (2.5/2.6) on registry-search misses by wrapping the "
+            "named official CLI (must already be installed and logged in -- "
+            "`claude login` / `grok login`). Makes real network + LLM calls. "
+            "Omit to keep the old behavior (raises OrchestratorNotReady on a miss)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     registry = AppRegistry(args.db)
     if args.seed_demo_app:
         _seed_demo_app(registry)
 
-    orchestrator = Orchestrator(registry=registry, intent_analyzer=StubIntentAnalyzer())
+    dev_provider = None
+    if args.dev_provider:
+        dev_provider = _DEV_PROVIDERS[args.dev_provider]()
+        try:
+            dev_provider.ensure_ready()
+        except ExternalLoginRequired as exc:
+            print(f"[{type(exc).__name__}] {exc}", file=sys.stderr)
+            registry.close()
+            return 1
+
+    orchestrator = Orchestrator(
+        registry=registry, intent_analyzer=StubIntentAnalyzer(), dev_provider=dev_provider
+    )
 
     try:
         result = orchestrator.process(args.prompt)
-    except (OrchestratorNotReady, OrchestratorTimeout) as exc:
+    except DevelopmentPending as exc:
+        dev = exc.development_result
+        print(f"[{type(exc).__name__}] path={dev.path.name} reason={dev.reason}", file=sys.stderr)
+        if dev.exec_manifest:
+            print(f"exec_manifest: {dev.exec_manifest}", file=sys.stderr)
+        return 1
+    except (OrchestratorNotReady, OrchestratorTimeout, ProviderNotReady) as exc:
         print(f"[{type(exc).__name__}] {exc}", file=sys.stderr)
         return 1
     finally:

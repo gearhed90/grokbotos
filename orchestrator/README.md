@@ -38,7 +38,7 @@ external deps are added deliberately, not by default.
 | 2.6 Path A/B/C decision + exec_manifest | Implemented: `dev_agent/path_decision.py`, `dev_agent/codegen.py`, `dev_agent/agent.py:develop()`. Every exec_manifest this produces has `sandbox_profile_id="phase3-not-implemented"` -- code gets *generated*, never installed/run/tested |
 | 2.6 "3 paths only inside Phase 3 sandbox" | **Not applicable yet** -- there's no sandbox to be inside of; `develop()` only ever generates text |
 | 2.6 retry-on-test-failure | **Not implemented** -- nothing to retry against without 2.7 |
-| `develop()` wired into the state machine | **Not implemented** -- `state_machine.py`'s no-match branch still raises `OrchestratorNotReady`, unaware `dev_agent` exists. They're separate pieces until this is done |
+| `develop()` wired into the state machine | Implemented: `Orchestrator(dev_provider=...)` runs PLAN->DEVELOP on a registry-search miss. Path C (credentials needed) surfaces as `needs_clarification`; paths A/B raise `DevelopmentPending` (carries the `DevelopmentResult`) since there's still no 2.7/2.8 to verify/register what got generated. No `dev_provider` -> same `OrchestratorNotReady` as before |
 | 2.7 테스트/검수 에이전트 | **Not implemented** |
 | 2.8 앱 레지스트리 등록 | **Not implemented** |
 | 2.9 Result format | Implemented (`ResultEnvelope` in `state_machine.py`) |
@@ -48,11 +48,14 @@ external deps are added deliberately, not by default.
 
 ```bash
 cd orchestrator
-python3 -m orchestrator.cli "이미지에서 텍스트 추출해줘"     # no matching app -> NotImplementedError (expected, honest)
-python3 -m orchestrator.cli --seed-demo-app "hello demo app"  # seeds a matching app first -> EXECUTE_EXISTING path
+python3 -m orchestrator.cli "hello demo" --seed-demo-app              # seeds a matching app first -> EXECUTE_EXISTING path
+python3 -m orchestrator.cli "이미지에서 텍스트 추출해줘"                  # no matching app, no --dev-provider -> OrchestratorNotReady (expected, honest)
+python3 -m orchestrator.cli "이미지에서 텍스트 추출해줘" --dev-provider claude  # runs PLAN->DEVELOP for real (needs `claude login` done)
 ```
 
-`dev_agent.agent.develop()` isn't wired into `cli.py` yet (see table above), but can be exercised directly with a real provider -- this makes real network calls to npm/crates.io/GitHub/OSV.dev and real LLM calls, so it costs actual API usage:
+`--dev-provider {claude,grok}` makes real network calls (npm/crates.io/GitHub/OSV.dev) and real LLM calls via the named CLI, so it costs actual API usage. It prints the chosen path and `exec_manifest` to stderr and exits 1 (`DevelopmentPending`) since 2.7/2.8 still don't exist to verify/register the result.
+
+`dev_agent.agent.develop()` can also be called directly for finer control:
 
 ```python
 from orchestrator.dev_agent.agent import develop

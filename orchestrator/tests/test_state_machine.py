@@ -80,10 +80,11 @@ class TestOrchestratorScenarios(unittest.TestCase):
         self.assertEqual(first.status, "success")
         self.assertEqual(second.status, "success")
 
-    def test_no_registry_match_raises_not_ready_naming_dev_pipeline(self):
+    def test_no_registry_match_without_dev_provider_raises_not_ready(self):
         """Analog of scenario B's first half: nothing in the registry, and
-        since 2.5-2.8 (plan/develop/test/register) aren't implemented, the
-        pipeline must say so explicitly rather than fabricate a result."""
+        with no dev_provider configured, the pipeline must say so
+        explicitly rather than fabricate a result. (With a dev_provider
+        configured, see test_dev_agent_wiring.py for what happens instead.)"""
         analyzer = _FixedAnalyzer(
             TaskSpec(raw_prompt="do something new", goal="something new", capability_tags=["nonexistent"])
         )
@@ -92,7 +93,7 @@ class TestOrchestratorScenarios(unittest.TestCase):
         with self.assertRaises(OrchestratorNotReady) as ctx:
             orchestrator.process("do something new")
 
-        self.assertIn("2.5-2.8", str(ctx.exception))
+        self.assertIn("dev_provider", str(ctx.exception))
 
     def test_partial_match_in_adapter_band_raises_not_ready(self):
         # 2 of 3 query tags overlap -> confidence 0.667, inside the

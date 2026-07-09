@@ -5,11 +5,14 @@
       -> PLAN -> DEVELOP -> TEST -> (REGISTER_AND_EXECUTE -> DELIVER_RESULT
                                       | RETRY_DEVELOP, up to max_retries)
 
-PLAN/DEVELOP/TEST/REGISTER_AND_EXECUTE (ROADMAP.md 2.5-2.8) are not
-implemented -- there is no development agent, test agent, or Phase 3
-sandbox to call into yet. Reaching that branch raises OrchestratorNotReady
-with a message naming which ROADMAP.md section is missing, rather than
-faking success.
+PLAN/DEVELOP (ROADMAP.md 2.5-2.6, `dev_agent/`) are wired in below, gated
+on an `LLMProvider` being supplied -- without one, this behaves as before.
+TEST/REGISTER_AND_EXECUTE (2.7-2.8) still aren't implemented -- there's no
+test agent, no registration pipeline, and no Phase 3 sandbox to actually
+run generated code in to verify it. Reaching that point raises
+`DevelopmentPending` carrying the `DevelopmentResult` (candidates
+evaluated, chosen path, exec_manifest) for inspection, instead of
+registering/executing something nothing has verified.
 """
 
 from __future__ import annotations
@@ -19,7 +22,11 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
 
+from .dev_agent.agent import develop
+from .dev_agent.http_client import real_get, real_post_json
+from .dev_agent.path_decision import Path as DevPath
 from .llm import IntentAnalyzer
+from .providers.base import LLMProvider
 from .registry.db import AppRecord, AppRegistry
 from .registry.matcher import find_best_match
 from .task_spec import TaskSpec
@@ -49,6 +56,25 @@ class OrchestratorNotReady(Exception):
     but this prototype hasn't implemented yet."""
 
 
+class DevelopmentPending(OrchestratorNotReady):
+    """PLAN+DEVELOP (2.5/2.6) ran and produced a candidate exec_manifest,
+    but TEST (2.7) and REGISTER (2.8) don't exist yet to verify and
+    persist it -- so it's surfaced here instead of being silently
+    registered/executed unverified. `.development_result` carries what
+    would have been registered (candidates evaluated, chosen path,
+    generated code, exec_manifest) for inspection."""
+
+    def __init__(self, development_result):
+        self.development_result = development_result
+        super().__init__(
+            f"Developed via path {development_result.path.name} "
+            f"({development_result.reason}) but can't verify or register it "
+            "yet -- ROADMAP.md 2.7 (test/verify) and 2.8 (register) aren't "
+            "implemented. See .development_result for what would have been "
+            "registered."
+        )
+
+
 class OrchestratorTimeout(Exception):
     """Raised when a single process() call exceeds its wall-clock budget
     (ROADMAP.md 폐쇄루프 컨트롤러: '각 상태 전이에 타임아웃 ... 설정')."""
@@ -73,11 +99,17 @@ class Orchestrator:
         self,
         registry: AppRegistry,
         intent_analyzer: IntentAnalyzer,
+        dev_provider: LLMProvider | None = None,
+        dev_http_get=real_get,
+        dev_http_post=real_post_json,
         max_retries: int = 3,
         timeout_seconds: float = 30.0,
     ):
         self._registry = registry
         self._intent_analyzer = intent_analyzer
+        self._dev_provider = dev_provider
+        self._dev_http_get = dev_http_get
+        self._dev_http_post = dev_http_post
         self._max_retries = max_retries
         self._timeout_seconds = timeout_seconds
 
@@ -111,13 +143,36 @@ class Orchestrator:
                 "explicitly deferred to a separate track in the roadmap."
             )
 
-        raise OrchestratorNotReady(
-            "No confident registry match; would proceed to PLAN -> DEVELOP "
-            "-> TEST -> REGISTER (ROADMAP.md 2.5-2.8), none of which are "
-            "implemented yet (no planning/dev/test agent, no Phase 3 "
-            f"sandbox). max_retries={self._max_retries} is reserved for "
-            "that loop once it exists."
+        if self._dev_provider is None:
+            raise OrchestratorNotReady(
+                "No confident registry match, and no LLM provider configured "
+                "for development -- pass dev_provider= to Orchestrator to "
+                "run PLAN -> DEVELOP (ROADMAP.md 2.5-2.6, implemented in "
+                "dev_agent/). TEST -> REGISTER (2.7-2.8) still aren't "
+                f"implemented either way. max_retries={self._max_retries} is "
+                "reserved for the retry-on-test-failure loop once 2.7 exists."
+            )
+
+        state = State.PLAN
+        self._check_deadline(deadline, state)
+        dev_result = develop(
+            task_spec,
+            self._dev_provider,
+            http_get=self._dev_http_get,
+            http_post=self._dev_http_post,
         )
+
+        state = State.DEVELOP
+        self._check_deadline(deadline, state)
+        if dev_result.path is DevPath.ASK_USER:
+            return ResultEnvelope(
+                status="needs_clarification",
+                summary="Need more information before development can proceed.",
+                final_state=State.NEEDS_CLARIFICATION,
+                clarification_questions=dev_result.clarification_questions,
+            )
+
+        raise DevelopmentPending(dev_result)
 
     def _execute_existing(self, app: AppRecord, deadline: float) -> ResultEnvelope:
         """ROADMAP.md 2.4. Stubbed: no Phase 3 sandbox exists yet to
