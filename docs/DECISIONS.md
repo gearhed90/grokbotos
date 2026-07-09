@@ -158,3 +158,18 @@ podman storage the build step mounts. Added a `docker/login-action` step
 `sudo podman pull ...` step before the build step, matching the error
 message's own suggested fix. Only found by actually running the workflow
 -- this wasn't something to catch by reading the template beforehand.
+
+Two more issues surfaced on subsequent runs, same pattern (only found by
+actually executing the workflow):
+
+- `docker/login-action` logs in the runner user's own credential store,
+  but the pull (and bootc-image-builder itself) run as root via `sudo`,
+  which keeps a separate one -- login reported success but the pull still
+  got `unauthorized`. Fixed by logging in with `sudo podman login`
+  instead, so both steps share root's credential store.
+- `ghcr.io/ublue-os/base-main` doesn't declare a default root filesystem
+  type in its container metadata, so bootc-image-builder failed with
+  `missing required info: DefaultRootFs`. This is a known issue with
+  Universal Blue-derived images (confirmed via their own Discourse forum,
+  not guessed) -- fixed by passing `--rootfs ext4` explicitly via
+  `additional-args`.

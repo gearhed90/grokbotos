@@ -99,7 +99,12 @@ jobs:
           image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
           chown: ${{ env.USER_UID }}:${{ env.USER_GID }}
           types: ${{ matrix.disk-type }}
-          additional-args: --use-librepo=True
+          # ublue-os/base-main doesn't declare a default root filesystem
+          # type in its container metadata, so bootc-image-builder can't
+          # infer one ("missing required info: DefaultRootFs") -- has to
+          # be set explicitly. ext4 for simplicity; revisit if Phase 3's
+          # sandbox or Phase 6 branding wants btrfs subvolumes/snapshots.
+          additional-args: --use-librepo=True --rootfs ext4
 
       - name: Upload disk images and Checksum to Job Artifacts
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
