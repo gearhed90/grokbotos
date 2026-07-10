@@ -1,10 +1,13 @@
 # Minimal kiosk config for the AI-OS shell (ROADMAP.md Phase 4).
-# One fullscreen terminal running the onboarding/prompt shell -- no bar,
-# no window borders, no other desktop chrome. Firefox (spawned by the
-# shell for OAuth login, e.g. `claude login`/`grok login`) also runs
-# fullscreen; closing it returns focus to the shell terminal.
+# `webshell_cli` starts a local HTTP server and opens Firefox in --kiosk
+# mode against it -- that Firefox window IS the desktop the user sees
+# (prompt bar + installed-app/LLM-connection icon dock), not a terminal.
+# Any other Firefox window it opens along the way (e.g. `claude login`'s
+# own OAuth redirect) is fullscreened by the same rule below, and closing
+# it returns focus to the kiosk window underneath. No bar, no window
+# borders, no other desktop chrome.
 
-exec foot -e sh -c 'cd /usr/lib/oais/orchestrator && exec python3 -m orchestrator.onboarding_cli'
+exec sh -c 'cd /usr/lib/oais/orchestrator && exec python3 -m orchestrator.webshell_cli'
 
 default_border none
 default_floating_border none
@@ -13,5 +16,4 @@ bar {
     mode invisible
 }
 
-for_window [app_id="foot"] fullscreen enable
 for_window [app_id="firefox"] fullscreen enable

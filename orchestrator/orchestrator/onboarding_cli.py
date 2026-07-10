@@ -4,12 +4,12 @@
       -> 저장된 연결 있음? -> 프롬프트 입력 화면
       -> 없음 -> LLM 선택 -> 설치/로그인 -> 저장 -> 프롬프트 입력 화면
 
-Console/text-based for now, on purpose: this project's OS image is
-console-only as of Phase 1 (no compositor, no browser -- see
-docs/DECISIONS.md), so this is what can actually run and be verified
-today. Wrapping it in a graphical fullscreen compositor session
-("Gamescope 유사 구조") is separate follow-up work once this flow itself is
-solid -- the logic underneath (onboarding.py) doesn't change either way.
+Console/text-based, kept as the headless-friendly path (SSH, recovery
+console, or any environment with no display) -- `webshell_cli.py` is
+what sway actually boots into now (a real graphical shell: prompt bar +
+installed-app/LLM-connection icon dock in Firefox, per explicit user
+feedback that a text menu doesn't count as "GUI"). Both share the exact
+same connection logic (`onboarding.py`); only the UI on top differs.
 
 Voice input (2.1's other half) isn't implemented -- no STT engine has been
 chosen yet (ROADMAP.md 2.1). Text-only for now.

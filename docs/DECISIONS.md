@@ -279,3 +279,70 @@ and none of this was written with a specific SELinux module in mind) --
 all written from documented patterns, none boot-tested. Expect at least
 one round of fixes once actually tried in the VM, same as
 `build.yml`/`build-disk.yml` needed.
+
+## Phase 4 boot shell: text TUI replaced with a real GUI web shell (2026-07-10)
+
+The first boot-tested build (arm64 disk image, `main`@`a266e5f`) actually
+worked -- tty1 autologin -> sway -> the onboarding shell ran and showed
+its provider-selection screen. Two problems surfaced from that first real
+test, both from actual screenshots the user provided:
+
+**1. Korean text rendered as tofu boxes.** The image had no CJK-capable
+font installed, so `foot` fell back to boxes for any Hangul the shell
+printed. Fixed by adding `google-noto-sans-cjk-ttc-fonts` to `build.sh`'s
+`dnf5 install` line.
+
+**2. Wrong UI shape entirely.** The shell that actually appeared was a
+numbered text menu (`[1] Claude (Anthropic)` etc.) in a terminal. The
+user's explicit expectation, stated after seeing the screenshot: once
+AI-OS is installed, the *first* screen must be a desktop-style GUI --a
+prompt input at the center, and a dock/taskbar-like row of icons at the
+bottom for both installed programs and LLM-connection options. The
+prompt input must be visibly disabled until an LLM icon is clicked and a
+connection succeeds. A text menu in a terminal does not meet that bar,
+regardless of how correct the underlying connection logic is.
+
+**Decision: build this as a local HTTP server + static HTML/CSS/JS page,
+displayed via the already-baked-in Firefox in `--kiosk` mode** --
+rather than a native toolkit (GTK4, Qt). Reasoning:
+
+- Firefox is already a hard requirement in the image (OAuth login for
+  `claude`/`grok` needs a real browser -- see the entry above this one).
+  Reusing it for the shell UI itself means no new heavyweight package
+  (GTK4 + PyGObject + introspection data, or Qt + PySide) has to be
+  added just to draw a box and some icons.
+  `sway`'s existing `for_window [app_id="firefox"] fullscreen enable`
+  rule already fullscreens whatever Firefox window is on screen, so the
+  OAuth login flow (which also opens a Firefox window) and the shell
+  itself share one visual language for free.
+- The orchestrator package is already pure-stdlib Python (see its
+  README's "stdlib only, on purpose" note); `http.server` keeps that
+  true for the server side too, no new dependency to vendor or
+  `dnf install`.
+- HTML/CSS text rendering doesn't have the CJK tofu-box problem GTK/Qt
+  can also hit if the wrong font stack is picked -- browsers fall back to
+  system fonts (now including the Noto CJK package above) correctly by
+  default.
+
+**Shape of the result** (`orchestrator/webshell/`):
+`server.py` (stdlib `http.server`, binds `127.0.0.1` only) serves
+`static/index.html`+`style.css`+`app.js` and a small JSON API
+(`/api/status`, `/api/apps`, `/api/choices`, `/api/connect`,
+`/api/connect-token`, `/api/prompt`). `connect.py` runs the actual
+connection flow (which blocks on a real subprocess during browser OAuth)
+on a background thread, using a lock-protected `ConnectionState`
+(`state.py`) so `/api/status` keeps answering polls while that's in
+flight -- the frontend polls every 1.5s and enables the prompt input the
+moment `connected` flips true. None of `onboarding.py`'s connection
+logic changed; this only replaces the UI layer that was driving it.
+`webshell_cli.py` is what `system_files/etc/sway/config` now execs
+(replacing the old `foot -e ... onboarding_cli` line); `onboarding_cli.py`
+itself is kept as-is for headless use (SSH, recovery console) since the
+underlying logic is identical either way.
+
+**Still genuinely unverified**: same caveat as before -- no display in
+this dev sandbox. Logic-level tests only (`tests/test_webshell.py`,
+including a real-socket integration test against routes that don't touch
+subprocesses). The actual "click Claude icon -> Firefox OAuth window
+opens on top -> closing it reveals the shell again with the prompt now
+enabled" flow has never been observed end-to-end.

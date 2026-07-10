@@ -32,10 +32,21 @@ systemctl enable podman.socket
 ### (Claude: always, no headless flow yet; Grok: not strictly, but this
 ### keeps both providers on the same UX) -- see docs/DECISIONS.md. So a
 ### minimal graphical session is baked in specifically to run one thing
-### fullscreen: a terminal running orchestrator's onboarding shell, which
-### can spawn Firefox for login when needed and gets focus back once
-### that closes. This is NOT a desktop environment -- no panel, no
-### app launcher, no window chrome, nothing but that one app.
+### fullscreen: Firefox in --kiosk mode against a small local HTTP
+### server (orchestrator.webshell) that serves the actual shell UI --
+### prompt bar + installed-app/LLM-connection icon dock, not a terminal
+### menu (see orchestrator/orchestrator/webshell/). Any other Firefox
+### window it opens along the way (e.g. an OAuth login redirect) gets
+### fullscreened too and returns focus to the kiosk page once closed.
+### This is NOT a desktop environment -- no panel, no app launcher, no
+### window chrome, nothing but that one app. `foot` is kept installed for
+### headless/recovery use (`onboarding_cli.py`'s text flow still works),
+### it's just not what boots by default anymore.
+###
+### google-noto-sans-cjk-ttc-fonts: without a CJK-capable font, Korean
+### text (the shell UI's own labels, any Korean the user types back)
+### renders as empty boxes -- confirmed on real hardware before this was
+### added.
 ###
 ### Everything this needs to survive a reboot is placed under /usr or
 ### /etc on purpose: /opt and /home are symlinked to /var/opt and
@@ -54,7 +65,7 @@ systemctl enable podman.socket
 ### the /var persistence constraint above; expect to iterate once
 ### actually booted (docs/LOCAL_SETUP.md).
 
-dnf5 install -y python3 sway foot firefox
+dnf5 install -y python3 sway foot firefox google-noto-sans-cjk-ttc-fonts
 
 mkdir -p /usr/lib/oais
 cp -a /ctx/orchestrator /usr/lib/oais/orchestrator

@@ -118,6 +118,12 @@ class AppRegistry:
                 [(app.app_id, tag) for tag in app.capability_tags],
             )
 
+    def list_all(self) -> list[AppRecord]:
+        """All registered apps, alphabetical -- powers the Phase 4 shell's
+        installed-program icon dock (ROADMAP.md 2.1 하단 아이콘)."""
+        rows = self._conn.execute("SELECT * FROM apps ORDER BY name").fetchall()
+        return [AppRecord._from_row(row) for row in rows]
+
     def find_by_tags(self, tags: list[str]) -> list[AppRecord]:
         """Tier-1 filter (ROADMAP.md 2.3 step 1): apps sharing at least one
         capability tag with the request, ranked by tag-overlap count then

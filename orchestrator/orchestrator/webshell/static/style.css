@@ -1,0 +1,187 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0d12;
+  --panel: #161a22;
+  --field: #0f1218;
+  --border: #2a2f3a;
+  --accent: #5b8cff;
+  --text: #e8ebf2;
+  --muted: #7d8494;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans CJK KR", "Noto Sans KR", "Noto Sans", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+#stage {
+  height: calc(100vh - 150px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 0 40px;
+}
+
+#logo {
+  font-size: 2rem;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+  margin: 0;
+}
+
+#prompt-form {
+  width: min(720px, 90vw);
+  display: flex;
+  gap: 12px;
+}
+
+#prompt-input {
+  flex: 1;
+  padding: 16px 20px;
+  font-size: 1.1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+#prompt-input:disabled {
+  color: var(--muted);
+}
+
+#prompt-submit {
+  padding: 0 24px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+#prompt-submit:disabled {
+  background: var(--border);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+#result {
+  width: min(720px, 90vw);
+  min-height: 1.5rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+#connect-panel {
+  width: min(720px, 90vw);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#connect-panel input {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--field);
+  color: var(--text);
+}
+
+#connect-panel button {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+#dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 150px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 24px;
+}
+
+.dock-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.icon-row {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+}
+
+.icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  min-width: 60px;
+}
+
+.icon-glyph {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #232838;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.llm-icon.connecting .icon-glyph {
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+.llm-icon.connected .icon-glyph {
+  background: var(--accent);
+}
+
+.icon-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.icon-empty {
+  color: var(--muted);
+  font-size: 0.85rem;
+  align-self: center;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
