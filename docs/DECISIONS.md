@@ -346,3 +346,57 @@ including a real-socket integration test against routes that don't touch
 subprocesses). The actual "click Claude icon -> Firefox OAuth window
 opens on top -> closing it reveals the shell again with the prompt now
 enabled" flow has never been observed end-to-end.
+
+## Black screen after sway starts (2026-07-11) — home directory persistence bug
+
+Second real boot report: tty1 autologin worked, the mouse cursor appeared
+(so sway itself started and is compositing), but nothing else ever
+rendered -- no window, no error, no way to check logs from within the
+running session.
+
+**Root cause (high-confidence, not yet confirmed against a real log --
+see the logging fix below)**: `build.sh`'s `useradd --create-home aios`
+creates `/var/home/aios` at image **build** time. This is exactly the
+`/var`-doesn't-persist problem already documented above for `/opt` and
+the app/config paths -- just missed for the user account's home
+directory itself. At boot, `webshell_cli.py` (like everything under
+`onboarding.py`) calls `Path.home()`-based paths (`~/.config/oais/`,
+`~/.local/share/oais/`) and `mkdir(parents=True)`s into them. If
+`/var/home/aios` doesn't exist, that walks up to the parent `/var/home`
+-- owned `root:root`, mode `0755` -- and a non-root `aios` process trying
+to create a subdirectory there gets `PermissionError`. That exception is
+unhandled, so the process sway just `exec`'d crashes immediately, `exec`
+(not `exec_always`) doesn't retry, and sway is left showing its own empty
+background with nothing on it and no terminal to display the traceback.
+
+**Fix, three parts**:
+
+1. `system_files/usr/lib/tmpfiles.d/oais-aios-home.conf`: a
+   `d /var/home/aios 0700 aios aios -` rule. Ships under `/usr`, so
+   `systemd-tmpfiles-setup.service` (runs on every boot, standard systemd
+   behavior, well before getty/autologin) recreates the directory with
+   correct ownership regardless of what the build-time `useradd` did or
+   didn't manage to persist. This is the actual fix, following the exact
+   pattern ostree/bootc images already use to guarantee `/var/home`
+   itself exists.
+2. Debug logging: `system_files/etc/sway/config`'s `exec` line now
+   redirects `webshell_cli`'s stdout/stderr (and Firefox's, since it's a
+   subprocess sharing the same fds) to `$HOME/.local/share/oais/shell.log`
+   instead of into the void. Next time something fails silently on
+   screen, that file (readable from another VT, e.g. Ctrl+Alt+F2, or via
+   an admin account) has the actual traceback.
+3. `webshell_cli.py:_launch_firefox_or_fallback()`: if Firefox exits
+   non-zero or isn't found, falls back to launching the old text shell
+   (`foot -e ... onboarding_cli`) instead of leaving the screen blank --
+   something visible (even a crude text menu) beats a silent hang, and
+   it's driven by the exact same `Orchestrator`/`onboarding.py` logic
+   either way.
+
+**Still not fully confirmed**: without an actual log file from a real
+boot, this is the most-likely-by-far explanation given the symptoms
+(compositor definitely running, nothing else does), not a certainty --
+there could be a second, unrelated issue (e.g. Firefox failing to
+initialize GPU/GL rendering inside a QEMU/UTM VM with no acceleration,
+which the new fallback would also mask into "text shell instead" rather
+than surface directly). The logging added in part 2 is what turns the
+next report from a guess into a real diagnosis.

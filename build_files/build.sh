@@ -76,6 +76,15 @@ cp -a /ctx/orchestrator /usr/lib/oais/orchestrator
 # install time, so nothing here can hardcode it). Shell is the launcher
 # script from system_files, not /bin/bash -- it execs straight into sway
 # on tty1, no .bash_profile dependency.
+#
+# --create-home writes /var/home/aios right now, at build time -- which,
+# per the /var persistence note above, is NOT guaranteed to make it into
+# the shipped image. Don't rely on this alone: the actual guarantee that
+# aios has a writable $HOME at boot is
+# system_files/usr/lib/tmpfiles.d/oais-aios-home.conf (runs every boot,
+# ships under /usr so it always exists). --create-home is kept anyway
+# since it's harmless and does work in build/test contexts where /var
+# does persist.
 useradd --create-home --shell /usr/local/bin/oais-shell-launch aios
 
 # Autologin `aios` on tty1 -- standard systemd getty override pattern.

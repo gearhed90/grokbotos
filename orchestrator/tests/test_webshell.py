@@ -345,6 +345,11 @@ class TestWebServerIntegration(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 400)
 
 
+class _CompletedProcess:
+    def __init__(self, returncode=0):
+        self.returncode = returncode
+
+
 class TestWebshellCliMain(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -359,6 +364,7 @@ class TestWebshellCliMain(unittest.TestCase):
 
         def _fake_run(argv):
             calls.append(argv)
+            return _CompletedProcess(returncode=0)
 
         webshell_cli.main(
             run=_fake_run, port=0, config_path=self.config_path, registry_path=self.registry_path
@@ -378,12 +384,69 @@ class TestWebshellCliMain(unittest.TestCase):
             # by the time firefox would launch, the server thread is up and
             # the initial state has already been computed
             seen_state["connected"] = webshell_cli._initial_state(self.config_path).snapshot()["connected"]
+            return _CompletedProcess(returncode=0)
 
         webshell_cli.main(
             run=_fake_run, port=0, config_path=self.config_path, registry_path=self.registry_path
         )
 
         self.assertFalse(seen_state["connected"])
+
+    def test_firefox_crash_falls_back_to_text_shell(self):
+        """The bug this guards against: sway's `exec` silently dying leaves
+        a black screen with nothing visible and nothing to debug. If
+        Firefox exits nonzero, something (the old text shell) must still
+        launch rather than leaving the compositor showing nothing."""
+        from orchestrator import webshell_cli
+
+        calls = []
+
+        def _fake_run(argv):
+            calls.append(argv)
+            if argv[0] == "firefox":
+                return _CompletedProcess(returncode=1)
+            return _CompletedProcess(returncode=0)
+
+        webshell_cli.main(
+            run=_fake_run, port=0, config_path=self.config_path, registry_path=self.registry_path
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][0], "firefox")
+        self.assertEqual(calls[1], webshell_cli.FALLBACK_ARGV)
+
+    def test_firefox_binary_missing_falls_back_to_text_shell(self):
+        from orchestrator import webshell_cli
+
+        calls = []
+
+        def _fake_run(argv):
+            calls.append(argv)
+            if argv[0] == "firefox":
+                raise FileNotFoundError("no such file: firefox")
+            return _CompletedProcess(returncode=0)
+
+        webshell_cli.main(
+            run=_fake_run, port=0, config_path=self.config_path, registry_path=self.registry_path
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1], webshell_cli.FALLBACK_ARGV)
+
+    def test_firefox_success_does_not_trigger_fallback(self):
+        from orchestrator import webshell_cli
+
+        calls = []
+
+        def _fake_run(argv):
+            calls.append(argv)
+            return _CompletedProcess(returncode=0)
+
+        webshell_cli.main(
+            run=_fake_run, port=0, config_path=self.config_path, registry_path=self.registry_path
+        )
+
+        self.assertEqual(len(calls), 1)
 
 
 if __name__ == "__main__":

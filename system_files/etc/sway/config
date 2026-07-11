@@ -6,8 +6,16 @@
 # own OAuth redirect) is fullscreened by the same rule below, and closing
 # it returns focus to the kiosk window underneath. No bar, no window
 # borders, no other desktop chrome.
+#
+# stdout/stderr (Python tracebacks, Firefox's own errors -- it's a
+# subprocess of webshell_cli, inherits the same fds) are redirected to a
+# log file instead of going nowhere: sway takes over the console's
+# graphics mode, so anything not captured is simply unrecoverable if this
+# fails silently. Switch to another VT (e.g. Ctrl+Alt+F2) and
+# `cat ~aios/.local/share/oais/shell.log` (as root, or `sudo -u aios`) to
+# read it after a failed boot.
 
-exec sh -c 'cd /usr/lib/oais/orchestrator && exec python3 -m orchestrator.webshell_cli'
+exec sh -c 'mkdir -p "$HOME/.local/share/oais" && cd /usr/lib/oais/orchestrator && exec python3 -m orchestrator.webshell_cli >>"$HOME/.local/share/oais/shell.log" 2>&1'
 
 default_border none
 default_floating_border none

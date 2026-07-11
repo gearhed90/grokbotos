@@ -34,6 +34,13 @@ DEFAULT_REGISTRY_PATH = Path.home() / ".local" / "share" / "oais" / "registry.db
 DEFAULT_PORT = 8765
 FIREFOX_ARGV = ["firefox", "--kiosk"]
 
+# If Firefox can't even start (crashes immediately, missing binary, no GPU
+# support in a VM, etc.) this falls back to the old text shell instead of
+# leaving sway showing nothing but its own cursor on a black screen --
+# something visible beats a silent crash every time, and the fallback
+# still runs the same real Orchestrator underneath (onboarding_cli.py).
+FALLBACK_ARGV = ["foot", "-e", "python3", "-m", "orchestrator.onboarding_cli"]
+
 
 def _initial_state(config_path: Path) -> ConnectionState:
     """Re-verify any saved connection at startup (token expired, CLI
@@ -45,6 +52,22 @@ def _initial_state(config_path: Path) -> ConnectionState:
     if provider is not None and conn is not None:
         state.set_connected(conn.choice_id, provider)
     return state
+
+
+def _launch_firefox_or_fallback(run, url: str) -> None:
+    try:
+        result = run([*FIREFOX_ARGV, url])
+    except FileNotFoundError as exc:
+        print(f"[webshell_cli] firefox not found ({exc}); falling back to text shell", file=sys.stderr)
+        run(FALLBACK_ARGV)
+        return
+
+    if result.returncode != 0:
+        print(
+            f"[webshell_cli] firefox exited with code {result.returncode}; falling back to text shell",
+            file=sys.stderr,
+        )
+        run(FALLBACK_ARGV)
 
 
 def main(
@@ -66,7 +89,7 @@ def main(
     server_thread.start()
 
     try:
-        run([*FIREFOX_ARGV, f"http://127.0.0.1:{bound_port}/"])
+        _launch_firefox_or_fallback(run, f"http://127.0.0.1:{bound_port}/")
     finally:
         server.shutdown()
         server.server_close()
