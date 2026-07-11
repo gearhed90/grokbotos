@@ -69,9 +69,21 @@ class CliSubprocessProvider(LLMProvider):
         self._extra_env[key] = value
         self._verified_ready = False  # re-verify with the new credential
 
+    # A real `npm install -g` of a CLI package (registry resolution,
+    # download, any native/postinstall steps) routinely takes well over
+    # 120s on a constrained VM's shared virtio-net -- confirmed via the
+    # live log panel: a real install hit `TimeoutExpired` at exactly 120s
+    # (2026-07-11, docs/DECISIONS.md). Prompt calls (`<cli> -p ...`)
+    # should be much faster in practice; keeping their timeout tighter
+    # means a genuinely hung CLI still fails fast instead of blocking the
+    # whole connect flow for 10 minutes.
+    _INSTALL_TIMEOUT_SECONDS = 600
+    _PROMPT_TIMEOUT_SECONDS = 120
+
     def _default_run(self, argv: list[str]) -> subprocess.CompletedProcess:
         env = {**os.environ, **self._extra_env} if self._extra_env else None
-        return subprocess.run(argv, capture_output=True, text=True, check=False, timeout=120, env=env)
+        timeout = self._INSTALL_TIMEOUT_SECONDS if argv == self.install_argv else self._PROMPT_TIMEOUT_SECONDS
+        return subprocess.run(argv, capture_output=True, text=True, check=False, timeout=timeout, env=env)
 
     def interactive_login(self) -> bool:
         """Run `login_command` with the CLI's real stdio (not captured), so

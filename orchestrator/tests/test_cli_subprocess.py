@@ -138,6 +138,29 @@ class TestCliSubprocessProvider(unittest.TestCase):
         self.assertNotIn("capture_output", kwargs)  # real stdio, not captured
         self.assertEqual(kwargs["env"]["SOME_TOKEN"], "secret-value")
 
+    @patch("subprocess.run")
+    def test_install_call_gets_the_longer_timeout(self, mock_run):
+        """Real bug, caught via the live log panel: a real `npm install -g`
+        hit subprocess.TimeoutExpired at exactly 120s (2026-07-11,
+        docs/DECISIONS.md) -- the same timeout used for the fast `-p`
+        prompt calls was far too short for a real package install."""
+        mock_run.return_value = subprocess.CompletedProcess([], returncode=0, stdout="ok", stderr="")
+        provider = _FakeCliProvider()
+
+        provider._default_run(provider.install_argv)
+
+        self.assertEqual(mock_run.call_args.kwargs["timeout"], CliSubprocessProvider._INSTALL_TIMEOUT_SECONDS)
+        self.assertGreater(CliSubprocessProvider._INSTALL_TIMEOUT_SECONDS, CliSubprocessProvider._PROMPT_TIMEOUT_SECONDS)
+
+    @patch("subprocess.run")
+    def test_prompt_call_gets_the_shorter_timeout(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess([], returncode=0, stdout="ok", stderr="")
+        provider = _FakeCliProvider()
+
+        provider._default_run(["fakecli", "-p", "hello"])
+
+        self.assertEqual(mock_run.call_args.kwargs["timeout"], CliSubprocessProvider._PROMPT_TIMEOUT_SECONDS)
+
     def test_log_hook_receives_install_and_readiness_progress(self):
         """The shell UI's live log panel (webshell/logbuf.py) is fed by
         this hook -- without it, a slow install/login has zero visible

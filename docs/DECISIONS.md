@@ -582,3 +582,45 @@ lines asserted from `commands.dispatch()`/`cli_subprocess.py`/
 can't be exercised at all until this branch is merged to `main` --
 `workflow_run` triggers only fire for workflow files present on the
 default branch.
+
+## npm install timeout too short -- confirmed via the new log panel (2026-07-11)
+
+First real payoff from the log panel added earlier today: the user's
+screenshot showed the exact failure for the first time, instead of a
+guess --
+
+```
+[cmd] /llm claude
+[llm] claude 연결 시작
+[claude] 설치 중: npm install -g @anthropic-ai/claude-code
+[llm] claude 연결 중 예상치 못한 오류: TimeoutExpired: Command
+  '['npm', 'install', '-g', '@anthropic-ai/claude-code']' timed out
+  after 120 seconds
+```
+
+`CliSubprocessProvider._default_run()` used a single hardcoded 120s
+`subprocess.run(..., timeout=...)` for every call it makes -- both the
+package install and the fast `<cli> -p ...` prompt calls. A real `npm
+install -g` (registry resolution, download, any postinstall steps) on a
+VM sharing virtio-net bandwidth with the host routinely needs more than
+two minutes; 120s was simply too tight.
+
+**Fix**: split the timeout by call type instead of raising one global
+number blindly. `_default_run()` now picks `_INSTALL_TIMEOUT_SECONDS =
+600` when the argv matches `self.install_argv`, else
+`_PROMPT_TIMEOUT_SECONDS = 120` (unchanged -- a real completion call
+should still fail fast if something's actually hung, not block the
+whole connect flow for 10 minutes). 600s matches `interactive_login()`'s
+existing timeout for the login subprocess, so the two genuinely
+long-running operations are now consistent.
+
+Worth noting for what this round validates: the catch-all `except
+Exception` added in `connect.py` after the earlier "연결 중..." forever
+bug did exactly its job here -- `TimeoutExpired` isn't
+`ExternalLoginRequired`/`ProviderNotReady`, but it still reached the
+user as a clear, readable message instead of vanishing. Combined with
+the log panel, this is the first Phase 4 failure in this project that
+got diagnosed from real evidence on the first try, not a hypothesis.
+
+164 tests pass, including two asserting `_default_run` picks the right
+timeout for install vs. prompt calls.
