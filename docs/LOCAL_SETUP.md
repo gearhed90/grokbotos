@@ -51,7 +51,14 @@ git commit -m "Add cosign public key"
    `ghcr.io/head77x/oais` (amd64) and `ghcr.io/head77x/oais-arm64` (arm64)
    as separate images; `build-disk.yml` picks the right one automatically
    from this input.
-2. Download the `anaconda-iso` artifact from the completed run.
+2. Get the built image:
+   - **If the S3 secrets below are set**: `build-disk.yml` uploads it
+     straight to `s3://$AWS_S3_BUCKET/oais/<disk-type>-<platform>/`
+     automatically -- pull it from there (`aws s3 cp` or the S3 console).
+     Much faster than the next option for a multi-GB `anaconda-iso`.
+   - **Otherwise**: download the `oais-anaconda-iso-<platform>` artifact
+     from the completed run's Actions page (slow for a multi-GB file --
+     set up the S3 secrets once and this step goes away).
 3. Boot the ISO in a VM:
    - **Linux**: `just build-qcow2` locally, or boot the ISO in
      `virt-manager`/`virsh`.
@@ -78,6 +85,28 @@ sudo systemctl reboot
 ```
 Confirms the "rebase an existing install" path works, not just fresh ISO
 installs.
+
+## 6. (Optional) Direct-to-S3 disk image upload
+
+Downloading a multi-GB `anaconda-iso`/`qcow2` through GitHub's artifact
+zip UI is the slowest part of the whole `build-disk.yml` run. Set these
+repo secrets (Settings → Secrets and variables → Actions) and the
+workflow uploads straight to S3 instead, automatically -- no input to
+toggle, no artifact download:
+
+| Secret | Required | Notes |
+|---|---|---|
+| `AWS_ACCESS_KEY_ID` | yes | IAM user/role with `s3:PutObject` on the bucket below |
+| `AWS_SECRET_ACCESS_KEY` | yes | |
+| `AWS_S3_BUCKET` | yes | bucket name only, no `s3://` prefix |
+| `AWS_REGION` | no | defaults to `us-east-1` if unset |
+
+If `AWS_ACCESS_KEY_ID` or `AWS_S3_BUCKET` isn't set, the workflow falls
+back to the old GitHub Artifact upload automatically -- nothing breaks by
+leaving these unset, uploads are just slower to retrieve.
+
+Uploads land at
+`s3://$AWS_S3_BUCKET/oais/<qcow2|anaconda-iso>-<amd64|arm64>/`.
 
 ## Why this can't run in the current dev sandbox
 
