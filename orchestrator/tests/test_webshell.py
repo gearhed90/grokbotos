@@ -166,6 +166,24 @@ class TestRunConnect(unittest.TestCase):
         saved = json.loads(self.config_path.read_text())
         self.assertEqual(saved["custom_cli_binary"], "mycli")
 
+    def test_unexpected_exception_surfaces_as_error_instead_of_hanging(self):
+        """The actual 2026-07-11 bug: npm missing from the image made
+        install_argv raise a bare FileNotFoundError, which isn't
+        ExternalLoginRequired/ProviderNotReady -- before this catch-all,
+        that silently killed the background thread and left the UI
+        showing "connecting" forever with no error ever surfaced."""
+        state = ConnectionState()
+
+        def _raise(**kw):
+            raise FileNotFoundError("[Errno 2] No such file or directory: 'npm'")
+
+        run_connect("claude", state, self.config_path, connectors={"claude": _raise})
+
+        snap = state.snapshot()
+        self.assertFalse(snap["connected"])
+        self.assertIsNone(snap["connecting"])
+        self.assertIn("npm", snap["error"])
+
 
 class TestRunConnectToken(unittest.TestCase):
     def setUp(self):
@@ -199,6 +217,19 @@ class TestRunConnectToken(unittest.TestCase):
         run_connect_token("grok", "tok", state, self.config_path)
 
         self.assertIn("claude", state.snapshot()["error"])
+
+    def test_unexpected_exception_surfaces_as_error_instead_of_hanging(self):
+        state = ConnectionState()
+
+        def _raise(tok):
+            raise RuntimeError("boom")
+
+        run_connect_token("claude", "tok", state, self.config_path, token_connector=_raise)
+
+        snap = state.snapshot()
+        self.assertFalse(snap["connected"])
+        self.assertIsNone(snap["connecting"])
+        self.assertIn("boom", snap["error"])
 
 
 class TestApiPayloads(unittest.TestCase):

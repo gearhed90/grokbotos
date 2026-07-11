@@ -80,6 +80,17 @@ def run_connect(
     except ProviderNotReady as exc:
         state.set_error(str(exc))
         return
+    except Exception as exc:  # noqa: BLE001 - see comment
+        # This runs on a background thread (server.py's do_POST spawns it)
+        # -- an uncaught exception here doesn't crash the process, it just
+        # kills the thread silently, leaving ConnectionState stuck on
+        # "connecting" forever with the UI showing no error at all. Real
+        # example: npm missing from the image made install_argv raise a
+        # bare FileNotFoundError, which neither except above catches
+        # (2026-07-11, see docs/DECISIONS.md). Whatever the actual failure
+        # is, it must reach the user instead of vanishing.
+        state.set_error(f"{type(exc).__name__}: {exc}")
+        return
 
     _save(choice_id, provider, config_path)
     state.set_connected(choice_id, provider)
@@ -104,6 +115,9 @@ def run_connect_token(
         provider = token_connector(token)
     except ExternalLoginRequired as exc:
         state.set_error(str(exc), needs_token=True)
+        return
+    except Exception as exc:  # noqa: BLE001 - see run_connect's matching comment
+        state.set_error(f"{type(exc).__name__}: {exc}")
         return
 
     _save(choice_id, provider, config_path)

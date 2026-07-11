@@ -400,3 +400,51 @@ initialize GPU/GL rendering inside a QEMU/UTM VM with no acceleration,
 which the new fallback would also mask into "text shell instead" rather
 than surface directly). The logging added in part 2 is what turns the
 next report from a guess into a real diagnosis.
+
+## "Claude 클릭해도 반응 없음" — missing npm + a silently-dying background thread (2026-07-11)
+
+Third real boot report, and genuine progress: the GUI web shell rendered
+correctly this time (screenshot showed the prompt bar, the icon dock, and
+the "연결 중..." status after clicking Claude) -- the tmpfiles/logging fix
+above worked. But clicking Claude never went anywhere: no browser opened,
+no error, stuck on "연결 중..." indefinitely.
+
+**Root cause, found by re-reading the code (not yet confirmed against an
+actual `shell.log`, since this session has no way to read the user's VM
+directly)**: two independent bugs stacked.
+
+1. `ClaudeCliProvider`/`GrokCliProvider`'s `install_argv` is
+   `["npm", "install", "-g", "..."]` -- but `build.sh` never installs
+   `nodejs`/`npm` in the image. `python3`, `sway`, `foot`, `firefox`, and
+   the CJK font package are the only runtime packages it adds.
+2. `webshell/connect.py:run_connect()` (and `run_connect_token()`) only
+   caught `ExternalLoginRequired`/`ProviderNotReady`. `npm` missing means
+   `subprocess.run(["npm", ...])` raises a bare `FileNotFoundError`,
+   which neither `except` catches. This runs on a background thread
+   (`server.py`'s `/api/connect` handler spawns it so `/api/status`
+   polling keeps working during a real OAuth flow) -- an exception
+   escaping a thread's target function doesn't crash the process, it just
+   kills that thread silently. `ConnectionState` was left with
+   `connecting="claude"` forever, since neither `set_connected()` nor
+   `set_error()` ever ran. The frontend's polling loop was written
+   correctly (show `status.error` when present) -- it just never got one.
+
+**Fix**:
+- `build.sh`: add `nodejs` (Fedora bundles npm with it) to the `dnf5
+  install` line.
+- `connect.py`: both functions now also catch a bare `Exception` after
+  the specific ones, turning *any* unexpected failure into
+  `state.set_error(...)` instead of a silently dead thread. This is the
+  same lesson as the black-screen fix above, applied to a different
+  failure mode -- don't let a background operation fail invisibly, no
+  matter what actually goes wrong inside it.
+
+**Still not confirmed against a real log** -- this is the most-likely
+explanation given the code path and the observed symptom, not a
+certainty. If this doesn't fully fix it, `shell.log` should now at least
+show *something* useful either way, since Firefox/webshell_cli's own
+stdout/stderr already gets captured there (the connect failure itself
+happens inside the running webshell_cli process, so a `state.set_error()`
+call doesn't show up in `shell.log` by itself -- that's surfaced through
+the web UI's `#connect-status` text instead, which is the right place for
+it to be visible to the user without needing a second console).

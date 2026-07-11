@@ -65,7 +65,17 @@ systemctl enable podman.socket
 ### the /var persistence constraint above; expect to iterate once
 ### actually booted (docs/LOCAL_SETUP.md).
 
-dnf5 install -y python3 sway foot firefox google-noto-sans-cjk-ttc-fonts
+# nodejs (bundles npm on Fedora) -- required at RUNTIME, not build time:
+# ClaudeCliProvider/GrokCliProvider (orchestrator/providers/claude_cli.py,
+# xai_grok.py) auto-install their CLI via `npm install -g ...` the first
+# time a user picks Claude/Grok in the shell. Without npm present, that
+# install_argv call raises FileNotFoundError -- which, before the
+# connect.py fix in this same commit, silently killed the background
+# connection thread and left the UI showing "연결 중..." forever with no
+# error. High-confidence diagnosis of a real "clicked Claude, nothing
+# happened" report (2026-07-11) -- not yet confirmed against that boot's
+# actual shell.log, docs/DECISIONS.md.
+dnf5 install -y python3 sway foot firefox google-noto-sans-cjk-ttc-fonts nodejs
 
 mkdir -p /usr/lib/oais
 cp -a /ctx/orchestrator /usr/lib/oais/orchestrator
