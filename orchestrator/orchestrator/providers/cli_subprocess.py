@@ -46,10 +46,21 @@ class CliSubprocessProvider(LLMProvider):
     login_command: str
     install_argv: list[str] | None = None  # None if there's nothing to auto-install
 
-    def __init__(self, run: Runner | None = None, extra_env: dict[str, str] | None = None):
+    def __init__(
+        self,
+        run: Runner | None = None,
+        extra_env: dict[str, str] | None = None,
+        log: "Callable[[str], None] | None" = None,
+    ):
         self._run = run or self._default_run
         self._verified_ready = False
         self._extra_env: dict[str, str] = dict(extra_env or {})
+        # Fed to the shell UI's live log panel (webshell/logbuf.py) so
+        # "연결 중..." isn't the only thing the user sees while this runs a
+        # real install/login subprocess that can take a while -- no-op by
+        # default so every other caller (onboarding_cli.py, tests) is
+        # unaffected.
+        self._log: Callable[[str], None] = log or (lambda _msg: None)
 
     def set_env(self, key: str, value: str) -> None:
         """Add/override an environment variable for every subprocess call
@@ -72,7 +83,9 @@ class CliSubprocessProvider(LLMProvider):
         (callers should still confirm with ensure_ready() after)."""
         argv = self.login_command.split()
         env = {**os.environ, **self._extra_env} if self._extra_env else None
+        self._log(f"[{self.cli_binary}] 실행: {self.login_command} (브라우저가 열리면 로그인을 완료하세요)")
         result = subprocess.run(argv, env=env, timeout=600)
+        self._log(f"[{self.cli_binary}] {self.login_command} 종료 (코드 {result.returncode})")
         return result.returncode == 0
 
     def status(self) -> ProviderStatus:
@@ -91,21 +104,27 @@ class CliSubprocessProvider(LLMProvider):
                 raise ExternalLoginRequired(
                     self.provider_id, self.login_command, detail=f"'{self.cli_binary}' not found on PATH"
                 )
+            self._log(f"[{self.cli_binary}] 설치 중: {' '.join(self.install_argv)}")
             result = self._run(self.install_argv)
             if result.returncode != 0 or not self._binary_present():
+                self._log(f"[{self.cli_binary}] 설치 실패 (종료 코드 {result.returncode})")
                 raise ExternalLoginRequired(
                     self.provider_id,
                     self.login_command,
                     detail=f"install failed ({' '.join(self.install_argv)}): {result.stderr.strip()}",
                 )
+            self._log(f"[{self.cli_binary}] 설치 완료")
 
+        self._log(f"[{self.cli_binary}] 로그인 상태 확인 중...")
         smoke = self._run(self._build_prompt_argv("Reply with the single word: ok"))
         if smoke.returncode != 0:
+            self._log(f"[{self.cli_binary}] 로그인 필요 (확인 실패: {smoke.stderr.strip()[:200]})")
             raise ExternalLoginRequired(
                 self.provider_id,
                 self.login_command,
                 detail=f"'{self.cli_binary}' isn't logged in yet: {smoke.stderr.strip()}",
             )
+        self._log(f"[{self.cli_binary}] 준비 완료")
         self._verified_ready = True
 
     def complete_json(self, prompt: str, schema: dict) -> dict:

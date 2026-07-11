@@ -44,13 +44,18 @@ git commit -m "Add cosign public key"
 
 ## 4. ISO install test (Phase 1)
 
-1. Trigger `build-disk.yml` manually (Actions tab → "Build disk images" →
-   "Run workflow"). Pick `platform` matching **the machine you'll boot the
-   VM on**, not the machine running the CI job -- `amd64` for Intel/most
-   PCs, `arm64` for Apple Silicon Macs. `build.yml` publishes both
-   `ghcr.io/head77x/oais` (amd64) and `ghcr.io/head77x/oais-arm64` (arm64)
-   as separate images; `build-disk.yml` picks the right one automatically
-   from this input.
+1. `build-disk.yml` now runs **automatically** -- it's chained via a
+   `workflow_run` trigger off `build.yml` ("Build container image"), so
+   every successful push to `main` kicks off both platforms' `qcow2` +
+   `anaconda-iso` builds (4 jobs) with no manual step. Just wait for it
+   to show up and finish on the Actions tab after `build.yml` goes green.
+   To build just one platform on demand instead, trigger `build-disk.yml`
+   manually (Actions tab → "Build disk images" → "Run workflow") and pick
+   `platform` matching **the machine you'll boot the VM on**, not the
+   machine running the CI job -- `amd64` for Intel/most PCs, `arm64` for
+   Apple Silicon Macs. `build.yml` publishes both `ghcr.io/head77x/oais`
+   (amd64) and `ghcr.io/head77x/oais-arm64` (arm64) as separate images;
+   `build-disk.yml` picks the right one automatically either way.
 2. Get the built image:
    - **If the S3 secrets below are set**: `build-disk.yml` uploads it
      straight to `s3://$AWS_S3_BUCKET/oais/<disk-type>-<platform>/`

@@ -51,6 +51,13 @@ class TestDispatchRouting(_DispatchTestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("/help", result["message"])
 
+    def test_every_dispatched_command_is_logged(self):
+        lines = []
+
+        self._dispatch("/help", log=lines.append)
+
+        self.assertIn("/help", lines[0])
+
     def test_help_lists_all_built_in_commands(self):
         result = self._dispatch("/help")
 
@@ -114,7 +121,7 @@ class TestTokenCommand(_DispatchTestCase):
     def test_valid_token_starts_connecting_in_background(self):
         provider = _FakeProvider()
 
-        result = self._dispatch("/token claude abc123", token_connector=lambda tok: provider)
+        result = self._dispatch("/token claude abc123", token_connector=lambda tok, log=None: provider)
 
         self.assertEqual(result["status"], "connecting")
         self.assertTrue(_wait_until(lambda: self.state.snapshot()["connected"]))
@@ -137,16 +144,18 @@ class TestSystemCommand(_DispatchTestCase):
 
     def test_network_runs_nmcli_and_returns_output(self):
         seen = {}
+        lines = []
 
         def _fake_run(argv, **kw):
             seen["argv"] = argv
             return _CompletedProcess(returncode=0, stdout="DEVICE  TYPE  STATE\neth0 ethernet connected\n")
 
-        result = self._dispatch("/system network", run=_fake_run)
+        result = self._dispatch("/system network", run=_fake_run, log=lines.append)
 
         self.assertEqual(seen["argv"], ["nmcli", "device", "status"])
         self.assertEqual(result["status"], "success")
         self.assertIn("eth0", result["message"])
+        self.assertTrue(any("nmcli" in line for line in lines))
 
     def test_network_missing_nmcli_returns_error(self):
         def _fake_run(argv, **kw):

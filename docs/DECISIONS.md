@@ -525,3 +525,60 @@ enforced in `api.py`, not by disabling the input.
 
 149 tests pass. Still fully unverified against a real boot -- same
 caveat as every Phase 4 entry above.
+
+## Live CLI activity log panel + CI auto-chains disk builds (2026-07-11)
+
+Two independent follow-ups from the same round of feedback.
+
+**1. Live log panel.** The redesigned shell still left the user staring
+at a static "연결 중..." message with zero visibility into what was
+actually happening underneath -- exactly the same class of problem as
+the earlier black-screen and silent-thread bugs, just one layer up (the
+*mechanism* now correctly reaches the user, but there's nothing to show
+between "started" and "finished/failed" for a slow operation). Explicit
+request: a real-time log window, right side of the screen, showing what
+the CLI is actually doing.
+
+Implementation: `webshell/logbuf.py`'s `LogBuffer` is a thread-safe ring
+buffer (`collections.deque` + `threading.Condition`). `GET /api/logs?after=<id>`
+long-polls against it -- blocks up to 20s until a new entry exists, then
+returns immediately; the frontend just re-issues the request the instant
+a response comes back, giving near-real-time updates over plain HTTP
+with no websocket. Every layer that shells out to a real CLI now accepts
+an optional `log: Callable[[str], None]`, threaded all the way down:
+`server.py` → `api.prompt_payload()` → `commands.dispatch()` →
+`connect.run_connect()`/`run_connect_token()` → `onboarding.py`'s
+`connect_*()` functions → `providers/cli_subprocess.py` and
+`providers/local_ollama.py`, which log the actual install command,
+its exit code, the login subprocess starting and finishing, and the
+Ollama pull's start/success/failure. Default is a no-op everywhere, so
+every existing caller (`onboarding_cli.py`, all prior tests) is
+unaffected. `commands.dispatch()` also logs the raw command text itself
+on every call, so `/system network`'s `nmcli` invocation, `/cli`'s
+terminal spawn, and even plain `/help` all show up.
+
+Frontend: `#layout` is now a flex row -- `#page` (the existing prompt +
+tiles column) on the left, a fixed-width `#log-panel` (dark terminal-like
+background, monospace, auto-scrolling) on the right. `pollLogs()` in
+`app.js` is the long-poll loop.
+
+**2. CI: disk builds now chain automatically.** `build-disk.yml` only had
+`workflow_dispatch` (manual) and a narrow `pull_request` trigger --
+getting an actual disk image after a push to `main` required manually
+running it. Added a `workflow_run` trigger keyed off `build.yml`'s exact
+name ("Build container image"), gated on `conclusion == 'success'` so a
+failed container build doesn't waste a disk build on a stale/nonexistent
+image. Since a `workflow_run`-triggered run has no manual `platform`
+input, the job now computes its platform matrix dynamically (a small
+`determine-platforms` job): `workflow_dispatch` still builds exactly the
+one platform picked from the dropdown; every other trigger (the new
+automatic chain, and the existing `pull_request` trigger) builds both
+amd64 and arm64, matching `build.yml`'s own matrix. Every `inputs.platform`
+reference in the job became `matrix.platform`.
+
+162 tests pass. The log panel is logic-tested (LogBuffer directly, log
+lines asserted from `commands.dispatch()`/`cli_subprocess.py`/
+`local_ollama.py`) but has never rendered on a real screen. The CI change
+can't be exercised at all until this branch is merged to `main` --
+`workflow_run` triggers only fire for workflow files present on the
+default branch.

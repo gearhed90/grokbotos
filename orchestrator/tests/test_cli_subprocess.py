@@ -138,6 +138,60 @@ class TestCliSubprocessProvider(unittest.TestCase):
         self.assertNotIn("capture_output", kwargs)  # real stdio, not captured
         self.assertEqual(kwargs["env"]["SOME_TOKEN"], "secret-value")
 
+    def test_log_hook_receives_install_and_readiness_progress(self):
+        """The shell UI's live log panel (webshell/logbuf.py) is fed by
+        this hook -- without it, a slow install/login has zero visible
+        progress beyond a static "연결 중..." message (2026-07-11 user
+        feedback)."""
+        lines = []
+        installed = {"done": False}
+
+        def fake_run(argv):
+            if argv == ["fakecli", "--version"]:
+                return _ok(argv) if installed["done"] else _fail(argv)
+            if argv[0] == "npm":
+                installed["done"] = True
+                return _ok(argv)
+            return _ok(argv, stdout="ok")
+
+        provider = _FakeCliProvider(run=fake_run, log=lines.append)
+        provider.ensure_ready()
+
+        joined = "\n".join(lines)
+        self.assertIn("설치 중", joined)
+        self.assertIn("설치 완료", joined)
+        self.assertIn("준비 완료", joined)
+
+    def test_log_hook_reports_install_failure(self):
+        lines = []
+
+        def fake_run(argv):
+            return _fail(argv)
+
+        provider = _FakeCliProvider(run=fake_run, log=lines.append)
+
+        with self.assertRaises(ExternalLoginRequired):
+            provider.ensure_ready()
+
+        self.assertTrue(any("설치 실패" in line for line in lines))
+
+    @patch("subprocess.run")
+    def test_log_hook_receives_interactive_login_progress(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess([], returncode=0)
+        lines = []
+        provider = _FakeCliProvider(log=lines.append)
+
+        provider.interactive_login()
+
+        joined = "\n".join(lines)
+        self.assertIn("fakecli login", joined)
+        self.assertIn("종료", joined)
+
+    def test_no_log_hook_is_a_safe_no_op(self):
+        provider = _FakeCliProvider(run=lambda argv: _ok(argv, stdout="ok"))
+
+        provider.ensure_ready()  # must not raise just because log wasn't given
+
 
 if __name__ == "__main__":
     unittest.main()

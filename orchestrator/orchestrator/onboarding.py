@@ -137,12 +137,15 @@ def get_active_provider(path: Path = DEFAULT_CONFIG_PATH) -> LLMProvider | None:
     return provider
 
 
-def connect_claude_via_browser(provider: ClaudeCliProvider | None = None) -> ClaudeCliProvider:
+def connect_claude_via_browser(provider: ClaudeCliProvider | None = None, log=None) -> ClaudeCliProvider:
     """Primary Claude connection path now that a local browser is baked
     into the image: same shape as connect_grok() -- try silently first,
     otherwise run `claude login` with real stdio so its own browser-open
-    behavior takes over."""
-    provider = provider or ClaudeCliProvider()
+    behavior takes over. `log`, if given, is a callable(str) -> None fed
+    the CLI's real install/login progress (webshell/logbuf.py) -- ignored
+    if `provider` is supplied directly (its own log wiring, if any,
+    already applies)."""
+    provider = provider or ClaudeCliProvider(log=log)
     try:
         provider.ensure_ready()
         return provider
@@ -157,19 +160,19 @@ def connect_claude_via_browser(provider: ClaudeCliProvider | None = None) -> Cla
     return provider
 
 
-def connect_claude_with_token(token: str, provider: ClaudeCliProvider | None = None) -> ClaudeCliProvider:
+def connect_claude_with_token(token: str, provider: ClaudeCliProvider | None = None, log=None) -> ClaudeCliProvider:
     """Fallback path: no graphical session yet, or the user just prefers
     it. See module docstring."""
-    provider = provider or ClaudeCliProvider()
+    provider = provider or ClaudeCliProvider(log=log)
     provider.authenticate_with_token(token)
     provider.ensure_ready()  # raises ExternalLoginRequired if the token doesn't actually work
     return provider
 
 
-def connect_grok(provider: GrokCliProvider | None = None) -> GrokCliProvider:
+def connect_grok(provider: GrokCliProvider | None = None, log=None) -> GrokCliProvider:
     """Try silently first (already logged in from a previous session),
     otherwise drive the real device-code flow interactively."""
-    provider = provider or GrokCliProvider()
+    provider = provider or GrokCliProvider(log=log)
     try:
         provider.ensure_ready()
         return provider
@@ -184,8 +187,10 @@ def connect_grok(provider: GrokCliProvider | None = None) -> GrokCliProvider:
     return provider
 
 
-def connect_ollama(model_id: str = DEFAULT_OLLAMA_MODEL, provider: OllamaProvider | None = None) -> OllamaProvider:
-    provider = provider or OllamaProvider(model_id=model_id)
+def connect_ollama(
+    model_id: str = DEFAULT_OLLAMA_MODEL, provider: OllamaProvider | None = None, log=None
+) -> OllamaProvider:
+    provider = provider or OllamaProvider(model_id=model_id, log=log)
     provider.ensure_ready()  # auto-installs the daemon's model via `ollama pull`
     return provider
 
@@ -196,8 +201,9 @@ def connect_custom(
     login_command: str,
     install_argv: list[str] | None = None,
     provider: CliSubprocessProvider | None = None,
+    log=None,
 ) -> CliSubprocessProvider:
-    provider = provider or CustomCliProvider(provider_id, cli_binary, login_command, install_argv)
+    provider = provider or CustomCliProvider(provider_id, cli_binary, login_command, install_argv, log=log)
     try:
         provider.ensure_ready()
         return provider

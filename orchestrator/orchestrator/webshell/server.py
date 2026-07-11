@@ -11,10 +11,12 @@ from __future__ import annotations
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from .. import onboarding
 from ..registry.db import AppRegistry
 from . import api
+from .logbuf import LogBuffer
 from .state import ConnectionState
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -26,7 +28,9 @@ _CONTENT_TYPES = {
 }
 
 
-def build_handler(state: ConnectionState, registry: AppRegistry, config_path: Path) -> type[BaseHTTPRequestHandler]:
+def build_handler(
+    state: ConnectionState, registry: AppRegistry, config_path: Path, logbuf: LogBuffer
+) -> type[BaseHTTPRequestHandler]:
     static_root = STATIC_DIR.resolve()
 
     class Handler(BaseHTTPRequestHandler):
@@ -66,18 +70,29 @@ def build_handler(state: ConnectionState, registry: AppRegistry, config_path: Pa
             return json.loads(raw.decode("utf-8")) if raw else {}
 
         def do_GET(self) -> None:  # noqa: N802 - stdlib method name
-            if self.path in ("/", "/index.html"):
+            parsed = urlsplit(self.path)
+            path = parsed.path
+            if path in ("/", "/index.html"):
                 self._send_static("index.html")
-            elif self.path.startswith("/static/"):
-                self._send_static(self.path[len("/static/") :])
-            elif self.path == "/api/status":
+            elif path.startswith("/static/"):
+                self._send_static(path[len("/static/") :])
+            elif path == "/api/status":
                 self._send_json(api.status_payload(state))
-            elif self.path == "/api/apps":
+            elif path == "/api/apps":
                 self._send_json(api.apps_payload(registry))
-            elif self.path == "/api/choices":
+            elif path == "/api/choices":
                 self._send_json(
                     {"choices": [{"id": c.id, "label": c.label, "kind": c.kind} for c in onboarding.CHOICES]}
                 )
+            elif path == "/api/logs":
+                # Long-poll: blocks (up to a timeout) until new log lines
+                # exist so the frontend's log panel updates in near-real
+                # time without a websocket. `after` is the last entry id
+                # the client already has.
+                after = int(parse_qs(parsed.query).get("after", ["-1"])[0])
+                entries = logbuf.wait_for_more(after, timeout=20.0)
+                next_after = entries[-1][0] if entries else after
+                self._send_json({"entries": entries, "next_after": next_after})
             else:
                 self.send_error(404)
 
@@ -88,7 +103,9 @@ def build_handler(state: ConnectionState, registry: AppRegistry, config_path: Pa
                 if not text:
                     self._send_json({"status": "error", "message": "empty prompt"}, status=400)
                     return
-                self._send_json(api.prompt_payload(state, registry, text, config_path=config_path))
+                self._send_json(
+                    api.prompt_payload(state, registry, text, config_path=config_path, log=logbuf.append)
+                )
             else:
                 self.send_error(404)
 
@@ -101,6 +118,8 @@ def build_server(
     config_path: Path = onboarding.DEFAULT_CONFIG_PATH,
     host: str = "127.0.0.1",
     port: int = 0,
+    logbuf: LogBuffer | None = None,
 ) -> ThreadingHTTPServer:
-    handler_cls = build_handler(state, registry, config_path)
+    logbuf = logbuf or LogBuffer()
+    handler_cls = build_handler(state, registry, config_path, logbuf)
     return ThreadingHTTPServer((host, port), handler_cls)

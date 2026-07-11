@@ -16,6 +16,8 @@
   --tile-cli-b: #e8590c;
   --tile-app-a: #495057;
   --tile-app-b: #343a40;
+  --log-bg: #0b0c0d;
+  --log-text: #a8f0b0;
 }
 
 * {
@@ -24,10 +26,15 @@
 
 html, body {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: "Noto Sans CJK KR", "Noto Sans KR", "Noto Sans", system-ui, sans-serif;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
 }
 
 #topbar {
@@ -35,6 +42,13 @@ html, body {
   align-items: baseline;
   gap: 10px;
   padding: 20px 32px 0;
+  flex-shrink: 0;
+}
+
+#layout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
 }
 
 #brand {
@@ -52,12 +66,64 @@ html, body {
 }
 
 #page {
-  max-width: 880px;
-  margin: 0 auto;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
   padding: 48px 24px 64px;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 32px;
+}
+
+#page > * {
+  width: 100%;
+  max-width: 880px;
+}
+
+#log-panel {
+  width: 340px;
+  flex-shrink: 0;
+  background: var(--log-bg);
+  border-left: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+}
+
+#log-panel-header {
+  flex-shrink: 0;
+  padding: 14px 16px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+#log-lines {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.log-line {
+  color: var(--log-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.9;
+}
+
+.log-line + .log-line {
+  margin-top: 2px;
+}
+
+.log-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 #prompt-card {

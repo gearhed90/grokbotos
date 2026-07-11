@@ -47,21 +47,25 @@ def dispatch(
     popen=subprocess.Popen,
     connectors: dict | None = None,
     token_connector=None,
+    log=None,
 ) -> dict:
+    log = log or (lambda _msg: None)
     parts = text.strip().split()
     name = parts[0].lower()
     args = parts[1:]
 
+    log(f"[cmd] {text.strip()}")
+
     if name == "/help":
         return {"status": "success", "message": HELP_TEXT}
     if name == "/llm":
-        return _cmd_llm(args, state=state, config_path=config_path, connectors=connectors)
+        return _cmd_llm(args, state=state, config_path=config_path, connectors=connectors, log=log)
     if name == "/token":
-        return _cmd_token(args, state=state, config_path=config_path, token_connector=token_connector)
+        return _cmd_token(args, state=state, config_path=config_path, token_connector=token_connector, log=log)
     if name == "/system":
-        return _cmd_system(args, state=state, registry=registry, run=run)
+        return _cmd_system(args, state=state, registry=registry, run=run, log=log)
     if name == "/cli":
-        return _cmd_cli(popen=popen)
+        return _cmd_cli(popen=popen, log=log)
 
     return {
         "status": "error",
@@ -69,7 +73,9 @@ def dispatch(
     }
 
 
-def _cmd_llm(args: list[str], *, state: ConnectionState, config_path: Path, connectors: dict | None) -> dict:
+def _cmd_llm(
+    args: list[str], *, state: ConnectionState, config_path: Path, connectors: dict | None, log
+) -> dict:
     if not args:
         lines = [f"  {c.id:<8} {c.label}" for c in onboarding.CHOICES]
         return {"status": "success", "message": "/llm <id> 로 연결하세요:\n" + "\n".join(lines)}
@@ -99,6 +105,7 @@ def _cmd_llm(args: list[str], *, state: ConnectionState, config_path: Path, conn
             cli_binary=cli_binary,
             login_command=login_command,
             connectors=connectors,
+            log=log,
         ),
         daemon=True,
     ).start()
@@ -108,21 +115,26 @@ def _cmd_llm(args: list[str], *, state: ConnectionState, config_path: Path, conn
     }
 
 
-def _cmd_token(args: list[str], *, state: ConnectionState, config_path: Path, token_connector) -> dict:
+def _cmd_token(args: list[str], *, state: ConnectionState, config_path: Path, token_connector, log) -> dict:
     if len(args) < 2 or args[0].lower() != "claude":
         return {"status": "error", "message": "사용법: /token claude <토큰>"}
     token = args[1]
     threading.Thread(
         target=run_connect_token,
         kwargs=dict(
-            choice_id="claude", token=token, state=state, config_path=config_path, token_connector=token_connector
+            choice_id="claude",
+            token=token,
+            state=state,
+            config_path=config_path,
+            token_connector=token_connector,
+            log=log,
         ),
         daemon=True,
     ).start()
     return {"status": "connecting", "message": "토큰 확인 중..."}
 
 
-def _cmd_system(args: list[str], *, state: ConnectionState, registry, run) -> dict:
+def _cmd_system(args: list[str], *, state: ConnectionState, registry, run, log) -> dict:
     sub = args[0].lower() if args else None
 
     if sub is None:
@@ -141,12 +153,16 @@ def _cmd_system(args: list[str], *, state: ConnectionState, registry, run) -> di
         }
 
     if sub == "network":
+        log("[system] nmcli device status 실행 중...")
         try:
             result = run(["nmcli", "device", "status"], capture_output=True, text=True, timeout=10)
         except FileNotFoundError:
+            log("[system] nmcli를 찾을 수 없음")
             return {"status": "error", "message": "nmcli를 찾을 수 없습니다."}
         if result.returncode != 0:
+            log(f"[system] nmcli 실패 (코드 {result.returncode})")
             return {"status": "error", "message": f"nmcli 실행 실패: {result.stderr.strip()}"}
+        log("[system] nmcli 완료")
         return {"status": "success", "message": result.stdout.strip()}
 
     if sub == "info":
@@ -169,9 +185,11 @@ def _read_pretty_name() -> str:
     return "AI-OS"
 
 
-def _cmd_cli(*, popen) -> dict:
+def _cmd_cli(*, popen, log) -> dict:
+    log(f"[cli] 터미널 실행: {' '.join(DEFAULT_TERMINAL_ARGV)}")
     try:
         popen(DEFAULT_TERMINAL_ARGV)
     except FileNotFoundError:
+        log("[cli] 터미널(foot)을 찾을 수 없음")
         return {"status": "error", "message": "터미널(foot)을 찾을 수 없습니다."}
     return {"status": "success", "message": "새 터미널 창을 엽니다."}

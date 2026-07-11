@@ -56,12 +56,14 @@ class OllamaProvider(LLMProvider):
         http_get: HttpGet = _real_http_get,
         http_post: HttpPost = _real_http_post,
         run: Runner = _real_run,
+        log: Callable[[str], None] | None = None,
     ):
         self.model_id = model_id
         self._base_url = base_url
         self._http_get = http_get
         self._http_post = http_post
         self._run = run
+        self._log: Callable[[str], None] = log or (lambda _msg: None)
 
     def status(self) -> ProviderStatus:
         try:
@@ -80,6 +82,7 @@ class OllamaProvider(LLMProvider):
             return
 
         if current is ProviderStatus.ERROR:
+            self._log(f"[ollama] 데몬에 연결할 수 없음 ({self._base_url})")
             raise ModelNotInstalled(
                 self.provider_id,
                 self.model_id,
@@ -89,8 +92,10 @@ class OllamaProvider(LLMProvider):
                 ),
             )
 
+        self._log(f"[ollama] 모델 다운로드 중: ollama pull {self.model_id} (시간이 걸릴 수 있습니다)")
         result = self._run(["ollama", "pull", self.model_id])
         if result.returncode != 0:
+            self._log(f"[ollama] pull 실패 (종료 코드 {result.returncode})")
             raise ModelNotInstalled(
                 self.provider_id,
                 self.model_id,
@@ -98,11 +103,13 @@ class OllamaProvider(LLMProvider):
             )
 
         if self.status() is not ProviderStatus.READY:
+            self._log("[ollama] pull은 성공했지만 모델이 목록에 안 보임")
             raise ModelNotInstalled(
                 self.provider_id,
                 self.model_id,
                 detail="pull reported success but model still not visible in 'ollama list'",
             )
+        self._log(f"[ollama] 준비 완료: {self.model_id}")
 
     def complete_json(self, prompt: str, schema: dict) -> dict:
         if self.status() is not ProviderStatus.READY:

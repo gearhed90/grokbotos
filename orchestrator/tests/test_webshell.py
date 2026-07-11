@@ -195,14 +195,14 @@ class TestRunConnectToken(unittest.TestCase):
         state = ConnectionState()
         provider = _FakeProvider()
 
-        run_connect_token("claude", "tok-123", state, self.config_path, token_connector=lambda tok: provider)
+        run_connect_token("claude", "tok-123", state, self.config_path, token_connector=lambda tok, log=None: provider)
 
         self.assertTrue(state.snapshot()["connected"])
 
     def test_failure_keeps_needs_token(self):
         state = ConnectionState()
 
-        def _raise(tok):
+        def _raise(tok, log=None):
             raise ExternalLoginRequired("claude", "claude login", detail="bad token")
 
         run_connect_token("claude", "tok-bad", state, self.config_path, token_connector=_raise)
@@ -221,7 +221,7 @@ class TestRunConnectToken(unittest.TestCase):
     def test_unexpected_exception_surfaces_as_error_instead_of_hanging(self):
         state = ConnectionState()
 
-        def _raise(tok):
+        def _raise(tok, log=None):
             raise RuntimeError("boom")
 
         run_connect_token("claude", "tok", state, self.config_path, token_connector=_raise)
@@ -347,6 +347,16 @@ class TestWebServerIntegration(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             self._get("/static/../server.py")
         self.assertEqual(ctx.exception.code, 404)
+
+    def test_logs_endpoint_reflects_dispatched_commands(self):
+        self._post("/api/prompt", {"text": "/help"})
+
+        status, body = self._get("/api/logs?after=-1")
+        data = json.loads(body)
+
+        self.assertEqual(status, 200)
+        self.assertTrue(any("/help" in text for _id, text in data["entries"]))
+        self.assertGreaterEqual(data["next_after"], 0)
 
     def test_status_endpoint_reflects_disconnected_state(self):
         code, body = self._get("/api/status")

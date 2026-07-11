@@ -12,33 +12,40 @@
     <span id="brand-badge">Beta</span>
   </header>
 
-  <main id="page">
-    <section id="prompt-card">
-      <form id="prompt-form" autocomplete="off">
-        <textarea
-          id="prompt-input"
-          rows="2"
-          placeholder="명령이나 프롬프트를 입력하세요... (예: /help)"
-        ></textarea>
-        <div id="prompt-toolbar">
-          <span id="prompt-status">연결된 LLM 없음</span>
-          <button id="prompt-submit" type="submit" aria-label="실행">&uarr;</button>
-        </div>
-      </form>
-    </section>
+  <div id="layout">
+    <main id="page">
+      <section id="prompt-card">
+        <form id="prompt-form" autocomplete="off">
+          <textarea
+            id="prompt-input"
+            rows="2"
+            placeholder="명령이나 프롬프트를 입력하세요... (예: /help)"
+          ></textarea>
+          <div id="prompt-toolbar">
+            <span id="prompt-status">연결된 LLM 없음</span>
+            <button id="prompt-submit" type="submit" aria-label="실행">&uarr;</button>
+          </div>
+        </form>
+      </section>
 
-    <pre id="result" hidden></pre>
+      <pre id="result" hidden></pre>
 
-    <section class="tile-section">
-      <h2>명령</h2>
-      <div id="command-tiles" class="tile-grid"></div>
-    </section>
+      <section class="tile-section">
+        <h2>명령</h2>
+        <div id="command-tiles" class="tile-grid"></div>
+      </section>
 
-    <section class="tile-section">
-      <h2>설치된 프로그램</h2>
-      <div id="app-tiles" class="tile-grid"></div>
-    </section>
-  </main>
+      <section class="tile-section">
+        <h2>설치된 프로그램</h2>
+        <div id="app-tiles" class="tile-grid"></div>
+      </section>
+    </main>
+
+    <aside id="log-panel">
+      <div id="log-panel-header">로그</div>
+      <div id="log-lines"></div>
+    </aside>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

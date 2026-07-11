@@ -41,16 +41,29 @@ def prompt_payload(
     run=subprocess.run,
     popen=subprocess.Popen,
     connectors: dict | None = None,
+    token_connector=None,
+    log=None,
 ) -> dict:
     """Every tile in the UI submits through this same function -- a
     "/llm claude" click and a hand-typed "/llm claude" are identical
     requests by the time they get here. Slash-prefixed text is a
     built-in command (commands.py); anything else goes to the real
-    Orchestrator."""
+    Orchestrator. `log`, if given, feeds the shell UI's live log panel
+    (webshell/logbuf.py) -- optional so existing callers/tests are
+    unaffected."""
+    log = log or (lambda _msg: None)
     text = text.strip()
     if text.startswith("/"):
         return commands.dispatch(
-            text, state=state, registry=registry, config_path=config_path, run=run, popen=popen, connectors=connectors
+            text,
+            state=state,
+            registry=registry,
+            config_path=config_path,
+            run=run,
+            popen=popen,
+            connectors=connectors,
+            token_connector=token_connector,
+            log=log,
         )
 
     provider = state.provider
@@ -60,6 +73,7 @@ def prompt_payload(
             "message": "LLM이 연결되지 않았습니다. /llm 으로 연결하거나 /help 를 입력하세요.",
         }
 
+    log(f"[prompt] {text}")
     orchestrator = Orchestrator(
         registry=registry,
         intent_analyzer=LLMBackedIntentAnalyzer(provider),
@@ -69,14 +83,17 @@ def prompt_payload(
         result = orchestrator.process(text)
     except DevelopmentPending as exc:
         dev = exc.development_result
+        log(f"[prompt] 개발 경로 {dev.path.name}: {dev.reason}")
         return {
             "status": "development_pending",
             "message": f"[개발 경로: {dev.path.name}] {dev.reason}",
             "exec_manifest": dev.exec_manifest,
         }
     except (OrchestratorNotReady, OrchestratorTimeout, ProviderNotReady) as exc:
+        log(f"[prompt] 오류: {exc}")
         return {"status": "error", "message": str(exc)}
 
+    log(f"[prompt] 완료: {result.status}")
     if result.status == "needs_clarification":
         return {"status": "needs_clarification", "questions": result.clarification_questions}
     return {"status": "success", "message": result.summary}

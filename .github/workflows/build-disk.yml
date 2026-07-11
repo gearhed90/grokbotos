@@ -10,6 +10,17 @@ on:
         options:
           - amd64
           - arm64
+  # Chains off build.yml ("Build container image") instead of on push
+  # directly -- triggering on push would race build.yml's own container
+  # push, and bootc-image-builder would either pull a stale image or fail
+  # outright. workflow_run only fires once build.yml's run has fully
+  # finished, success or not (checked below).
+  workflow_run:
+    workflows: ["Build container image"]
+    types:
+      - completed
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -29,13 +40,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # workflow_run always fires this workflow, even when build.yml failed --
+  # this job is the gate that skips everything else in that case. It also
+  # picks which platform(s) to build: workflow_dispatch names exactly one
+  # (the manual dropdown), everything else (the automatic chain, and PRs
+  # touching disk_config/) builds both, matching build.yml's own amd64 +
+  # arm64 matrix.
+  determine-platforms:
+    name: Determine platform(s) to build
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    outputs:
+      platforms: ${{ steps.set.outputs.platforms }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'platforms=["${{ inputs.platform }}"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'platforms=["amd64","arm64"]' >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build disk images
-    runs-on: ${{ inputs.platform == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
+    needs: determine-platforms
+    runs-on: ${{ matrix.platform == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     strategy:
       fail-fast: false
       matrix:
         disk-type: ["qcow2", "anaconda-iso"]
+        platform: ${{ fromJSON(needs.determine-platforms.outputs.platforms) }}
     permissions:
       contents: read
       packages: read
@@ -50,9 +84,9 @@ jobs:
           DISK_TYPE=$(echo "${{ matrix.disk-type }}" | tr ' ' '-')
           # build.yml pushes amd64/arm64 as distinctly-named images
           # (oais / oais-arm64), not one multi-arch manifest -- select
-          # the one matching this run's platform input.
+          # the one matching this matrix leg's platform.
           IMAGE_NAME="${IMAGE_NAME}"
-          if [ "${{ inputs.platform }}" = "arm64" ]; then
+          if [ "${{ matrix.platform }}" = "arm64" ]; then
             IMAGE_NAME="${IMAGE_NAME}-arm64"
           fi
           # Lowercase the image uri
@@ -63,7 +97,7 @@ jobs:
           echo "USER_GID=${USER_GID}" >> ${GITHUB_ENV}
 
       - name: Install dependencies
-        if: inputs.platform == 'arm64'
+        if: matrix.platform == 'arm64'
         run: |
           set -x
           sudo apt update -y
@@ -71,7 +105,7 @@ jobs:
             podman
 
       - name: Maximize build space
-        if: inputs.platform != 'arm64'
+        if: matrix.platform != 'arm64'
         uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e # v9
         with:
           remove-codeql: true
@@ -143,7 +177,7 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
         run: |
           command -v aws >/dev/null 2>&1 || pip install --quiet awscli
-          S3_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/oais/${{ env.DISK_TYPE }}-${{ inputs.platform }}/"
+          S3_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/oais/${{ env.DISK_TYPE }}-${{ matrix.platform }}/"
           aws s3 cp --recursive --no-progress "${{ steps.build.outputs.output-directory }}" "$S3_PREFIX"
           echo "### Uploaded to S3" >> "$GITHUB_STEP_SUMMARY"
           echo "\`$S3_PREFIX\`" >> "$GITHUB_STEP_SUMMARY"
@@ -156,7 +190,7 @@ jobs:
           # not set explicitly -- with overwrite: true below that means
           # whichever leg (qcow2 vs anaconda-iso) finishes last silently
           # replaces the other's upload instead of both being kept.
-          name: oais-${{ env.DISK_TYPE }}-${{ inputs.platform }}
+          name: oais-${{ env.DISK_TYPE }}-${{ matrix.platform }}
           path: ${{ steps.build.outputs.output-directory }}
           if-no-files-found: error
           retention-days: 0

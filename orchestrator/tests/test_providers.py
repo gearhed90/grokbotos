@@ -27,6 +27,26 @@ class TestOllamaProvider(unittest.TestCase):
         provider.ensure_ready()
         self.assertEqual(provider.status(), ProviderStatus.READY)
 
+    def test_log_hook_receives_pull_progress(self):
+        lines = []
+
+        def fake_get(url):
+            return {"models": [{"name": "llama3:8b"}]} if fake_get.pulled else {"models": []}
+
+        fake_get.pulled = False
+
+        def fake_run(argv):
+            fake_get.pulled = True
+            return subprocess.CompletedProcess(argv, returncode=0, stdout="", stderr="")
+
+        provider = OllamaProvider("llama3:8b", http_get=fake_get, run=fake_run, log=lines.append)
+
+        provider.ensure_ready()
+
+        joined = "\n".join(lines)
+        self.assertIn("pull", joined)
+        self.assertIn("준비 완료", joined)
+
     def test_daemon_unreachable_raises_model_not_installed_with_hint(self):
         def fake_get(url):
             raise ConnectionRefusedError("no daemon")

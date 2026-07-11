@@ -140,6 +140,46 @@ document.getElementById("prompt-input").addEventListener("keydown", (ev) => {
   }
 });
 
+// Live log panel: /api/logs long-polls server-side (blocks until new
+// lines exist or ~20s elapses), so re-issuing the request immediately
+// after each response gives near-real-time updates without a websocket.
+// This exists because "연결 중..." with zero further feedback while a
+// real CLI install/login runs in the background left no way to tell
+// what was actually happening (2026-07-11).
+let logAfter = -1;
+
+async function pollLogs() {
+  try {
+    const data = await fetchJSON(`/api/logs?after=${logAfter}`);
+    if (data.entries.length) {
+      const panel = document.getElementById("log-lines");
+      const empty = panel.querySelector(".log-empty");
+      if (empty) empty.remove();
+      for (const [id, text] of data.entries) {
+        const line = document.createElement("div");
+        line.className = "log-line";
+        line.textContent = text;
+        panel.appendChild(line);
+        logAfter = id;
+      }
+      panel.scrollTop = panel.scrollHeight;
+    }
+  } catch (e) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  pollLogs();
+}
+
+function initLogPanel() {
+  const panel = document.getElementById("log-lines");
+  const empty = document.createElement("div");
+  empty.className = "log-empty";
+  empty.textContent = "아직 로그가 없습니다.";
+  panel.appendChild(empty);
+}
+
 renderCommandTiles();
 loadApps();
+initLogPanel();
 poll();
+pollLogs();
