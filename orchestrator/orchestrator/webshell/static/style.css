@@ -1,12 +1,21 @@
 :root {
   color-scheme: dark;
-  --bg: #0b0d12;
-  --panel: #161a22;
-  --field: #0f1218;
-  --border: #2a2f3a;
-  --accent: #5b8cff;
-  --text: #e8ebf2;
-  --muted: #7d8494;
+  --bg: #131314;
+  --panel: #1e1f20;
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --field: #17181a;
+  --text: #ececec;
+  --muted: #8a8d93;
+  --accent: #d97757;
+  --accent-strong: #c96343;
+  --tile-llm-a: #4c6ef5;
+  --tile-llm-b: #364fc7;
+  --tile-system-a: #12b886;
+  --tile-system-b: #099268;
+  --tile-cli-a: #f59f00;
+  --tile-cli-b: #e8590c;
+  --tile-app-a: #495057;
+  --tile-app-b: #343a40;
 }
 
 * {
@@ -15,173 +24,204 @@
 
 html, body {
   margin: 0;
-  height: 100%;
+  min-height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: "Noto Sans CJK KR", "Noto Sans KR", "Noto Sans", system-ui, sans-serif;
-  overflow: hidden;
 }
 
-#stage {
-  height: calc(100vh - 150px);
+#topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 20px 32px 0;
+}
+
+#brand {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+#brand-badge {
+  font-size: 0.7rem;
+  color: var(--muted);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+#page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 24px 64px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  padding: 0 40px;
+  gap: 32px;
 }
 
-#logo {
-  font-size: 2rem;
-  letter-spacing: 0.3em;
-  color: var(--muted);
-  margin: 0;
+#prompt-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  padding: 20px 22px 14px;
 }
 
 #prompt-form {
-  width: min(720px, 90vw);
   display: flex;
-  gap: 12px;
+  flex-direction: column;
 }
 
 #prompt-input {
-  flex: 1;
-  padding: 16px 20px;
-  font-size: 1.1rem;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--panel);
+  width: 100%;
+  border: none;
+  background: transparent;
   color: var(--text);
+  font: inherit;
+  font-size: 1.05rem;
+  resize: none;
+  outline: none;
+  padding: 4px 2px 16px;
 }
 
-#prompt-input:disabled {
+#prompt-input::placeholder {
+  color: var(--muted);
+}
+
+#prompt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--panel-border);
+}
+
+#prompt-status {
+  font-size: 0.8rem;
   color: var(--muted);
 }
 
 #prompt-submit {
-  padding: 0 24px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   border: none;
   background: var(--accent);
-  color: white;
-  font-size: 1rem;
+  color: #1a1a1a;
+  font-size: 1.1rem;
+  line-height: 1;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-#prompt-submit:disabled {
-  background: var(--border);
-  color: var(--muted);
-  cursor: not-allowed;
+#prompt-submit:hover {
+  background: var(--accent-strong);
 }
 
 #result {
-  width: min(720px, 90vw);
-  min-height: 1.5rem;
-  color: var(--muted);
-  white-space: pre-wrap;
-}
-
-#connect-panel {
-  width: min(720px, 90vw);
+  margin: 0;
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-#connect-panel input {
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--field);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 16px 18px;
   color: var(--text);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-#connect-panel button {
-  align-self: flex-start;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
-  background: var(--accent);
-  color: white;
-  cursor: pointer;
-}
-
-#dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 150px;
-  background: var(--panel);
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 12px;
-  padding: 10px 24px;
-}
-
-.dock-label {
-  font-size: 0.7rem;
+.tile-section h2 {
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin-bottom: 4px;
+  margin: 0 0 12px;
 }
 
-.icon-row {
-  display: flex;
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 18px;
-  overflow-x: auto;
 }
 
-.icon {
+.tile-empty {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.tile {
+  cursor: pointer;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  min-width: 60px;
+  gap: 8px;
 }
 
-.icon-glyph {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: #232838;
+.tile-thumb {
+  aspect-ratio: 4 / 3;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
-  font-weight: 600;
+  position: relative;
+  overflow: hidden;
 }
 
-.llm-icon.connecting .icon-glyph {
+.tile-thumb span {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.tile-llm .tile-thumb {
+  background: linear-gradient(135deg, var(--tile-llm-a), var(--tile-llm-b));
+}
+
+.tile-system .tile-thumb {
+  background: linear-gradient(135deg, var(--tile-system-a), var(--tile-system-b));
+}
+
+.tile-cli .tile-thumb {
+  background: linear-gradient(135deg, var(--tile-cli-a), var(--tile-cli-b));
+}
+
+.tile-app .tile-thumb {
+  background: linear-gradient(135deg, var(--tile-app-a), var(--tile-app-b));
+}
+
+.tile:hover .tile-thumb {
+  filter: brightness(1.12);
+}
+
+.tile-llm.connecting .tile-thumb {
   animation: pulse 1.2s infinite ease-in-out;
 }
 
-.llm-icon.connected .icon-glyph {
-  background: var(--accent);
+.tile-llm.connected .tile-thumb::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #40c057;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
 
-.icon-label {
-  font-size: 0.72rem;
-  color: var(--muted);
-  text-align: center;
-}
-
-.icon-empty {
-  color: var(--muted);
-  font-size: 0.85rem;
-  align-self: center;
+.tile-label {
+  font-size: 0.82rem;
+  color: var(--text);
+  padding: 0 2px;
 }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50% { opacity: 0.45; }
 }

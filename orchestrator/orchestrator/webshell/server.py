@@ -9,14 +9,12 @@ a service meant to be reachable from anywhere else.
 from __future__ import annotations
 
 import json
-import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .. import onboarding
 from ..registry.db import AppRegistry
 from . import api
-from .connect import run_connect, run_connect_token
 from .state import ConnectionState
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -84,46 +82,13 @@ def build_handler(state: ConnectionState, registry: AppRegistry, config_path: Pa
                 self.send_error(404)
 
         def do_POST(self) -> None:  # noqa: N802 - stdlib method name
-            if self.path == "/api/connect":
-                body = self._read_json_body()
-                choice_id = body.get("provider")
-                if choice_id not in {c.id for c in onboarding.CHOICES}:
-                    self._send_json({"status": "error", "message": "unknown provider"}, status=400)
-                    return
-                threading.Thread(
-                    target=run_connect,
-                    kwargs=dict(
-                        choice_id=choice_id,
-                        state=state,
-                        config_path=config_path,
-                        model_id=body.get("model_id"),
-                        cli_binary=body.get("cli_binary"),
-                        login_command=body.get("login_command"),
-                        install_argv=body.get("install_argv"),
-                    ),
-                    daemon=True,
-                ).start()
-                self._send_json({"status": "connecting"})
-            elif self.path == "/api/connect-token":
-                body = self._read_json_body()
-                choice_id = body.get("provider")
-                token = body.get("token", "")
-                if not token:
-                    self._send_json({"status": "error", "message": "token required"}, status=400)
-                    return
-                threading.Thread(
-                    target=run_connect_token,
-                    kwargs=dict(choice_id=choice_id, token=token, state=state, config_path=config_path),
-                    daemon=True,
-                ).start()
-                self._send_json({"status": "connecting"})
-            elif self.path == "/api/prompt":
+            if self.path == "/api/prompt":
                 body = self._read_json_body()
                 text = (body.get("text") or "").strip()
                 if not text:
                     self._send_json({"status": "error", "message": "empty prompt"}, status=400)
                     return
-                self._send_json(api.prompt_payload(state, registry, text))
+                self._send_json(api.prompt_payload(state, registry, text, config_path=config_path))
             else:
                 self.send_error(404)
 

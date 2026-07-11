@@ -448,3 +448,80 @@ happens inside the running webshell_cli process, so a `state.set_error()`
 call doesn't show up in `shell.log` by itself -- that's surfaced through
 the web UI's `#connect-status` text instead, which is the right place for
 it to be visible to the user without needing a second console).
+
+## Shell UI redesign + unified slash-command architecture (2026-07-11)
+
+User feedback on the working GUI shell screenshot: the visual design was
+"형편없다" (poor) compared to real product UI, and more importantly the
+*architecture* didn't fit an "OS" -- clicking an icon (Claude 연결, Grok
+연결, ...) ran bespoke JS that called a dedicated REST endpoint
+(`/api/connect`), completely separate from what happened when the user
+typed a prompt and pressed enter (`/api/prompt`). The user's explicit
+instruction: **every icon must work by producing a prompt-pipeline
+command** -- clicking "Claude 연결" and typing `/llm claude` + Enter must
+be the *same request*, not two code paths that happen to have similar
+effects. Referenced Claude Design's own prompt-input screen (dark
+elevated card, centered prompt, thumbnail grid below) as the visual bar
+to hit.
+
+**Architecture change**: introduced `webshell/commands.py`, a slash-
+command router. `POST /api/prompt` (the one endpoint everything now goes
+through) checks whether `text` starts with `/`; if so it's dispatched to
+`commands.dispatch()`, otherwise it goes to the real `Orchestrator` same
+as before. `/api/connect` and `/api/connect-token` were deleted entirely
+-- `commands.py` calls `connect.py`'s `run_connect()`/`run_connect_token()`
+directly (still on a background thread, for the same reason as before:
+`/llm claude` can block for minutes on a real browser OAuth flow, and
+`/api/status` polling needs to keep working while that happens).
+
+Built-in commands implemented, per the user's explicit list:
+- `/llm [id]` -- list providers, or connect to one. `/llm custom <cli>
+  [login_command...]` for the custom-CLI path (previously a multi-field
+  form in the UI; now parsed from the command text itself, since a modal
+  form doesn't fit "everything is a prompt").
+- `/token claude <token>` -- the existing browser-login-failed fallback,
+  now a command instead of a second hidden form.
+- `/system [network|info]` -- bare `/system` shows connection + registry
+  status; `/system network` shells out to `nmcli device status` (real
+  command, not a fake status page); `/system info` reads
+  `/etc/os-release` + `platform.uname()`. Actually *changing* network
+  config (the literal "네트워크 드라이버 설정" ask) isn't implemented --
+  documented here as a real, honest gap rather than faked, same as every
+  other "not yet" in this project. `/system` is a small, extensible
+  command group specifically so config-changing subcommands can be added
+  later without another redesign.
+- `/cli` -- spawns `foot` directly (`subprocess.Popen`, not blocking the
+  HTTP response). `system_files/etc/sway/config` gained back a
+  `for_window [app_id="foot"] fullscreen enable` rule (removed in the
+  previous redesign since the old text shell wasn't launched this way
+  anymore) so a `/cli` terminal behaves exactly like the OAuth-login
+  Firefox window: takes over the screen, closing it reveals the kiosk
+  page again.
+
+**Frontend**: full rewrite of `webshell/static/`. `index.html`/
+`style.css` now follow the Claude Design reference's visual language
+(dark `#131314` background, `#1e1f20` elevated rounded card for the
+prompt, circular accent send button) instead of the previous ad-hoc dark
+theme. The old fixed-height `#stage` + fixed-bottom `#dock` layout is
+gone; the page is now a normal scrollable column: prompt card, then a
+"명령" tile grid (Claude/Grok/Ollama/custom-LLM/시스템 설정/CLI 터미널,
+colored gradient thumbnails matching the reference's colorful cards), then
+a "설치된 프로그램" tile grid for registry apps (currently always empty --
+Phase 2.8 registration still doesn't exist -- but the UI slot is real and
+wired to `/api/apps`, ready for when it does). `app.js`'s only
+interaction primitive is `submitPrompt(text)` -- every tile's click
+handler either calls it directly (built-in commands, app tiles) or
+prefills the textarea for commands that need more typed detail (`/llm
+custom `). No tile has its own fetch/POST call; unification is enforced
+by there being nothing else to call.
+
+One behavior change worth calling out: the prompt input is **no longer
+disabled pre-connection**. It has to accept `/llm`, `/system`, `/cli`,
+`/help` before any LLM exists -- disabling the whole box until connected
+(the previous design) was fighting the new architecture directly. Plain-
+language prompts still correctly error server-side
+("LLM이 연결되지 않았습니다...") when no provider is connected; that's
+enforced in `api.py`, not by disabling the input.
+
+149 tests pass. Still fully unverified against a real boot -- same
+caveat as every Phase 4 entry above.

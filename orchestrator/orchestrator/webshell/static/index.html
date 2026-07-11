@@ -7,40 +7,38 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <main id="stage">
-    <h1 id="logo">AI-OS</h1>
+  <header id="topbar">
+    <span id="brand">AI&#8209;OS</span>
+    <span id="brand-badge">Beta</span>
+  </header>
 
-    <form id="prompt-form" autocomplete="off">
-      <input id="prompt-input" type="text" placeholder="LLM 연결 후 사용할 수 있습니다" disabled>
-      <button id="prompt-submit" type="submit" disabled>실행</button>
-    </form>
-    <div id="result"></div>
+  <main id="page">
+    <section id="prompt-card">
+      <form id="prompt-form" autocomplete="off">
+        <textarea
+          id="prompt-input"
+          rows="2"
+          placeholder="명령이나 프롬프트를 입력하세요... (예: /help)"
+        ></textarea>
+        <div id="prompt-toolbar">
+          <span id="prompt-status">연결된 LLM 없음</span>
+          <button id="prompt-submit" type="submit" aria-label="실행">&uarr;</button>
+        </div>
+      </form>
+    </section>
 
-    <div id="connect-panel" hidden>
-      <p id="connect-status"></p>
-      <div id="token-panel" hidden>
-        <input id="token-input" type="text" placeholder="claude setup-token 출력 붙여넣기">
-        <button id="token-submit" type="button">토큰으로 연결</button>
-      </div>
-      <div id="custom-panel" hidden>
-        <input id="custom-cli" type="text" placeholder="CLI 실행 파일 이름 (예: mycli)">
-        <input id="custom-login" type="text" placeholder="로그인 명령어 (예: mycli login)">
-        <input id="custom-install" type="text" placeholder="설치 명령어 (선택, 예: npm install -g mycli)">
-        <button id="custom-submit" type="button">연결</button>
-      </div>
-    </div>
+    <pre id="result" hidden></pre>
+
+    <section class="tile-section">
+      <h2>명령</h2>
+      <div id="command-tiles" class="tile-grid"></div>
+    </section>
+
+    <section class="tile-section">
+      <h2>설치된 프로그램</h2>
+      <div id="app-tiles" class="tile-grid"></div>
+    </section>
   </main>
-
-  <footer id="dock">
-    <div>
-      <div class="dock-label">설치된 프로그램</div>
-      <div id="app-icons" class="icon-row"></div>
-    </div>
-    <div>
-      <div class="dock-label">LLM 연결</div>
-      <div id="llm-icons" class="icon-row"></div>
-    </div>
-  </footer>
 
   <script src="/static/app.js"></script>
 </body>

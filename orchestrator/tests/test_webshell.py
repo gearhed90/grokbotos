@@ -360,10 +360,15 @@ class TestWebServerIntegration(unittest.TestCase):
         ids = {c["id"] for c in data["choices"]}
         self.assertEqual(ids, {"claude", "grok", "ollama", "custom"})
 
-    def test_connect_with_unknown_provider_returns_400(self):
-        with self.assertRaises(urllib.error.HTTPError) as ctx:
-            self._post("/api/connect", {"provider": "not-a-real-provider"})
-        self.assertEqual(ctx.exception.code, 400)
+    def test_prompt_routes_slash_command_to_router(self):
+        """Confirms /api/prompt -- the same endpoint a manually typed
+        prompt uses -- also handles built-in commands, i.e. a tile click
+        and hand-typed text really do go through one path."""
+        status, data = self._post("/api/prompt", {"text": "/help"})
+
+        self.assertEqual(status, 200)
+        self.assertEqual(data["status"], "success")
+        self.assertIn("/llm", data["message"])
 
     def test_prompt_without_connection_returns_error_status(self):
         status, data = self._post("/api/prompt", {"text": "hello"})
