@@ -11,7 +11,7 @@ def _ok(argv, stdout=""):
 class TestClaudeCliProvider(unittest.TestCase):
     def test_config(self):
         self.assertEqual(ClaudeCliProvider.cli_binary, "claude")
-        self.assertEqual(ClaudeCliProvider.login_command, "claude login")
+        self.assertEqual(ClaudeCliProvider.login_command, "claude auth login")
         self.assertEqual(ClaudeCliProvider.install_argv, ["npm", "install", "-g", "@anthropic-ai/claude-code"])
 
     def test_end_to_end_with_fake_run(self):

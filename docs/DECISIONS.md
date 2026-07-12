@@ -800,3 +800,50 @@ turns any remaining failure into a real diagnosis instead of another
 guess.
 
 168 tests pass.
+
+## The actual root cause: `claude login` isn't a real subcommand (2026-07-11)
+
+The streaming fix from the previous entry immediately paid off -- the
+next log-panel screenshot showed the real output for the first time:
+
+```
+[claude] 실행: claude login (브라우저가 열리면 로그인을 완료하세요)
+[claude] Not logged in · Please run /login
+[claude] claude login 종료 (코드 1)
+```
+
+`"Not logged in · Please run /login"` -- the leading slash is the
+giveaway. Verified directly against the real `claude` CLI installed in
+this dev sandbox (`claude --help`, `claude auth --help`, read-only,
+no auth state touched): **there is no top-level `login` subcommand at
+all**. The real commands are `claude auth login` / `claude auth logout`
+/ `claude auth status` (under an `auth` command group) and
+`claude setup-token`. `login_command = "claude login"` in
+`providers/claude_cli.py` was simply wrong from the start -- running it
+gets parsed as a normal prompt/REPL invocation, which (no TTY, piped
+stdio) can't start a REPL and just prints that hint before exiting 1.
+
+This was never a windowing/multi-window-management problem, despite a
+reasonable-looking symptom (user's hypothesis, given every window in
+this kiosk sway config gets forced fullscreen -- a new window and "the
+screen just changed" look identical from the outside). sway manages
+multiple windows fine; the login command was failing before a browser
+window would ever have been relevant.
+
+**Fix**: `ClaudeCliProvider.login_command = "claude auth login"`.
+Updated all prose elsewhere (onboarding.py, cli.py, README.md) that
+described the old (wrong) command as correct.
+
+**Still open, flagged for the next round rather than guessed at now**:
+once `claude auth login` actually runs, does its browser-open attempt
+produce a genuinely new, visible window, or does it hand off to the
+*already-running* kiosk Firefox instance and open as a background tab
+that kiosk mode's chrome-less UI gives no way to reach? `--kiosk`
+enables single-instance remoting like any other Firefox launch, so this
+is a real possible follow-up failure mode -- just not one there's
+evidence for yet. If the next attempt shows `claude auth login` running
+successfully but no visible browser ever appears, that's the next thing
+to fix (likely: a separate Firefox profile for kiosk-vs-external-URL
+launches, so they can never remote into each other).
+
+168 tests pass, including the corrected `login_command` assertion.

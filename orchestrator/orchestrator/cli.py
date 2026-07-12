@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Enable PLAN->DEVELOP (2.5/2.6) on registry-search misses by wrapping the "
             "named official CLI (must already be installed and logged in -- "
-            "`claude login` / `grok login`). Makes real network + LLM calls. "
+            "`claude auth login` / `grok login`). Makes real network + LLM calls. "
             "Omit to keep the old behavior (raises OrchestratorNotReady on a miss)."
         ),
     )

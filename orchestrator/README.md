@@ -56,7 +56,7 @@ external deps are added deliberately, not by default.
 cd orchestrator
 python3 -m orchestrator.cli "hello demo" --seed-demo-app              # seeds a matching app first -> EXECUTE_EXISTING path
 python3 -m orchestrator.cli "이미지에서 텍스트 추출해줘"                  # no matching app, no --dev-provider -> OrchestratorNotReady (expected, honest)
-python3 -m orchestrator.cli "이미지에서 텍스트 추출해줘" --dev-provider claude  # runs PLAN->DEVELOP for real (needs `claude login` done)
+python3 -m orchestrator.cli "이미지에서 텍스트 추출해줘" --dev-provider claude  # runs PLAN->DEVELOP for real (needs `claude auth login` done)
 ```
 
 `--dev-provider {claude,grok}` makes real network calls (npm/crates.io/GitHub/OSV.dev) and real LLM calls via the named CLI, so it costs actual API usage. It prints the chosen path and `exec_manifest` to stderr and exits 1 (`DevelopmentPending`) since 2.7/2.8 still don't exist to verify/register the result.
@@ -69,7 +69,7 @@ from orchestrator.providers.claude_cli import ClaudeCliProvider
 from orchestrator.task_spec import TaskSpec
 
 provider = ClaudeCliProvider()
-provider.ensure_ready()  # requires `claude login` already done
+provider.ensure_ready()  # requires `claude auth login` already done
 result = develop(TaskSpec(raw_prompt="pdf에서 텍스트 추출", goal="extract text from a pdf"), provider)
 print(result.path, result.exec_manifest)
 ```

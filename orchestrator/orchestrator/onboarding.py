@@ -8,8 +8,11 @@ completes, and remembering the choice across boots. `onboarding_cli.py`
 is the (console, for now) UI on top of this.
 
 Both Claude and Grok now use the same primary flow -- `interactive_login()`
-runs `claude login` / `grok login` with real stdio, so the CLI's own
-browser-opening behavior (Firefox, baked into the image -- see
+runs `claude auth login` / `grok login` (note: `claude auth login`, not
+`claude login` -- there's no top-level `login` subcommand; a real "click
+Claude, nothing happens" bug traced back to exactly that wrong
+invocation, 2026-07-11, docs/DECISIONS.md) with streamed stdio, so the
+CLI's own browser-opening behavior (Firefox, baked into the image -- see
 docs/DECISIONS.md) handles it directly, same as running either command
 from a normal terminal. `connect_claude_with_token()` (paste a
 `claude setup-token` output) is kept as a fallback for when no graphical
@@ -124,8 +127,8 @@ def get_active_provider(path: Path = DEFAULT_CONFIG_PATH) -> LLMProvider | None:
     anymore. Claude is a special case: a bare CLAUDE_CODE_OAUTH_TOKEN
     can't be recovered from disk (never persisted, on purpose -- it's a
     credential), so a saved Claude connection can only be confirmed
-    still-ready if `claude login`'s own stored session is still valid,
-    not via the token-paste path this module drove originally."""
+    still-ready if `claude auth login`'s own stored session is still
+    valid, not via the token-paste path this module drove originally."""
     conn = load_connection(path)
     if conn is None:
         return None
@@ -140,19 +143,19 @@ def get_active_provider(path: Path = DEFAULT_CONFIG_PATH) -> LLMProvider | None:
 def connect_claude_via_browser(provider: ClaudeCliProvider | None = None, log=None) -> ClaudeCliProvider:
     """Primary Claude connection path now that a local browser is baked
     into the image: same shape as connect_grok() -- try silently first,
-    otherwise run `claude login` with real stdio so its own browser-open
-    behavior takes over. `log`, if given, is a callable(str) -> None fed
-    the CLI's real install/login progress (webshell/logbuf.py) -- ignored
-    if `provider` is supplied directly (its own log wiring, if any,
-    already applies)."""
+    otherwise run `claude auth login` with streamed stdio so its own
+    browser-open behavior takes over. `log`, if given, is a
+    callable(str) -> None fed the CLI's real install/login progress
+    (webshell/logbuf.py) -- ignored if `provider` is supplied directly
+    (its own log wiring, if any, already applies)."""
     provider = provider or ClaudeCliProvider(log=log)
     try:
         provider.ensure_ready()
         return provider
     except ExternalLoginRequired:
         # status() ERROR means the `claude` binary itself isn't there
-        # (install never ran / failed) -- running `claude login` in that
-        # state doesn't prompt for anything, it just raises
+        # (install never ran / failed) -- running `claude auth login` in
+        # that state doesn't prompt for anything, it just raises
         # FileNotFoundError, masking the real problem with a confusing
         # second error (2026-07-11, docs/DECISIONS.md). Only retry via
         # interactive_login() when the binary exists and it's genuinely

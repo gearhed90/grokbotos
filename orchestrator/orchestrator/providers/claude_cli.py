@@ -1,6 +1,6 @@
 """Anthropic via the official Claude Code CLI, run as a subprocess.
 
-The user logs in with their own account (`claude login`, Pro/Max/Team
+The user logs in with their own account (`claude auth login`, Pro/Max/Team
 subscription or Console API key -- whichever Claude Code itself supports)
 exactly as they would on any machine. This provider never touches that
 credential: it shells out to `claude -p "<prompt>"` and reads stdout, the
@@ -14,11 +14,23 @@ against Anthropic's Consumer Terms of Service.
 available as a fallback for setups without Claude Code installed --
 mirroring how the Grok CLI itself falls back to `XAI_API_KEY`.
 
-`claude login` itself needs a local browser to complete the OAuth
-redirect (confirmed via Anthropic's own docs, code.claude.com/docs/en/authentication)
--- not available on this project's console-only OS (docs/DECISIONS.md).
-`authenticate_with_token()` is the documented headless-friendly path
-instead: run `claude setup-token` on a machine that *does* have a
+login_command is `claude auth login`, NOT `claude login` -- there is no
+top-level `login` subcommand; `login` lives under the `auth` command
+group (confirmed via `claude auth --help` in this dev sandbox, which has
+a real Claude Code CLI installed). Running the wrong invocation doesn't
+error -- `claude login` is parsed as a normal prompt/REPL invocation,
+which (with no TTY, piped stdio) just prints "Not logged in · Please run
+/login" (a REPL slash-command hint, not a CLI flag) and exits 1. This was
+the actual cause of a real "clicked Claude, nothing happens" report
+(2026-07-11, docs/DECISIONS.md) -- a wrong subcommand, not a windowing/
+multi-window-management problem.
+
+`claude auth login` still needs a local browser to complete the OAuth
+redirect (confirmed via Anthropic's own docs,
+code.claude.com/docs/en/authentication) -- see docs/DECISIONS.md for how
+this image ensures one exists and is registered as the default handler.
+`authenticate_with_token()` is the documented headless-friendly
+alternative: run `claude setup-token` on a machine that *does* have a
 browser, then feed the resulting token in here.
 """
 
@@ -32,7 +44,7 @@ OAUTH_TOKEN_ENV_VAR = "CLAUDE_CODE_OAUTH_TOKEN"
 class ClaudeCliProvider(CliSubprocessProvider):
     provider_id = "anthropic-claude-code"
     cli_binary = "claude"
-    login_command = "claude login"
+    login_command = "claude auth login"
     install_argv = ["npm", "install", "-g", "@anthropic-ai/claude-code"]
 
     def authenticate_with_token(self, token: str) -> None:
