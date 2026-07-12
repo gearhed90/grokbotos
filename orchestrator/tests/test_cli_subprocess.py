@@ -124,18 +124,22 @@ class TestCliSubprocessProvider(unittest.TestCase):
         called_env = mock_run.call_args.kwargs["env"]
         self.assertEqual(called_env["SOME_TOKEN"], "secret-value")
 
-    @patch("subprocess.run")
-    def test_interactive_login_streams_real_stdio_and_reports_exit_code(self, mock_run):
-        mock_run.return_value = subprocess.CompletedProcess([], returncode=0)
+    @patch("subprocess.Popen")
+    def test_interactive_login_streams_output_and_reports_exit_code(self, mock_popen_cls):
+        mock_proc = mock_popen_cls.return_value
+        mock_proc.stdout = iter(["some output line\n"])
+        mock_proc.returncode = 0
+        mock_proc.wait.return_value = 0
         provider = _FakeCliProvider()
         provider.set_env("SOME_TOKEN", "secret-value")
 
         success = provider.interactive_login()
 
         self.assertTrue(success)
-        args, kwargs = mock_run.call_args
+        args, kwargs = mock_popen_cls.call_args
         self.assertEqual(args[0], ["fakecli", "login"])
-        self.assertNotIn("capture_output", kwargs)  # real stdio, not captured
+        self.assertEqual(kwargs["stdout"], subprocess.PIPE)
+        self.assertEqual(kwargs["stderr"], subprocess.STDOUT)
         self.assertEqual(kwargs["env"]["SOME_TOKEN"], "secret-value")
 
     @patch("subprocess.run")
@@ -198,9 +202,18 @@ class TestCliSubprocessProvider(unittest.TestCase):
 
         self.assertTrue(any("설치 실패" in line for line in lines))
 
-    @patch("subprocess.run")
-    def test_log_hook_receives_interactive_login_progress(self, mock_run):
-        mock_run.return_value = subprocess.CompletedProcess([], returncode=0)
+    @patch("subprocess.Popen")
+    def test_log_hook_receives_interactive_login_progress(self, mock_popen_cls):
+        """Real bug: `claude login` exited non-zero with zero visible
+        output beyond the bare exit code, because interactive_login()
+        inherited real stdio -- which in the GUI shell goes to an unread
+        log file redirect, not anywhere the user can see (2026-07-11,
+        docs/DECISIONS.md). Output must reach the log panel line by
+        line, not just a start/end marker."""
+        mock_proc = mock_popen_cls.return_value
+        mock_proc.stdout = iter(["Visit: https://example.com/device?code=ABCD\n"])
+        mock_proc.returncode = 0
+        mock_proc.wait.return_value = 0
         lines = []
         provider = _FakeCliProvider(log=lines.append)
 
@@ -208,7 +221,22 @@ class TestCliSubprocessProvider(unittest.TestCase):
 
         joined = "\n".join(lines)
         self.assertIn("fakecli login", joined)
+        self.assertIn("https://example.com/device?code=ABCD", joined)
         self.assertIn("종료", joined)
+
+    @patch("subprocess.Popen")
+    def test_interactive_login_timeout_kills_process_and_logs(self, mock_popen_cls):
+        mock_proc = mock_popen_cls.return_value
+        mock_proc.stdout = iter([])
+        mock_proc.wait.side_effect = [subprocess.TimeoutExpired(cmd="fakecli login", timeout=600), 0]
+        lines = []
+        provider = _FakeCliProvider(log=lines.append)
+
+        with self.assertRaises(subprocess.TimeoutExpired):
+            provider.interactive_login()
+
+        mock_proc.kill.assert_called_once()
+        self.assertTrue(any("시간 초과" in line for line in lines))
 
     def test_no_log_hook_is_a_safe_no_op(self):
         provider = _FakeCliProvider(run=lambda argv: _ok(argv, stdout="ok"))

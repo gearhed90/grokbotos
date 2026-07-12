@@ -67,8 +67,34 @@ systemctl enable podman.socket
 
 # nodejs (bundles npm on Fedora): ClaudeCliProvider/GrokCliProvider
 # (orchestrator/providers/claude_cli.py, xai_grok.py) shell out to
-# `claude`/`grok`, both npm packages.
-dnf5 install -y python3 sway foot firefox google-noto-sans-cjk-ttc-fonts nodejs
+# `claude`/`grok`, both npm packages. xdg-utils provides `xdg-open`,
+# which `claude login`'s browser auto-launch (and any other CLI that
+# tries to open a URL the standard Linux way) depends on -- a bare sway
+# session has no desktop environment to provide this or a registered
+# default browser, unlike GNOME/KDE.
+dnf5 install -y python3 sway foot firefox google-noto-sans-cjk-ttc-fonts nodejs xdg-utils
+
+# Register Firefox as the default handler for http(s)/html so
+# `xdg-open <url>` (what most CLIs, including `claude`, shell out to for
+# "open this login URL in a browser") actually resolves to something,
+# instead of silently failing because no desktop environment ever set a
+# default. firefox.desktop ships in /usr/share/applications/ as part of
+# the firefox package installed above. BROWSER=firefox is a second,
+# more direct signal -- some tools (e.g. Node's `open` package, which
+# Claude Code's CLI may use) check $BROWSER before falling back to
+# xdg-open, and PAM's pam_env module (part of the standard `login`
+# flow agetty's autologin invokes) applies /etc/environment to every
+# session, including the kiosk one.
+mkdir -p /etc/xdg
+cat > /etc/xdg/mimeapps.list <<'EOF'
+[Default Applications]
+text/html=firefox.desktop
+x-scheme-handler/http=firefox.desktop
+x-scheme-handler/https=firefox.desktop
+x-scheme-handler/about=firefox.desktop
+x-scheme-handler/unknown=firefox.desktop
+EOF
+echo 'BROWSER=firefox' >> /etc/environment
 
 # Bake the CLIs themselves in at build time (root, full write access to
 # the global npm prefix) rather than leaving `npm install -g` to run at

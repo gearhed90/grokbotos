@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import threading
 from typing import Callable
 
 from .base import ExternalLoginRequired, LLMProvider, ProviderNotReady, ProviderStatus
@@ -86,19 +87,50 @@ class CliSubprocessProvider(LLMProvider):
         return subprocess.run(argv, capture_output=True, text=True, check=False, timeout=timeout, env=env)
 
     def interactive_login(self) -> bool:
-        """Run `login_command` with the CLI's real stdio (not captured), so
-        a device-code URL/prompt (Grok) is visible on screen and reaches
-        the real terminal, blocking until the CLI exits. Not something a
-        unit test can meaningfully fake -- this needs a real terminal and
-        a human on the other end of the login URL; verify on a real
-        machine. Returns whether the login command itself exited 0
-        (callers should still confirm with ensure_ready() after)."""
+        """Run `login_command`, streaming its output line by line into
+        both `_log()` (the shell UI's live log panel) and real stdout.
+
+        Used to inherit stdio uncaptured on the theory that a human would
+        be watching a real terminal -- but in the GUI shell
+        (webshell_cli.py), that terminal doesn't exist: sway redirects
+        this whole process's stdio to a log file nobody's watching. A
+        real login failure (e.g. `claude login` exiting non-zero) showed
+        up in the log panel as a bare exit code with zero context
+        (2026-07-11, docs/DECISIONS.md) -- capturing and re-emitting each
+        line through `_log()` fixes that, and is also the only way a
+        device-code URL/prompt (Grok) reaches the user at all in that
+        path. Still `print()`s each line too, so `onboarding_cli.py`'s
+        real-terminal fallback keeps seeing it live as before. Returns
+        whether the login command itself exited 0 (callers should still
+        confirm with ensure_ready() after)."""
         argv = self.login_command.split()
         env = {**os.environ, **self._extra_env} if self._extra_env else None
         self._log(f"[{self.cli_binary}] 실행: {self.login_command} (브라우저가 열리면 로그인을 완료하세요)")
-        result = subprocess.run(argv, env=env, timeout=600)
-        self._log(f"[{self.cli_binary}] {self.login_command} 종료 (코드 {result.returncode})")
-        return result.returncode == 0
+
+        proc = subprocess.Popen(
+            argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        )
+
+        def _pump() -> None:
+            for line in proc.stdout:
+                line = line.rstrip("\n")
+                if line:
+                    self._log(f"[{self.cli_binary}] {line}")
+                    print(line, flush=True)
+
+        pump_thread = threading.Thread(target=_pump, daemon=True)
+        pump_thread.start()
+        try:
+            proc.wait(timeout=600)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            self._log(f"[{self.cli_binary}] {self.login_command} 시간 초과 (600초)")
+            raise
+        pump_thread.join(timeout=5)  # let any already-produced output finish logging
+
+        self._log(f"[{self.cli_binary}] {self.login_command} 종료 (코드 {proc.returncode})")
+        return proc.returncode == 0
 
     def status(self) -> ProviderStatus:
         if self._verified_ready:

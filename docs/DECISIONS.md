@@ -737,3 +737,66 @@ yet) -- next push should confirm whether this clears the `npm install`
 step, and then (assuming it does) finally let the actual "click Claude,
 already-installed, straight to login" flow get boot-tested for the
 first time.
+
+## `claude login` exits non-zero with zero visible output (2026-07-11)
+
+Fourth log-panel screenshot in this same debugging chain, and genuine
+further progress -- the npm-at-build-time fix worked (`claude`
+resolved on PATH immediately, no install step at all this time):
+
+```
+[cmd] /llm claude
+[llm] claude 연결 시작
+[claude] 로그인 상태 확인 중...
+[claude] 로그인 필요 (확인 실패: )
+[claude] 실행: claude login (브라우저가 열리면 로그인을 완료하세요)
+[claude] claude login 종료 (코드 1)
+[llm] claude 연결 실패: anthropic-claude-code: run `claude login` first.
+  `claude login` exited non-zero
+```
+
+`claude login` itself failed, but with **no output at all** to go on --
+`interactive_login()` ran the login command with real inherited stdio
+(uncaptured), on the theory that a human would be watching a real
+terminal. That premise no longer holds for the GUI shell: sway's `exec`
+redirects `webshell_cli`'s entire stdio to a log file
+(`~/.local/share/oais/shell.log`) that nothing in the UI surfaces, so
+`claude login`'s own stdout/stderr -- whatever URL or error it printed
+-- went straight into a file nobody was reading. The log panel only ever
+had the exit code to show.
+
+**Fix 1 -- capture and stream, not just start/end markers.**
+`interactive_login()` now runs the login command via `Popen` with
+`stdout=PIPE, stderr=STDOUT`, pumping each output line into both
+`_log()` (so it reaches the visible log panel line by line, in near
+real time) and `print()` (so `onboarding_cli.py`'s real-terminal
+fallback -- which still runs inside an actual visible `foot` window --
+keeps seeing it live too, same as before). This isn't just a diagnostic
+nicety: it's the only way a Grok-style device-code URL+code ever reaches
+the user in the GUI shell at all, since that flow has no browser
+auto-launch to fall back on.
+
+**Fix 2 -- a concrete, likely cause for the failure itself.** This image
+never installed `xdg-utils` or registered a default browser. A bare
+`sway` session provides no desktop environment to do either
+automatically (unlike GNOME/KDE), so `claude login`'s attempt to
+auto-open a browser (however it does that internally -- most Node CLIs
+either shell out to `xdg-open` or use a package that falls back to it)
+plausibly had nothing to open anything with, and exited non-zero as a
+result. Added `xdg-utils` to the package list, `/etc/xdg/mimeapps.list`
+registering `firefox.desktop` as the default handler for
+http/https/text-html (the standard freedesktop.org association file
+`xdg-open` reads), and `BROWSER=firefox` in `/etc/environment` (applied
+to every login session via PAM's `pam_env`, including the kiosk
+autologin) as a second, more direct signal for tools that check it
+before falling back to `xdg-open`.
+
+**Not confirmed** -- this session still has no way to capture the actual
+`claude login` output that was silently discarded before fix 1 shipped,
+so fix 2's browser-registration diagnosis is the most plausible
+explanation given how this image is built, not a certainty. The next
+attempt should have real output in the log panel either way, which
+turns any remaining failure into a real diagnosis instead of another
+guess.
+
+168 tests pass.
