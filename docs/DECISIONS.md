@@ -847,3 +847,35 @@ to fix (likely: a separate Firefox profile for kiosk-vs-external-URL
 launches, so they can never remote into each other).
 
 168 tests pass, including the corrected `login_command` assertion.
+
+## Login succeeded, but stuck on the OAuth success page with no way back (2026-07-11)
+
+Real progress -- Claude's own "Build something great / You're all set
+up for Claude Code. You can now close this window." success page
+appeared, confirming `claude auth login` completed. But the user then
+had no way to actually get back to the AI-OS shell: that Firefox window
+has no title bar, no close button, no chrome at all (this kiosk's sway
+config never had any), and there was no keybinding to close a window
+either -- `system_files/etc/sway/config`'s own comment claimed "closing
+it returns focus to the kiosk window underneath," but nothing actually
+made that true. sway itself manages multiple windows fine; there was
+just no way to act on one.
+
+**Fix, two parts**:
+1. `webshell/wm.py` (new): snapshots sway's Firefox window IDs (via
+   `swaymsg -t get_tree`) before a login flow's connector call and
+   again after, then closes (`swaymsg [con_id=N] kill`) whatever's new
+   -- i.e. whatever window that flow opened. Wired into
+   `connect.py:run_connect()` around the connector call (`try/finally`,
+   so it fires on success *and* failure -- an error page left open would
+   block the kiosk exactly the same way). Best-effort throughout: no
+   swaymsg binary, not running under sway (tests, `onboarding_cli.py`'s
+   headless path), malformed IPC output -- all just skip silently,
+   never fail the connection attempt over a window-management nicety.
+2. `system_files/etc/sway/config`: added `bindsym Mod1+F4 kill` as a
+   manual fallback for anything wm.py's automatic close doesn't catch.
+   Alt+F4 specifically because it's universal enough to not depend on a
+   Super/Mod key a given keyboard/VM might not forward.
+
+178 tests pass, including a full `run_connect()` integration test
+confirming the close call fires with the right window ID.

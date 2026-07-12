@@ -11,8 +11,11 @@ progress for the shell UI's live log panel (webshell/logbuf.py).
 
 from __future__ import annotations
 
+import subprocess
+
 from .. import onboarding
 from ..providers.base import ExternalLoginRequired, ProviderNotReady
+from . import wm
 from .state import ConnectionState
 
 
@@ -58,6 +61,7 @@ def run_connect(
     install_argv: list[str] | None = None,
     connectors: dict | None = None,
     log=None,
+    swaymsg_run=subprocess.run,
 ) -> None:
     connectors = connectors or _default_connectors()
     state.start_connecting(choice_id)
@@ -72,40 +76,52 @@ def run_connect(
         state.set_error("cli_binary/login_command required for a custom provider")
         return
 
+    # A login flow may pop a real Firefox window for OAuth (claude auth
+    # login, grok login). Its own "you can now close this window" success
+    # page has no way to actually close it -- this kiosk's sway config has
+    # no title bar/chrome (2026-07-11, docs/DECISIONS.md). Snapshot before,
+    # and once the connector call (which blocks until that subprocess
+    # exits) returns either way, close whatever new Firefox window showed
+    # up, so the user always lands back on the kiosk automatically.
+    before_ids = wm.firefox_window_ids(run=swaymsg_run)
     try:
-        provider = connector(
-            model_id=model_id,
-            cli_binary=cli_binary,
-            login_command=login_command,
-            install_argv=install_argv,
-            log=log,
-        )
-    except ExternalLoginRequired as exc:
-        # Only Claude has a documented headless token fallback (see
-        # onboarding.py's module docstring) -- Grok/custom logins have no
-        # such path yet, so there's nothing useful to paste for them.
-        if log:
-            log(f"[llm] {choice_id} 연결 실패: {exc}")
-        state.set_error(str(exc), needs_token=(choice_id == "claude"))
-        return
-    except ProviderNotReady as exc:
-        if log:
-            log(f"[llm] {choice_id} 연결 실패: {exc}")
-        state.set_error(str(exc))
-        return
-    except Exception as exc:  # noqa: BLE001 - see comment
-        # This runs on a background thread (server.py's do_POST spawns it)
-        # -- an uncaught exception here doesn't crash the process, it just
-        # kills the thread silently, leaving ConnectionState stuck on
-        # "connecting" forever with the UI showing no error at all. Real
-        # example: npm missing from the image made install_argv raise a
-        # bare FileNotFoundError, which neither except above catches
-        # (2026-07-11, see docs/DECISIONS.md). Whatever the actual failure
-        # is, it must reach the user instead of vanishing.
-        if log:
-            log(f"[llm] {choice_id} 연결 중 예상치 못한 오류: {type(exc).__name__}: {exc}")
-        state.set_error(f"{type(exc).__name__}: {exc}")
-        return
+        try:
+            provider = connector(
+                model_id=model_id,
+                cli_binary=cli_binary,
+                login_command=login_command,
+                install_argv=install_argv,
+                log=log,
+            )
+        except ExternalLoginRequired as exc:
+            # Only Claude has a documented headless token fallback (see
+            # onboarding.py's module docstring) -- Grok/custom logins have
+            # no such path yet, so there's nothing useful to paste for them.
+            if log:
+                log(f"[llm] {choice_id} 연결 실패: {exc}")
+            state.set_error(str(exc), needs_token=(choice_id == "claude"))
+            return
+        except ProviderNotReady as exc:
+            if log:
+                log(f"[llm] {choice_id} 연결 실패: {exc}")
+            state.set_error(str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001 - see comment
+            # This runs on a background thread (server.py's do_POST spawns
+            # it) -- an uncaught exception here doesn't crash the process,
+            # it just kills the thread silently, leaving ConnectionState
+            # stuck on "connecting" forever with the UI showing no error at
+            # all. Real example: npm missing from the image made
+            # install_argv raise a bare FileNotFoundError, which neither
+            # except above catches (2026-07-11, see docs/DECISIONS.md).
+            # Whatever the actual failure is, it must reach the user
+            # instead of vanishing.
+            if log:
+                log(f"[llm] {choice_id} 연결 중 예상치 못한 오류: {type(exc).__name__}: {exc}")
+            state.set_error(f"{type(exc).__name__}: {exc}")
+            return
+    finally:
+        wm.close_new_firefox_windows(before_ids, run=swaymsg_run)
 
     if log:
         log(f"[llm] {choice_id} 연결 완료")

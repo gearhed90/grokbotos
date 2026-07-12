@@ -2,13 +2,18 @@
 # `webshell_cli` starts a local HTTP server and opens Firefox in --kiosk
 # mode against it -- that Firefox window IS the desktop the user sees
 # (prompt bar + command/app tile grid), not a terminal. Any other Firefox
-# window it opens along the way (e.g. `claude login`'s own OAuth
-# redirect) is fullscreened by the same rule below, and closing it
-# returns focus to the kiosk window underneath. The `/cli` built-in
+# window it opens along the way (e.g. `claude auth login`'s own OAuth
+# redirect) is fullscreened by the same rule below; webshell/wm.py closes
+# it automatically once that login flow's subprocess exits (there's no
+# title bar/chrome for a human to close it with -- confirmed missing on
+# real hardware, 2026-07-11, docs/DECISIONS.md). The `/cli` built-in
 # command (webshell/commands.py) spawns `foot` directly -- also
-# fullscreened, so it behaves exactly like the OAuth case: it takes over
-# the screen, and closing it (exit/Ctrl+D) reveals the kiosk window
-# again. No bar, no window borders, no other desktop chrome.
+# fullscreened; closing it (exit/Ctrl+D) reveals the kiosk window again.
+# Alt+F4 below is a manual fallback for anything wm.py's automatic close
+# doesn't catch (swaymsg unavailable, a window it doesn't know to close,
+# etc.) -- universal enough to work without depending on a Super/Mod key
+# a given keyboard/VM might not forward. No bar, no window borders, no
+# other desktop chrome.
 #
 # stdout/stderr (Python tracebacks, Firefox's own errors -- it's a
 # subprocess of webshell_cli, inherits the same fds) are redirected to a
@@ -29,3 +34,5 @@ bar {
 
 for_window [app_id="firefox"] fullscreen enable
 for_window [app_id="foot"] fullscreen enable
+
+bindsym Mod1+F4 kill

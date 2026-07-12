@@ -101,6 +101,47 @@ class TestRunConnect(unittest.TestCase):
         saved = json.loads(self.config_path.read_text())
         self.assertEqual(saved["model_id"], "llama3")
 
+    def test_closes_any_new_firefox_window_a_login_flow_opened(self):
+        """Real bug: `claude auth login` opens a real Firefox window for
+        OAuth; its own success page says "you can now close this window"
+        but this kiosk has no title bar/chrome to do that with, leaving
+        the user stuck unable to get back to the shell (2026-07-11,
+        docs/DECISIONS.md). run_connect() must close whatever new Firefox
+        window showed up during the connector call, automatically."""
+        import subprocess as _subprocess
+
+        state = ConnectionState()
+        swaymsg_calls = []
+        get_tree_call_count = [0]
+
+        def _tree_result(*firefox_ids):
+            payload = json.dumps(
+                {
+                    "id": 0,
+                    "nodes": [{"id": i, "app_id": "firefox", "nodes": [], "floating_nodes": []} for i in firefox_ids],
+                    "floating_nodes": [],
+                }
+            )
+            return _subprocess.CompletedProcess([], returncode=0, stdout=payload, stderr="")
+
+        def fake_swaymsg_run(argv, **kw):
+            swaymsg_calls.append(argv)
+            if argv == ["swaymsg", "-t", "get_tree"]:
+                get_tree_call_count[0] += 1
+                # Before the connector call: just the kiosk window (id 1).
+                # After: a new OAuth popup (id 2) has also appeared.
+                return _tree_result(1) if get_tree_call_count[0] == 1 else _tree_result(1, 2)
+            return _subprocess.CompletedProcess([], returncode=0, stdout="", stderr="")
+
+        run_connect(
+            "claude", state, self.config_path,
+            connectors={"claude": lambda **kw: _FakeProvider()},
+            swaymsg_run=fake_swaymsg_run,
+        )
+
+        kill_calls = [c for c in swaymsg_calls if c[-1] == "kill"]
+        self.assertEqual(kill_calls, [["swaymsg", "[con_id=2]", "kill"]])
+
     def test_external_login_required_for_claude_sets_needs_token(self):
         state = ConnectionState()
 
