@@ -65,17 +65,27 @@ systemctl enable podman.socket
 ### the /var persistence constraint above; expect to iterate once
 ### actually booted (docs/LOCAL_SETUP.md).
 
-# nodejs (bundles npm on Fedora) -- required at RUNTIME, not build time:
-# ClaudeCliProvider/GrokCliProvider (orchestrator/providers/claude_cli.py,
-# xai_grok.py) auto-install their CLI via `npm install -g ...` the first
-# time a user picks Claude/Grok in the shell. Without npm present, that
-# install_argv call raises FileNotFoundError -- which, before the
-# connect.py fix in this same commit, silently killed the background
-# connection thread and left the UI showing "연결 중..." forever with no
-# error. High-confidence diagnosis of a real "clicked Claude, nothing
-# happened" report (2026-07-11) -- not yet confirmed against that boot's
-# actual shell.log, docs/DECISIONS.md.
+# nodejs (bundles npm on Fedora): ClaudeCliProvider/GrokCliProvider
+# (orchestrator/providers/claude_cli.py, xai_grok.py) shell out to
+# `claude`/`grok`, both npm packages.
 dnf5 install -y python3 sway foot firefox google-noto-sans-cjk-ttc-fonts nodejs
+
+# Bake the CLIs themselves in at build time (root, full write access to
+# the global npm prefix) rather than leaving `npm install -g` to run at
+# first connect as the unprivileged `aios` kiosk user. That runtime path
+# was tried first and failed on real hardware: `npm install -g` targets
+# a root-owned global directory by default, which `aios` can't write to
+# (confirmed via the shell UI's log panel: exit code 254, consistent
+# with npm's EACCES failure mode for a non-root global install) --
+# and even when permissions aren't the issue, doing this at first boot
+# adds a real network dependency and a multi-minute wait to what should
+# be an instant "click Claude, log in" flow (2026-07-11, docs/DECISIONS.md).
+# ensure_ready()'s binary-presence check (`claude --version` /
+# `grok --version`) finds these already on PATH and skips the runtime
+# install_argv step entirely -- it only still exists as a fallback for
+# providers this image doesn't know to bake in ahead of time (the
+# "다른 CLI 기반 LLM 직접 추가" / `/llm custom` path).
+npm install -g @anthropic-ai/claude-code @xai-official/grok
 
 mkdir -p /usr/lib/oais
 cp -a /ctx/orchestrator /usr/lib/oais/orchestrator

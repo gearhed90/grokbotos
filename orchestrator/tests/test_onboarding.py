@@ -30,9 +30,15 @@ class _FakeProvider:
     provider_id = "fake"
     login_command = "fake login"
 
-    def __init__(self, ready_after_login=True, ensure_ready_raises_first=True):
+    def __init__(
+        self,
+        ready_after_login=True,
+        ensure_ready_raises_first=True,
+        status_result=ProviderStatus.AUTH_REQUIRED,
+    ):
         self._ready = not ensure_ready_raises_first
         self._ready_after_login = ready_after_login
+        self._status_result = status_result
         self.interactive_login_called = False
         self.ensure_ready_calls = 0
 
@@ -40,6 +46,9 @@ class _FakeProvider:
         self.ensure_ready_calls += 1
         if not self._ready:
             raise ExternalLoginRequired(self.provider_id, self.login_command, detail="not logged in")
+
+    def status(self):
+        return self._status_result
 
     def interactive_login(self):
         self.interactive_login_called = True
@@ -141,6 +150,20 @@ class TestConnectGrok(unittest.TestCase):
         with self.assertRaises(ExternalLoginRequired):
             connect_grok(provider=fake)
 
+    def test_binary_missing_does_not_attempt_interactive_login(self):
+        """Real bug: `grok login`/`claude login` on a binary that was
+        never successfully installed doesn't prompt for anything -- it
+        raises FileNotFoundError, masking the real install failure
+        behind a confusing second error (2026-07-11, docs/DECISIONS.md).
+        status() ERROR (binary not present) must short-circuit straight
+        to re-raising the original ExternalLoginRequired instead."""
+        fake = _FakeProvider(ensure_ready_raises_first=True, status_result=ProviderStatus.ERROR)
+
+        with self.assertRaises(ExternalLoginRequired):
+            connect_grok(provider=fake)
+
+        self.assertFalse(fake.interactive_login_called)
+
 
 class TestConnectClaudeViaBrowser(unittest.TestCase):
     """Primary Claude path now that a browser is baked into the image --
@@ -167,6 +190,14 @@ class TestConnectClaudeViaBrowser(unittest.TestCase):
 
         with self.assertRaises(ExternalLoginRequired):
             connect_claude_via_browser(provider=fake)
+
+    def test_binary_missing_does_not_attempt_interactive_login(self):
+        fake = _FakeProvider(ensure_ready_raises_first=True, status_result=ProviderStatus.ERROR)
+
+        with self.assertRaises(ExternalLoginRequired):
+            connect_claude_via_browser(provider=fake)
+
+        self.assertFalse(fake.interactive_login_called)
 
 
 class TestConnectClaudeWithToken(unittest.TestCase):
@@ -209,6 +240,14 @@ class TestConnectCustom(unittest.TestCase):
         connect_custom("my-llm", "mycli", "mycli login", provider=fake)
 
         self.assertTrue(fake.interactive_login_called)
+
+    def test_binary_missing_does_not_attempt_interactive_login(self):
+        fake = _FakeProvider(ensure_ready_raises_first=True, status_result=ProviderStatus.ERROR)
+
+        with self.assertRaises(ExternalLoginRequired):
+            connect_custom("my-llm", "mycli", "mycli login", provider=fake)
+
+        self.assertFalse(fake.interactive_login_called)
 
 
 if __name__ == "__main__":

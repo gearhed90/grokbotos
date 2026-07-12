@@ -119,7 +119,13 @@ class CliSubprocessProvider(LLMProvider):
             self._log(f"[{self.cli_binary}] 설치 중: {' '.join(self.install_argv)}")
             result = self._run(self.install_argv)
             if result.returncode != 0 or not self._binary_present():
-                self._log(f"[{self.cli_binary}] 설치 실패 (종료 코드 {result.returncode})")
+                # stderr, not just the exit code -- an exit code alone
+                # (e.g. npm's 254) doesn't say whether this was a
+                # permission error, a network failure, or something else
+                # entirely, and guessing wasted a full round-trip before
+                # (2026-07-11, docs/DECISIONS.md).
+                stderr_snippet = (result.stderr or "").strip()[:300]
+                self._log(f"[{self.cli_binary}] 설치 실패 (종료 코드 {result.returncode}): {stderr_snippet}")
                 raise ExternalLoginRequired(
                     self.provider_id,
                     self.login_command,

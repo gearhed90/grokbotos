@@ -25,7 +25,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .providers.base import ExternalLoginRequired, LLMProvider, ProviderNotReady
+from .providers.base import ExternalLoginRequired, LLMProvider, ProviderNotReady, ProviderStatus
 from .providers.cli_subprocess import CliSubprocessProvider
 from .providers.claude_cli import ClaudeCliProvider
 from .providers.local_ollama import OllamaProvider
@@ -150,7 +150,15 @@ def connect_claude_via_browser(provider: ClaudeCliProvider | None = None, log=No
         provider.ensure_ready()
         return provider
     except ExternalLoginRequired:
-        pass
+        # status() ERROR means the `claude` binary itself isn't there
+        # (install never ran / failed) -- running `claude login` in that
+        # state doesn't prompt for anything, it just raises
+        # FileNotFoundError, masking the real problem with a confusing
+        # second error (2026-07-11, docs/DECISIONS.md). Only retry via
+        # interactive_login() when the binary exists and it's genuinely
+        # an auth problem.
+        if provider.status() is ProviderStatus.ERROR:
+            raise
 
     if not provider.interactive_login():
         raise ExternalLoginRequired(
@@ -177,7 +185,9 @@ def connect_grok(provider: GrokCliProvider | None = None, log=None) -> GrokCliPr
         provider.ensure_ready()
         return provider
     except ExternalLoginRequired:
-        pass
+        # See connect_claude_via_browser()'s matching comment.
+        if provider.status() is ProviderStatus.ERROR:
+            raise
 
     if not provider.interactive_login():
         raise ExternalLoginRequired(
@@ -208,7 +218,9 @@ def connect_custom(
         provider.ensure_ready()
         return provider
     except ExternalLoginRequired:
-        pass
+        # See connect_claude_via_browser()'s matching comment.
+        if provider.status() is ProviderStatus.ERROR:
+            raise
 
     if not provider.interactive_login():
         raise ExternalLoginRequired(provider.provider_id, login_command, detail=f"`{login_command}` exited non-zero")

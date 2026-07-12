@@ -624,3 +624,76 @@ got diagnosed from real evidence on the first try, not a hypothesis.
 
 164 tests pass, including two asserting `_default_run` picks the right
 timeout for install vs. prompt calls.
+
+## npm install exit 254 -- likely EACCES, not a missing driver (2026-07-11)
+
+User's follow-up question, after a second log-panel screenshot showed a
+new failure past the timeout fix:
+
+```
+[claude] 설치 중: npm install -g @anthropic-ai/claude-code
+[claude] 설치 실패 (종료 코드 254)
+[claude] 실행: claude login (브라우저가 열리면 로그인을 완료하세요)
+[llm] claude 연결 중 예상치 못한 오류: FileNotFoundError: ... 'claude'
+```
+
+User asked whether basic devices (network/graphics/sound) are actually
+working out of the box on this image. Short answer: almost certainly
+yes for the *driver* layer -- `virtio-net`/`virtio-gpu`/`virtio-snd` are
+built into the stock Fedora kernel this image ships (no separate driver
+package needed for a QEMU/UTM VM), and NetworkManager auto-configures a
+detected ethernet device via DHCP by default. The failure here doesn't
+match a missing-driver signature.
+
+**Two separate bugs, actually**:
+
+1. **The real cause of exit 254, by far the more likely explanation
+   given how the image is built**: `npm install -g` was being run at
+   *first connect*, as the unprivileged `aios` kiosk user. npm's default
+   global install prefix (targeting `/usr/lib/node_modules` for a
+   system-installed Node.js) is root-owned; a non-root global install
+   there fails with `EACCES`, and npm has been known to surface that as
+   a non-1 exit code depending on version -- 254 is consistent with
+   that, though the previous fix (this same commit) didn't preserve
+   stderr to confirm it outright, only the exit code. **Not deeply
+   confirmed** (no stderr captured from that attempt), but far more
+   likely than a driver/network problem given `aios` has no elevated
+   permissions anywhere in this image.
+2. **A real bug independent of #1**: once the install step failed and
+   raised `ExternalLoginRequired`, `connect_claude_via_browser()` still
+   blindly went on to call `interactive_login()` (`claude login`) --
+   which, since `claude` was never actually installed, raised a second,
+   unrelated `FileNotFoundError` instead of surfacing the original
+   install failure. This masked the real problem behind a confusing
+   secondary error.
+
+**Fixes**:
+- `build.sh` now runs `npm install -g @anthropic-ai/claude-code
+  @xai-official/grok` at **build time**, as root, right after installing
+  `nodejs`. This is the actual structural fix: no more first-boot
+  network dependency, no more permission mismatch, no more multi-minute
+  wait in the connect flow -- `ensure_ready()`'s binary-presence check
+  finds both CLIs already on PATH and skips the runtime install entirely.
+  Runtime `npm install -g` as `aios` still exists as a fallback for
+  providers this image doesn't know to bake in ahead of time (the
+  `/llm custom` path) -- so the underlying permission risk isn't fully
+  gone for that path, just no longer hit by the two built-in providers.
+- `onboarding.py`'s `connect_claude_via_browser()`/`connect_grok()`/
+  `connect_custom()` now check `provider.status()` after catching
+  `ExternalLoginRequired`: if it's `ProviderStatus.ERROR` (binary not
+  present), they re-raise immediately instead of attempting
+  `interactive_login()` against a binary that was never installed. Fixes
+  bug 2 for any future install failure, not just this one.
+- `cli_subprocess.py`'s install-failure log line now includes a stderr
+  snippet (previously exit-code-only), so the *next* install failure --
+  whether this one recurs against the baked-in CLIs' fallback path, or a
+  `/llm custom` provider hits it -- shows the actual npm error instead
+  of requiring another guess.
+
+**Practical next step suggested to the user**: once rebuilt, `/system
+network` (already implemented, runs real `nmcli device status`) is the
+direct way to confirm the network device itself is actually up, if
+connectivity is ever in question again.
+
+167 tests pass, including new coverage for the status()-gated
+interactive_login() short-circuit across all three connect_* functions.
