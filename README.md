@@ -10,13 +10,24 @@ this repo looks the way it does: [`docs/DECISIONS.md`](docs/DECISIONS.md).
 Steps that need a real machine (not this dev/CI environment):
 [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md).
 
-**Status: Phase 0/1 done and verified, Phase 2 in progress.** Confirmed
-2026-07-09: clean-installed the `oais-arm64` image on Apple Silicon (UTM),
-rebooted, logged in, `bootc status` shows the right image. The OS image
-itself is still just a minimal customized bootc image (no AI layer baked
-in yet -- that's Phase 5). A standalone orchestrator prototype for the
-closed-loop pipeline lives in [`orchestrator/`](orchestrator/) and is
-developed/tested independently of the image build.
+**Status (updated 2026-07-12): Phase 0/1 done and verified, Phase 2 is a
+tested prototype but not complete (2.7/2.8 missing), Phase 4's GUI boot
+shell is being built ahead of Phase 2 completion at the user's request.**
+Confirmed 2026-07-09: clean-installed the `oais-arm64` image on Apple
+Silicon (UTM), rebooted, logged in, `bootc status` shows the right image.
+The OS image itself is still just a minimal customized bootc image (no AI
+layer baked in yet -- that's Phase 5). A standalone orchestrator prototype
+for the closed-loop pipeline lives in [`orchestrator/`](orchestrator/) and
+is developed/tested independently of the image build; it also now ships a
+kiosk GUI boot shell (Firefox in `--kiosk` mode over a local `sway`
+compositor, `orchestrator/webshell/`) with a live CLI log panel and
+automatic window cleanup after login flows. That shell has gone through
+several real-VM debug rounds (black screen, hung LLM connect, npm
+timeouts/permissions, a broken image build, invisible login output, a
+wrong CLI subcommand, a stuck OAuth window -- see `docs/DECISIONS.md`'s
+2026-07-11 entries) but the fully-combined fixed state has not yet been
+verified in one continuous boot-to-prompt run. See `docs/ROADMAP.md`'s
+progress note and Appendix B for the full picture.
 
 This repo is built on the [`ublue-os/image-template`](https://github.com/ublue-os/image-template)
 pattern for [bootc](https://github.com/bootc-dev/bootc) images -- see that
@@ -43,7 +54,7 @@ one multi-arch manifest -- see `docs/DECISIONS.md`.
 - `oais.env` -- image name/registry/description variables consumed by the `Justfile`.
 - `.github/workflows/build.yml` -- builds the OCI image and pushes to GHCR.
 - `.github/workflows/build-disk.yml` -- builds qcow2/ISO disk images from the OCI image.
-- `orchestrator/` -- Phase 2 closed-loop pipeline prototype (Task Spec, app registry, state machine). Standalone Python, not yet wired into the image -- see `orchestrator/README.md`.
+- `orchestrator/` -- Phase 2 closed-loop pipeline prototype (Task Spec, app registry, state machine) plus the Phase 4 kiosk GUI boot shell (`webshell/`). Copied into the image at `/usr/lib/oais/orchestrator` and launched by `system_files/etc/sway/config` on `aios` autologin -- see `orchestrator/README.md`.
 
 ## Building locally
 
@@ -62,3 +73,11 @@ sudo bootc switch --transport containers-storage localhost/oais:latest
 `ghcr.io/head77x/oais:latest` (amd64) and `ghcr.io/head77x/oais-arm64:latest`
 (arm64) once secrets are configured (see `docs/LOCAL_SETUP.md` for the
 cosign signing key requirement before this will succeed).
+
+`build-disk.yml` (qcow2/ISO disk images) now runs automatically after
+`build.yml` succeeds on `main`, via a `workflow_run` trigger -- no manual
+step needed anymore. It can still be triggered manually
+(`workflow_dispatch`) to pick a single platform. If
+`AWS_ACCESS_KEY_ID`/`AWS_S3_BUCKET` secrets are set, finished disk images
+upload straight to S3; otherwise they're attached as workflow artifacts.
+See `docs/LOCAL_SETUP.md` for the full secrets list.
