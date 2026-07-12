@@ -85,7 +85,20 @@ dnf5 install -y python3 sway foot firefox google-noto-sans-cjk-ttc-fonts nodejs
 # install_argv step entirely -- it only still exists as a fallback for
 # providers this image doesn't know to bake in ahead of time (the
 # "다른 CLI 기반 LLM 직접 추가" / `/llm custom` path).
-npm install -g @anthropic-ai/claude-code @xai-official/grok
+#
+# HOME=/tmp: npm needs a writable $HOME for its cache dir, and root's
+# ambient $HOME (/root) isn't usable in this build stage -- confirmed in
+# CI: `mkdir '/root'` failed with ENOTDIR. Same root cause as the
+# /opt and aios-homedir issues already documented above: this base
+# image's /root is (like /home, /opt) an ostree symlink into /var
+# (-> var/roothome), and /var isn't populated the way a real booted
+# system's is during `podman build` -- only /usr and /etc reliably are.
+# /tmp is already a real, writable tmpfs in this RUN step (see the
+# Containerfile's `--mount=type=tmpfs,dst=/tmp`), so pointing npm's
+# $HOME there for just this command sidesteps the problem instead of
+# trying to fix /root itself, which nothing at runtime depends on
+# anyway (aios, not root, is the account that actually boots into).
+HOME=/tmp npm install -g @anthropic-ai/claude-code @xai-official/grok
 
 mkdir -p /usr/lib/oais
 cp -a /ctx/orchestrator /usr/lib/oais/orchestrator

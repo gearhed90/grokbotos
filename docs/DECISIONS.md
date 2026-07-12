@@ -697,3 +697,43 @@ connectivity is ever in question again.
 
 167 tests pass, including new coverage for the status()-gated
 interactive_login() short-circuit across all three connect_* functions.
+
+## Image build fails: `npm install -g` at build time hits `/root` ENOTDIR (2026-07-11)
+
+The previous fix (baking Claude/Grok CLIs in at build time) broke the
+CI build itself:
+
+```
++ npm install -g @anthropic-ai/claude-code @xai-official/grok
+npm error code ENOTDIR
+npm error syscall mkdir
+npm error path /root
+npm error errno ENOTDIR
+npm error Invalid response body while trying to fetch
+  https://registry.npmjs.org/@anthropic-ai%2fclaude-code:
+  ENOTDIR: not a directory, mkdir '/root'
+```
+
+Same root cause pattern as the `/opt` and `aios` home-directory issues
+already documented above, just hitting `root`'s account this time
+instead of `aios`'s: this base image's `/root` is (like `/home`, `/opt`)
+an ostree symlink into `/var` (`-> var/roothome`), and `/var` isn't
+populated the way a real booted system's is during `podman build` --
+`/var/roothome` doesn't exist as an actual directory in this build
+stage, so `/root` resolves to something `mkdir` can't create a `.npm`
+cache directory under (`ENOTDIR`). npm needs a writable `$HOME` to
+resolve its cache location before it can even reach the registry, so
+this failed before making any real network request.
+
+**Fix**: `HOME=/tmp npm install -g ...` -- `/tmp` is already a real,
+writable `tmpfs` in this build step (the Containerfile's own
+`--mount=type=tmpfs,dst=/tmp`), so pointing npm's `$HOME` there for just
+this one command sidesteps the problem entirely. Nothing at runtime
+depends on root's home directory state either way -- `aios`, not root,
+is the account the shipped image actually boots into.
+
+Not yet re-verified in CI (this fix hasn't been through a build run
+yet) -- next push should confirm whether this clears the `npm install`
+step, and then (assuming it does) finally let the actual "click Claude,
+already-installed, straight to login" flow get boot-tested for the
+first time.
