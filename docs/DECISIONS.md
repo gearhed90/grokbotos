@@ -879,3 +879,63 @@ just no way to act on one.
 
 178 tests pass, including a full `run_connect()` integration test
 confirming the close call fires with the right window ID.
+
+## Still stuck on the OAuth success page after the wm.py fix -- reused tab, not a new window (2026-07-13)
+
+This is exactly the failure mode flagged as "still open" at the end of
+the previous entry. A new screenshot showed the same symptom as before
+(Claude's "Build something great... you can now close this window"
+page, filling the whole screen, no way back) *after* `webshell/wm.py`
+had already shipped -- so the fix from 2026-07-11 evidently didn't
+fire. The user also independently pushed back on the underlying design:
+even a chromeless kiosk needs *some* real way to move between windows
+(browser popup, a spawned `/cli` terminal), not just an auto-kill that
+either works silently or leaves you stuck with zero recourse.
+
+**Root cause (plausible, not directly confirmed -- this dev sandbox has
+no display to boot-test against, same caveat as the rest of Phase 4's
+window-management work)**: the kiosk's own desktop *is* a Firefox
+`--kiosk` window (`webshell_cli.py`), already running by the time a
+login flow tries to open its OAuth URL. Firefox is single-instance by
+default -- a second `firefox <url>` invocation (which is what a bare
+`firefox.desktop` xdg entry, or `xdg-open`, or Node's `open` package via
+`$BROWSER`, all resolve to) gets sent to the *already-running* kiosk
+instance over Firefox's remoting protocol and opens as a new **tab** in
+the **same window**, not a separate one. Kiosk mode hides all chrome
+(no tab bar, no back button), so that tab's content -- the OAuth success
+page -- just permanently overwrites the kiosk UI. Critically, this also
+explains why `wm.py`'s fix didn't help: its `swaymsg -t get_tree` diff
+looks for a *new* sway con_id, and there never was one -- it's the same
+window, same con_id, just navigated to a different URL. There was
+nothing for it to find and close.
+
+**Fix, two parts** (matches the user's own framing: a real fix for this
+specific bug, plus a general desktop primitive so this class of problem
+degrades gracefully next time):
+1. `system_files/usr/local/bin/oais-open-browser` (new): a wrapper
+   script that runs `firefox --new-window "$@"` instead of a bare
+   `firefox`. `--new-window` forces Firefox's remoting to open a
+   genuinely separate top-level window instead of reusing a tab, which
+   is what `wm.py`'s existing diff-and-kill logic actually needs to find
+   something to act on. Registered as the default handler for
+   `text/html`/`x-scheme-handler/http(s)` etc. via a new
+   `system_files/usr/share/applications/oais-browser.desktop` (replacing
+   the previous direct `firefox.desktop` mapping in
+   `/etc/xdg/mimeapps.list`), and as `$BROWSER` in `/etc/environment`
+   (`build_files/build.sh`).
+2. `system_files/etc/sway/config`: added real focus-cycling keybindings
+   -- `Mod1+Tab`/`Mod1+Shift+Tab` (sway's built-in `focus next`/
+   `focus prev` sibling cycling) alongside the existing `Mod1+F4 kill`.
+   This is the "기본적인 GUI 구성 요소" the user asked for directly: even
+   though there's still no visible chrome (no taskbar, no window list),
+   a human can now alt-tab between whatever's actually open -- the kiosk
+   shell, a login popup, a `/cli` terminal -- instead of depending
+   entirely on `wm.py` guessing right.
+
+**Still not independently confirmed**: whether `--new-window` sent to a
+running `--kiosk` instance reliably produces a window that both (a) gets
+its own distinct sway con_id and (b) doesn't inherit kiosk-mode
+chromelessness in a way that breaks something else. This needs a real
+boot test to fully verify, like the rest of this phase's window-
+management work; flagging it explicitly rather than claiming certainty
+the codebase alone can't provide.

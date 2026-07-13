@@ -188,7 +188,7 @@
 
 - [x] 전용 컴포지터 기반 풀스크린 셸 구현 (일반 데스크톱 UI 요소 노출 안 함) — `sway` 커스텀 config(`system_files/etc/sway/config`)가 Firefox `--kiosk`로 로컬 웹 UI(`orchestrator/webshell/`)를 표시, `/cli` 명령 실행 시 `foot` 터미널도 동일하게 풀스크린. Claude Design 참고해 시각 디자인 전면 재작업 (`docs/DECISIONS.md`). Plymouth 스플래시와의 전환 시퀀스는 미검증
 - [x] **(ToDo 원문엔 없던 항목, "연결 중..."만 뜨고 진행 상황이 안 보인다는 사용자 피드백으로 추가)** 우측 실시간 CLI 로그 패널 — `webshell/logbuf.py`(`LogBuffer` 링버퍼) + `GET /api/logs` long-polling. 설치/로그인 등 백그라운드 작업의 실제 stdout/stderr를 그대로 화면에 표시 (2.1 입력 레이어 섹션과 동일 항목, 여기선 "결과 전달 UI"라는 Phase 4 목표 관점에서 재기재)
-- [x] **(ToDo 원문엔 없던 항목, 로그인 성공 후 원래 화면으로 못 돌아가는 문제로 추가)** sway 창 자동 정리(`webshell/wm.py`) — 이 kiosk 구성엔 창 제목표시줄/닫기 버튼이 없어서, 로그인 등 새 창을 여는 플로우가 끝나면 그 창을 sway IPC로 자동으로 닫고 셸로 복귀시킨다. `Alt+F4` 수동 폴백 병행
+- [x] **(ToDo 원문엔 없던 항목, 로그인 성공 후 원래 화면으로 못 돌아가는 문제로 추가)** sway 창 자동 정리(`webshell/wm.py`) — 이 kiosk 구성엔 창 제목표시줄/닫기 버튼이 없어서, 로그인 등 새 창을 여는 플로우가 끝나면 그 창을 sway IPC로 자동으로 닫고 셸로 복귀시킨다. 1차 수정(07-11) 이후에도 동일 증상 재발 → kiosk Firefox가 이미 실행 중이라 로그인 URL이 새 창이 아니라 같은 창의 새 탭으로 열렸을 가능성이 높다고 진단(07-13) → `firefox --new-window`를 강제하는 래퍼(`oais-open-browser`)를 기본 브라우저로 등록해 `wm.py`가 실제로 새 창을 찾아 닫을 수 있게 수정. 추가로 사용자 요청에 따라 `Alt+Tab`/`Alt+Shift+Tab`(창 포커스 순환)을 `Alt+F4`(강제 종료)와 함께 배선 — 크롬 없는 kiosk라도 최소한의 "창 간 전환" 데스크톱 기본 기능은 갖추도록 함 (`docs/DECISIONS.md` 2026-07-13)
 - [ ] 결과 렌더링 방식 설계 (텍스트, 파일 다운로드, 인라인 미리보기 등) — 텍스트 요약만 구현됨(`ResultEnvelope.summary`를 웹 UI의 결과 영역에 표시), 파일/인라인 미리보기 미착수
 - [ ] 세션 히스토리/재실행/피드백(수정 요청) 흐름 설계 — 미착수
 - [x] 기본 세션으로 자동 실행되는 systemd 서비스 또는 디스플레이 매니저 세션 등록 — `getty@tty1` 자동 로그인(`system_files/etc/systemd/system/getty@tty1.service.d/autologin.conf`) + `aios` 계정의 로그인 셸이 바로 `sway` 실행. 부팅 자체는 실기 검증 완료, 이번 재설계분은 미검증

@@ -74,27 +74,39 @@ systemctl enable podman.socket
 # default browser, unlike GNOME/KDE.
 dnf5 install -y python3 sway foot firefox google-noto-sans-cjk-ttc-fonts nodejs xdg-utils
 
-# Register Firefox as the default handler for http(s)/html so
-# `xdg-open <url>` (what most CLIs, including `claude`, shell out to for
-# "open this login URL in a browser") actually resolves to something,
-# instead of silently failing because no desktop environment ever set a
-# default. firefox.desktop ships in /usr/share/applications/ as part of
-# the firefox package installed above. BROWSER=firefox is a second,
-# more direct signal -- some tools (e.g. Node's `open` package, which
-# Claude Code's CLI may use) check $BROWSER before falling back to
-# xdg-open, and PAM's pam_env module (part of the standard `login`
-# flow agetty's autologin invokes) applies /etc/environment to every
-# session, including the kiosk one.
+# Register a browser handler for http(s)/html so `xdg-open <url>` (what
+# most CLIs, including `claude`, shell out to for "open this login URL in
+# a browser") actually resolves to something, instead of silently failing
+# because no desktop environment ever set a default.
+#
+# NOT firefox.desktop directly: the kiosk's own desktop IS a Firefox
+# --kiosk window (webshell_cli.py), already running by the time a login
+# flow tries to open a URL. A bare `firefox <url>` gets sent to that
+# already-running instance via Firefox's remoting protocol and opens as a
+# new TAB in the SAME window (Firefox is single-instance by default) --
+# not a separate one webshell/wm.py can detect and close. That's what
+# left `claude auth login`'s OAuth success page stuck covering the whole
+# kiosk UI with no way back (2026-07-13, docs/DECISIONS.md).
+# oais-browser.desktop (system_files/usr/share/applications/) wraps
+# `firefox --new-window` instead (system_files/usr/local/bin/oais-open-browser)
+# so the login flow's URL always opens as a genuinely new top-level
+# window that wm.py's before/after `swaymsg -t get_tree` diff can find.
+#
+# BROWSER=<the same wrapper> is a second, more direct signal -- some
+# tools (e.g. Node's `open` package, which Claude Code's CLI may use)
+# check $BROWSER before falling back to xdg-open, and PAM's pam_env
+# module (part of the standard `login` flow agetty's autologin invokes)
+# applies /etc/environment to every session, including the kiosk one.
 mkdir -p /etc/xdg
 cat > /etc/xdg/mimeapps.list <<'EOF'
 [Default Applications]
-text/html=firefox.desktop
-x-scheme-handler/http=firefox.desktop
-x-scheme-handler/https=firefox.desktop
-x-scheme-handler/about=firefox.desktop
-x-scheme-handler/unknown=firefox.desktop
+text/html=oais-browser.desktop
+x-scheme-handler/http=oais-browser.desktop
+x-scheme-handler/https=oais-browser.desktop
+x-scheme-handler/about=oais-browser.desktop
+x-scheme-handler/unknown=oais-browser.desktop
 EOF
-echo 'BROWSER=firefox' >> /etc/environment
+echo 'BROWSER=/usr/local/bin/oais-open-browser' >> /etc/environment
 
 # Bake the CLIs themselves in at build time (root, full write access to
 # the global npm prefix) rather than leaving `npm install -g` to run at

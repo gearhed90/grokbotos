@@ -1,19 +1,27 @@
 # Minimal kiosk config for the AI-OS shell (ROADMAP.md Phase 4).
 # `webshell_cli` starts a local HTTP server and opens Firefox in --kiosk
 # mode against it -- that Firefox window IS the desktop the user sees
-# (prompt bar + command/app tile grid), not a terminal. Any other Firefox
-# window it opens along the way (e.g. `claude auth login`'s own OAuth
-# redirect) is fullscreened by the same rule below; webshell/wm.py closes
-# it automatically once that login flow's subprocess exits (there's no
-# title bar/chrome for a human to close it with -- confirmed missing on
-# real hardware, 2026-07-11, docs/DECISIONS.md). The `/cli` built-in
-# command (webshell/commands.py) spawns `foot` directly -- also
-# fullscreened; closing it (exit/Ctrl+D) reveals the kiosk window again.
-# Alt+F4 below is a manual fallback for anything wm.py's automatic close
-# doesn't catch (swaymsg unavailable, a window it doesn't know to close,
-# etc.) -- universal enough to work without depending on a Super/Mod key
-# a given keyboard/VM might not forward. No bar, no window borders, no
-# other desktop chrome.
+# (prompt bar + command/app tile grid), not a terminal. Any other window
+# it opens along the way (e.g. `claude auth login`'s own OAuth redirect,
+# opened via /usr/local/bin/oais-open-browser -- see build_files/build.sh
+# and docs/DECISIONS.md 2026-07-13 for why that wrapper exists instead of
+# a bare `firefox`) is fullscreened by the same rule below; webshell/wm.py
+# closes it automatically once that login flow's subprocess exits. The
+# `/cli` built-in command (webshell/commands.py) spawns `foot` directly --
+# also fullscreened.
+#
+# This kiosk has NO window chrome (no title bar/tab bar/close button) by
+# design, so it needs real fallbacks for a human to move between windows
+# without relying solely on wm.py guessing right every time:
+#   - Alt+Tab / Alt+Shift+Tab: cycle focus between whatever windows are
+#     currently open (kiosk shell, a login popup, a /cli terminal) --
+#     sway's built-in sibling-cycling, close enough to a real desktop's
+#     alt-tab given everything here lives flat in one workspace.
+#   - Alt+F4: kill the focused window outright, for anything wm.py's
+#     automatic close doesn't catch (swaymsg unavailable, a window it
+#     doesn't know to close, etc.).
+# Both use Mod1 (Alt) rather than a Super/Mod4 key some keyboards/VMs
+# don't forward. Still no bar, no window borders, no other desktop chrome.
 #
 # stdout/stderr (Python tracebacks, Firefox's own errors -- it's a
 # subprocess of webshell_cli, inherits the same fds) are redirected to a
@@ -35,4 +43,6 @@ bar {
 for_window [app_id="firefox"] fullscreen enable
 for_window [app_id="foot"] fullscreen enable
 
+bindsym Mod1+Tab focus next
+bindsym Mod1+Shift+Tab focus prev
 bindsym Mod1+F4 kill
