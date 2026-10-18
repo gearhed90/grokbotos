@@ -11,6 +11,7 @@
 - 실기에서만 할 일: [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md)
 - 앱을 이미지에 넣는 방법: [`docs/GROKBOT_APP.md`](docs/GROKBOT_APP.md)
 - 설치 명령 규격: [`docs/GROKBOT_INSTALL.md`](docs/GROKBOT_INSTALL.md)
+- 하드웨어와 드라이버: [`docs/HARDWARE.md`](docs/HARDWARE.md)
 
 ## 이 트리에서 부팅되는 것
 
@@ -56,7 +57,7 @@ build_files/install-grokbot-app.sh    페이로드 또는 플레이스홀더
 grokbot-app/                          로컬 페이로드 자리. 기본은 비어 있음
 system_files/etc/grokbot/app.conf     grokbot-launch 가 읽는 설정
 system_files/etc/sway/config          키오스크
-system_files/usr/local/bin/grokbot-*  세션, 실행, 설치, 로그아웃
+system_files/usr/local/bin/grokbot-*  세션, 실행, 설치, 로그아웃, 공장 초기화 초안
 disk_config/                          ISO / qcow2
 .github/workflows/build.yml           GHCR oais, oais-arm64
 .github/workflows/build-disk.yml      qcow2 / anaconda ISO

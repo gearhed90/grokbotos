@@ -2,7 +2,7 @@
 
 Containerfile, 스크립트, CI, 문서는 가상화가 없는 환경에서도 고칠 수 있다. 아래는 KVM과 root가 있는 본인 리눅스 머신, 또는 Apple Silicon Mac + UTM이 필요하다.
 
-지금 트리의 첫 화면은 **플레이스홀더**다. Grok Bot 로그인 화면이 아니다. 실제 앱을 넣는 방법은 [`GROKBOT_APP.md`](./GROKBOT_APP.md).
+기본 이미지의 첫 화면은 Grok Bot 0.71.2다. amd64와 arm64 둘 다 RPM을 넣는다. 이 환경에서 그 화면을 부팅해 보지는 않았다. 플레이스홀더 안내 페이지는 `GROKBOT_DISABLE_BUNDLED_APP=1`로 빌드했을 때만 나온다. 주소와 체크섬은 [`GROKBOT_APP.md`](./GROKBOT_APP.md). 하드웨어는 [`HARDWARE.md`](./HARDWARE.md).
 
 ## 1. 도구 설치
 
@@ -24,10 +24,20 @@ sudo bootc status
 just build
 ```
 
-기본 빌드는 플레이스홀더다. 웹 앱 주소를 알고 있고 그 화면을 먼저 보려면:
+이 빌드는 `downloads.cursor.com`에서 아키텍처에 맞는 Grok Bot RPM을 받는다. 체크섬이 다르면 실패한다. 네트워크가 필요하다.
+
+플레이스홀더 안내 페이지만 넣으려면:
 
 ```bash
-GROKBOT_WEB_URL='https://확인된-주소' just build
+GROKBOT_DISABLE_BUNDLED_APP=1 just build
+```
+
+웹 주소는 그 플레이스홀더 빌드에서만 쓴다. RPM을 넣는 기본 빌드에서는 무시된다.
+
+```bash
+GROKBOT_DISABLE_BUNDLED_APP=1 \
+GROKBOT_WEB_URL='https://확인된-주소' \
+just build
 ```
 
 디스크 이미지:
@@ -102,16 +112,15 @@ sudo systemctl reboot
 
 없으면 예전처럼 아티팩트로 올라간다. 경로는 `s3://$AWS_S3_BUCKET/oais/<qcow2|anaconda-iso>-<amd64|arm64>/`. 이 접두사 `oais`는 이미지 이름과 맞추어 두었고, 제품 이름으로 바꾸지 않았다.
 
-## 7. 실제 Grok Bot을 넣은 뒤
+## 7. 부팅 뒤에 더 볼 것
 
-플레이스홀더 부팅이 된 다음에 한다.
+RPM은 이미 기본 빌드에 들어 있다. 아래는 그 이미지를 실제로 켠 뒤에 하는 일이다. 여기서는 하지 않았다.
 
-1. 바이너리 URL, 종류, sha256, 실행 경로를 정한다. [`GROKBOT_APP.md`](./GROKBOT_APP.md)
-2. 그 인자로 이미지를 다시 빌드한다.
-3. 첫 화면이 Grok Bot 로그인/구독인지 본다.
-4. 재부팅 뒤 세션이 남는지 본다.
-5. `grokbot-install flatpak org.mozilla.firefox` 같은 설치가 사용자 권한으로 되는지 본다. 네트워크가 필요하다.
-6. `Alt+Space`로 그 앱을 열고 `Alt+G`로 Grok Bot에 돌아오는지 본다.
+1. 첫 화면이 Grok Bot 로그인 또는 구독인지 본다. 안내 페이지가 보이면 `GROKBOT_DISABLE_BUNDLED_APP=1`로 만든 이미지다.
+2. 재부팅 뒤 세션이 `/var/home/grokbot`에 남는지 본다.
+3. `grokbot-install flatpak org.mozilla.firefox` 같은 설치가 사용자 권한으로 되는지 본다. 네트워크가 필요하다.
+4. `Alt+Space`로 그 앱을 열고 `Alt+G`로 Grok Bot에 돌아오는지 본다.
+5. 하드웨어 항목은 [`HARDWARE.md`](./HARDWARE.md)의 표대로 적는다. 안 본 칸은 미확인이다.
 
 ## 이 개발 샌드박스에서 안 되는 이유
 
