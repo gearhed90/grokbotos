@@ -2,7 +2,7 @@
 FROM scratch AS ctx
 COPY build_files /
 COPY system_files /system_files
-COPY orchestrator /orchestrator
+COPY grokbot-app /grokbot-app
 
 # Base Image
 # quay.io/fedora/fedora-bootc: minimal Fedora Atomic (bootc) image with no
@@ -14,6 +14,20 @@ COPY orchestrator /orchestrator
 # sandbox to resolve one; pin it once resolvable (from CI logs or a
 # machine with normal network access).
 FROM quay.io/fedora/fedora-bootc:latest
+
+# Grok Bot Linux app. Empty SOURCE selects the pinned RPM for TARGETARCH
+# (amd64 and arm64). GROKBOT_DISABLE_BUNDLED_APP=1 keeps the placeholder.
+# See docs/GROKBOT_APP.md and build_files/install-grokbot-app.sh.
+ARG GROKBOT_APP_SOURCE=
+ARG GROKBOT_APP_SHA256=
+ARG GROKBOT_APP_KIND=auto
+ARG GROKBOT_APP_EXEC=
+ARG GROKBOT_FLATPAK_ID=
+ARG GROKBOT_WEB_URL=
+ARG GROKBOT_TARGET_ARCH
+ARG GROKBOT_DISABLE_BUNDLED_APP
+# Set by podman/buildah from the build platform. amd64 or arm64.
+ARG TARGETARCH
 
 ### MODIFICATIONS
 ## make modifications desired in your image and install packages by modifying the build.sh script

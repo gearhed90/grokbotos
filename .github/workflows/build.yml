@@ -29,6 +29,8 @@ jobs:
     # into one multi-arch manifest list -- simpler and easier to debug for
     # now; revisit if a single `oais:latest` that resolves per-client-arch
     # is worth the added complexity later.
+    # The product name is Grok Bot OS. The GHCR image names stay oais and
+    # oais-arm64 so existing pulls, kickstart sed, and S3 prefixes keep working.
     runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
@@ -80,9 +82,12 @@ jobs:
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >> ${GITHUB_ENV}
 
-      # This actually builds the container image
+      # This actually builds the container image. The arch selects which
+      # pinned Grok Bot RPM install-grokbot-app.sh downloads.
       - name: Build Image
         id: build-image
+        env:
+          GROKBOT_TARGET_ARCH: ${{ matrix.platform }}
         run: |
           sudo -E $(command -v just) build \
             ${IMAGE_NAME} \

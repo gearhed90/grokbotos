@@ -1,0 +1,20 @@
+#!/bin/bash
+# Focus the Grok Bot window. Bound to Super+G and Alt+G.
+set -euo pipefail
+
+CONF="${GROKBOT_CONF:-/etc/grokbot/app.conf}"
+app_id="grokbot"
+if [[ -f "$CONF" ]]; then
+    # shellcheck disable=SC1090
+    source "$CONF"
+    app_id="${GROKBOT_APP_ID:-grokbot}"
+fi
+if [[ ! "$app_id" =~ ^[A-Za-z][A-Za-z0-9_.-]*$ ]]; then
+    echo "grokbot-focus: refusing unsafe app id" >&2
+    exit 1
+fi
+if ! command -v swaymsg >/dev/null 2>&1; then
+    echo "grokbot-focus: swaymsg is not available" >&2
+    exit 1
+fi
+exec swaymsg "[app_id=\"${app_id}\"] focus"

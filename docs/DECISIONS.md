@@ -1,8 +1,11 @@
 # Decisions Log
 
-Tracks the Phase 0/1 decisions called for in `ROADMAP.md`, and why. Append
-new decisions here as later phases make them (LLM provider, STT engine,
-vector index, sandbox tech, etc.) rather than losing them in commit messages.
+2026-10-18부터 새 항목은 한국어로 적는다. 그 아래 영어 기록은 AI-OS 시절의
+원문이다. 실기에서 얻은 수정이라 고치지 않는다. Grok Bot OS 전환은 이 파일
+맨 아래 2026-10-18 항목이다.
+
+Tracks the Phase 0/1 decisions called for by the original roadmap, and why.
+Append new decisions here rather than losing them in commit messages.
 
 ## Base distro: Fedora Atomic (Universal Blue)
 
@@ -939,3 +942,82 @@ chromelessness in a way that breaks something else. This needs a real
 boot test to fully verify, like the rest of this phase's window-
 management work; flagging it explicitly rather than claiming certainty
 the codebase alone can't provide.
+
+
+## Grok Bot OS로 전환 (2026-10-18)
+
+제품 목표가 바뀌었다. 설치하고 켜면 화면에 Grok Bot만 있고, 로그인과 구독은 Grok Bot 계정이 하며, 필요한 앱은 Grok Bot이 이 PC에 설치한다. 예전의 자체 오케스트레이터(상태 머신, 태그 레지스트리, Claude/Grok/Ollama CLI 추상화, 개발 에이전트, 슬래시 명령 웹 셸)는 그 자리를 Grok Bot이 대신하므로 부팅 경로에서 뺐다.
+
+### 이미지에서 뺀 것
+
+`orchestrator/` 전체를 `legacy/orchestrator/`로 옮겼다. 삭제는 하지 않았다. 검은 화면, `claude login`이 없는 서브커맨드라는 사실, Firefox 키오스크가 OAuth 페이지를 같은 창 탭으로 흡수한 문제의 원인 코드가 거기 있다. Containerfile은 이 디렉터리를 복사하지 않고, sway도 실행하지 않는다. `check` 워크플로는 그 파이썬 테스트를 돌리지 않는다.
+
+같이 뺀 것:
+
+- 이미지에 굽던 `nodejs`와 `npm install -g` Claude/Grok CLI. 빌드 중 `/root` ENOTDIR 우회(`HOME=/tmp`)도 따라서 필요 없어졌다. `/root`가 ostree 심볼릭 링크라 빌드 중 `$HOME`으로 쓰면 안 된다는 사실은 그대로 유효하다.
+- `foot`. 예전의 텍스트 셸과 `/cli`용이다. 복구 콘솔은 `Ctrl+Alt+F2`의 getty다.
+- 키오스크 계정 `aios`. 새 계정은 `grokbot`이다. 비밀번호는 잠그고 tty1 자동 로그인만 연다.
+- 자체 계정, `~/.config/oais/provider.json`, OAuth 디바이스 플로, API 키 저장.
+
+### 남긴 것
+
+부팅과 이미지 파이프라인은 유지한다.
+
+- 베이스 `quay.io/fedora/fedora-bootc`. `ID=fedora`는 바꾸지 않는다.
+- GHCR 이름 `ghcr.io/head77x/oais`와 `ghcr.io/head77x/oais-arm64`. 매니페스트 리스트로 합치지 않는다.
+- `build.yml`, `build-disk.yml`의 구조. `workflow_run`으로 디스크 빌드를 잇는 것, root `podman login`, `--rootfs ext4`, ISO kickstart의 `ghcr.io/head77x/oais:latest`를 sed로 바꾸는 것, Anaconda Users 모듈을 끄지 않는 것.
+- S3 접두사 `oais/`와 아티팩트 이름. 받아 가던 경로다.
+- `/usr`와 `/etc`에만 부팅에 필요한 파일을 둔다. 빌드 중 `/var`에 쓴 홈은 이미지에 안 남을 수 있다.
+- tmpfiles로 `/var/home/<키오스크계정>`을 매 부팅 만들고, 들어 있는 파일은 지우지 않는다. 계정 이름만 `grokbot`으로 바꿨다.
+- sway 키오스크. 패널 없음, 테두리 없음, `Alt+Tab`, `Alt+Shift+Tab`, `Alt+F4`.
+- 기본 브라우저는 키오스크 Firefox와 다른 프로필의 `--new-window` 래퍼(`grokbot-open-browser`)다. 2026-07-13에 같은 창 탭으로 흡수되던 문제를 피하기 위한 것이다. 키오스크 Firefox에는 `--no-remote`와 전용 프로필을 추가로 줬다.
+- CJK 폰트, `xdg-utils`, `podman.socket`, `tmux`, `htop`.
+
+### sway를 유지한 이유
+
+cage는 앱 하나를 전체화면으로 띄우고 끝나면 다시 실행해서 더 작아 보인다. 이 제품은 Grok Bot과 설치한 앱을 오가야 한다. cage는 창을 여러 개 다루지 못한다. sway는 UTM에서 tty1 자동 로그인 뒤 실제로 뜬 컴포지터이고, Alt+Tab / Alt+F4 수정도 sway 설정이다. 재시작은 `grokbot-kiosk`의 루프 10줄로 처리한다. cage로 바꿔 그 실기 수정을 버릴 이유가 없다.
+
+Plymouth는 넣지 않았다. 부팅 스플래시는 아직 확인할 수 없고, 첫 화면 목표와 무관하다.
+
+### 플레이스홀더
+
+Grok Bot Linux 빌드는 이 저장소에 없고, 공개 URL도 확인하지 못했다. 바이너리를 만들어 넣지 않는다. 페이로드와 sha256이 없으면 `grokbot-launch`는 Firefox 키오스크로 로컬 안내 페이지를 연다. `GROKBOT_WEB_URL`이 있으면 그 주소를 연다. 페이로드가 있으면 같은 `grokbot-launch`가 `/usr/lib/grokbot/grokbot-native`를 exec한다. 종류와 체크섬 규칙은 `docs/GROKBOT_APP.md`.
+
+그래서 이 커밋의 첫 화면은 Grok Bot 로그인이 아니다. 안내 페이지다.
+
+### 앱 설치
+
+사용자 권한 `grokbot-install`만 둔다. Flatpak은 `--user`와 Flathub 앱 id만. 로컬 파일은 `~/Apps`와 사용자 데스크톱 파일로 복사하고, 심볼릭 링크와 홈 밖 경로는 거부한다. 앱 실행 중 격리는 없다. Flatpak 앱만 Flatpak 샌드박스를 탄다. 로컬 앱 격리는 Phase D로 남긴다. 규격은 `docs/GROKBOT_INSTALL.md`.
+
+### 이 항목을 쓸 때 확인하지 못한 것
+
+이 개발 환경에는 KVM과 fedora-bootc 이미지 빌드가 없다. 셸 테스트, shellcheck, 워크플로 YAML, `just --dry-run`만 돌렸다. 새 이미지의 부팅, Firefox 키오스크 렌더링, fuzzel, Flathub 설치, SELinux enforcing에서의 실행은 실기 또는 VM이 필요하다. 2026-07-09 UTM 확인은 이 트리가 아니다.
+
+## Grok Bot RPM을 두 아키텍처에 넣는다 (2026-10-18)
+
+기본 이미지는 플레이스홀더가 아니다. Grok Bot 0.71.2 RPM을 amd64와 arm64 모두에 넣는다. 이미지가 Fedora bootc라 deb가 아니라 RPM이다. 플레이스홀더는 `GROKBOT_DISABLE_BUNDLED_APP=1`일 때만 남는다.
+
+고정 URL과 sha256은 `docs/GROKBOT_APP.md`와 `build_files/install-grokbot-app.sh`에 있다. `api2.cursor.sh`의 latest 리다이렉트는 문서에만 적고 빌드는 쓰지 않는다. 다음 빌드로 바뀌면 체크섬이 달라져 빌드가 실패해야 하기 때문이다.
+
+이 환경에서 두 RPM을 받아 sha256이 문서의 값과 같은지 확인했다. x86_64는 92776633바이트, aarch64는 87733289바이트다. `rpm -qpl`, `rpm -qp --scripts`, `rpm -qp --requires`, 데스크톱 파일, x86_64 `grok-bot`의 `readelf -d` NEEDED를 봤다. `dnf5 install`과 부팅은 하지 않았다.
+
+### RPM이 하는 일과, 빌드가 그걸 그대로 두지 않는 이유
+
+패키지 이름은 `grok-bot`이고 파일은 `/opt/Grok Bot/grok-bot`에 있다. 데스크톱 파일은 `/usr/share/applications/grok-bot.desktop`이고 `StartupWMClass=grok-bot`, `Exec=grok-bot %U`, `MimeType=x-scheme-handler/grokbot;x-scheme-handler/sand`다.
+
+`%post`는 `/usr/bin/grok-bot`을 그 `/opt` 경로에 연결하고, `chrome-sandbox` 권한을 바꾸고, AppArmor 프로파일을 넣고, `/etc/yum.repos.d/grok-bot.repo`를 만든다. 셋 다 이 이미지에서 실행하면 안 된다.
+
+- `/opt`는 이 베이스에서 `/var/opt`다. 빌드 때 `/var`에 쓴 파일은 부팅 디스크에 안 남을 수 있다.
+- 경로에 공백이 있으면 Electron의 setuid `chrome-sandbox`가 동작하지 않는다. 페이로드의 `chrome-sandbox`는 `0755`였다.
+- AppArmor 프로파일은 Debian 쪽 설치 단계다.
+- yum 저장소를 넣으면 고정해 둔 RPM이 아니라 그 저장소의 다음 빌드를 받게 된다. 업데이트는 이미지를 다시 만들어 `bootc upgrade`하는 쪽이다.
+
+그래서 `dnf5 install --setopt=tsflags=noscripts`로 의존성만 받고, 트리를 `/usr/lib/grokbot/app`으로 옮긴 뒤 `chrome-sandbox`를 `4755`로 둔다. `/usr/bin/grok-bot`은 심볼릭 링크가 아니라 Wayland 래퍼다. `--ozone-platform=wayland`와 `--enable-features=UseOzonePlatform`을 붙인다. `--no-sandbox`는 넣지 않는다. 샌드박스가 SELinux에서 되는지는 부팅해서 봐야 한다.
+
+`rpm -V grok-bot`은 파일이 옮겨져서 어긋난다. 앱 업데이트는 그 rpm을 시스템 안에서 올리는 방식이 아니다.
+
+`Requires`는 `gtk3`, `nss`, `at-spi2-core`, `libnotify`, `xdg-utils`, `(libXtst or libXtst6)`, `(libuuid or libuuid1)`이다. NEEDED에는 그 밖에 cups, gbm, alsa, xkbcommon, Xcomposite 등이 있다. Fedora 패키지 이름을 `build.sh`에 적었다. 이름이 틀리면 이미지 빌드가 실패한다. 여기서는 그 dnf 설치를 실행하지 않았다.
+
+### 창
+
+`GROKBOT_APP_ID=grok-bot`이다. `Super+G` / `Alt+G`는 그 `app_id`에 포커스한다. Wayland `app_id`가 데스크톱 파일과 같은지는 미확인이다. `http`/`https`는 계속 `grokbot-open-browser`(별도 Firefox 프로필, `--new-window`)다. `grokbot://`와 `sand://`는 `grok-bot.desktop`이다. 예전의 `wm.py`가 OAuth 창을 자동으로 닫던 코드는 `legacy/`에만 있다. 닫기는 `Alt+F4`, 복귀는 `Alt+G`다.

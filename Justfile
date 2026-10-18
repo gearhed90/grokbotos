@@ -100,6 +100,34 @@ build $target_image=image_name $tag=default_tag:
 
     BUILD_ARGS=()
     LABELS=()
+
+    # Empty SOURCE installs the pinned Grok Bot RPM for the target arch.
+    # GROKBOT_DISABLE_BUNDLED_APP=1 keeps the placeholder. docs/GROKBOT_APP.md.
+    # The GHCR image name stays ${image_name}.
+    if [[ -n "${GROKBOT_APP_SOURCE:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "GROKBOT_APP_SOURCE=${GROKBOT_APP_SOURCE}")
+    fi
+    if [[ -n "${GROKBOT_APP_SHA256:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "GROKBOT_APP_SHA256=${GROKBOT_APP_SHA256}")
+    fi
+    if [[ -n "${GROKBOT_APP_KIND:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "GROKBOT_APP_KIND=${GROKBOT_APP_KIND}")
+    fi
+    if [[ -n "${GROKBOT_APP_EXEC:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "GROKBOT_APP_EXEC=${GROKBOT_APP_EXEC}")
+    fi
+    if [[ -n "${GROKBOT_FLATPAK_ID:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "GROKBOT_FLATPAK_ID=${GROKBOT_FLATPAK_ID}")
+    fi
+    if [[ -n "${GROKBOT_WEB_URL:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "GROKBOT_WEB_URL=${GROKBOT_WEB_URL}")
+    fi
+    if [[ -n "${GROKBOT_TARGET_ARCH:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "GROKBOT_TARGET_ARCH=${GROKBOT_TARGET_ARCH}")
+    fi
+    if [[ -n "${GROKBOT_DISABLE_BUNDLED_APP:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "GROKBOT_DISABLE_BUNDLED_APP=${GROKBOT_DISABLE_BUNDLED_APP}")
+    fi
     if [[ -z "$(git status -s)" ]]; then
         GIT_SHA=$(git rev-parse --short HEAD)
         LABELS+=("--label" "io.artifacthub.package.readme-url=https://raw.githubusercontent.com/{{ repo_organization }}/{{ image_name }}/${GIT_SHA}/README.md")
