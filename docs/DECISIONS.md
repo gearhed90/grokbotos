@@ -983,7 +983,7 @@ Plymouth는 넣지 않았다. 부팅 스플래시는 아직 확인할 수 없고
 
 Grok Bot Linux 빌드는 이 저장소에 없고, 공개 URL도 확인하지 못했다. 바이너리를 만들어 넣지 않는다. 페이로드와 sha256이 없으면 `grokbot-launch`는 Firefox 키오스크로 로컬 안내 페이지를 연다. `GROKBOT_WEB_URL`이 있으면 그 주소를 연다. 페이로드가 있으면 같은 `grokbot-launch`가 `/usr/lib/grokbot/grokbot-native`를 exec한다. 종류와 체크섬 규칙은 `docs/GROKBOT_APP.md`.
 
-그래서 이 커밋의 첫 화면은 Grok Bot 로그인이 아니다. 안내 페이지다.
+그래서 이 문단이 적힌 커밋의 첫 화면은 Grok Bot 로그인이 아니었다. 안내 페이지였다. 그 다음 커밋에서 기본 빌드는 Grok Bot 0.71.2 RPM이다. 플레이스홀더는 `GROKBOT_DISABLE_BUNDLED_APP=1`일 때만 남는다. 바로 아래 항목이 그 기록이다.
 
 ### 앱 설치
 
@@ -1021,3 +1021,9 @@ Grok Bot Linux 빌드는 이 저장소에 없고, 공개 URL도 확인하지 못
 ### 창
 
 `GROKBOT_APP_ID=grok-bot`이다. `Super+G` / `Alt+G`는 그 `app_id`에 포커스한다. Wayland `app_id`가 데스크톱 파일과 같은지는 미확인이다. `http`/`https`는 계속 `grokbot-open-browser`(별도 Firefox 프로필, `--new-window`)다. `grokbot://`와 `sand://`는 `grok-bot.desktop`이다. 예전의 `wm.py`가 OAuth 창을 자동으로 닫던 코드는 `legacy/`에만 있다. 닫기는 `Alt+F4`, 복귀는 `Alt+G`다.
+
+## 베이스는 Fedora bootc (2026-10-18)
+
+Arch로 바꾸지 않는다. 이미지 빌드, GHCR 이름, 디스크 설치, 실패 시 이전 배포로 돌아가는 경로가 bootc에 있다. Grok Bot이 하드웨어를 고치려고 로컬 이미지를 만드는 설계도 지금 부팅 중인 bootc 이미지를 `FROM`으로 삼는다. 그 흐름은 구현하지 않았다. 설계만 `docs/HARDWARE.md`와 로드맵 Phase G에 있다.
+
+같은 이유로 공장 초기화의 첫 버전도 `/usr`와 bootc 배포를 지우지 않는다. `grokbot-factory-reset`은 `--confirm RESET`일 때만 `/var/home/grokbot`의 내용을 지운다. 전체 `/var` 초기화, 첫 부팅 재실행, 새 주인 설치 모드는 아직 없다.

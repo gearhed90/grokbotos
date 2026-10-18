@@ -4,7 +4,7 @@ Grok Bot이 이 PC에 앱을 추가할 때 호출하는 명령이다. root로 �
 
 구현: `/usr/local/bin/grokbot-install`.
 
-Grok Bot 앱이 아직 이미지에 없으므로, 이 명령은 앱이 나중에 그대로 실행할 수 있게 규격만 고정한다. 앱이 다른 IPC를 요구하면 그 앞에 얇은 어댑터를 두고, 이 명령의 의미는 바꾸지 않는다.
+Grok Bot 0.71.2 RPM은 기본 이미지 빌드에 들어간다. 이 명령은 그 앱이 부를 수 있게 규격만 고정한 것이다. 앱이 이 명령을 실제로 부르는지, 다른 IPC를 요구하는지는 확인하지 않았다. 다른 IPC가 필요하면 그 앞에 얇은 어댑터를 두고, 이 명령의 의미는 바꾸지 않는다.
 
 ## 호출
 
@@ -87,7 +87,7 @@ Grok Bot이 이미 디스크에 만들어 둔 파일이나 디렉터리를 사�
 | 키 | 프로그램 | 동작 |
 |---|---|---|
 | `Super+Space`, `Alt+Space` | `grokbot-switch` | fuzzel. layer-shell이라 전체화면 규칙에 가리지 않는다 |
-| `Super+G`, `Alt+G` | `grokbot-focus` | `GROKBOT_APP_ID` 창에 포커스. 플레이스홀더는 `firefox` |
+| `Super+G`, `Alt+G` | `grokbot-focus` | `GROKBOT_APP_ID` 창에 포커스. 네이티브 기본값은 `grok-bot`. 플레이스홀더 빌드만 `firefox` |
 | `Alt+Tab` | sway | 다음 창 |
 | `Alt+F4` | sway | 보고 있는 창 닫기 |
 
