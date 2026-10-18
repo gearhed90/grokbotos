@@ -3,8 +3,10 @@
 # grokbot-kiosk restarts grokbot-launch whenever that process exits.
 # sway itself does not restart a crashed exec child.
 #
-# The visible app is whatever grokbot-launch starts (placeholder Firefox
-# or the real Grok Bot binary). Other installed apps are also fullscreen.
+# The visible app is whatever grokbot-launch starts. The native Grok Bot
+# RPM's desktop file sets StartupWMClass=grok-bot, and app.conf sets
+# GROKBOT_APP_ID=grok-bot so Super+G / Alt+G can focus it. The placeholder
+# Firefox window uses app_id firefox. Other installed apps are also fullscreen.
 # fuzzel is a layer-shell launcher, so it is not a window and is not
 # covered by the fullscreen rule.
 #

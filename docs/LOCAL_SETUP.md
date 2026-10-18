@@ -64,7 +64,7 @@ git add cosign.pub
    - Apple Silicon: [UTM](https://mac.getutm.app/)에서 Virtualize → Linux. RAM 4GB 이상, 디스크 20GB 이상 (`disk_config/disk.toml`의 `minsize`).
 4. Anaconda에서 사용자와 비밀번호를 만든다. 이 계정은 복구용이다. 화면을 쓰는 계정은 이미지 안의 `grokbot`이고, 비밀번호 없이 tty1에 자동 로그인된다.
 5. 재부팅 후 확인할 것:
-   - 패널이나 데스크톱 없이 플레이스홀더(또는 넣었다면 Grok Bot)만 보이는지.
+   - 패널이나 데스크톱 없이 Grok Bot만 보이는지. 안내 페이지가 보이면 그 이미지에 RPM이 없다.
    - `Alt+Space`로 앱 목록이 뜨는지. `Alt+G`로 돌아오는지. UTM에서 Super가 안 먹으면 Alt를 쓴다.
    - `Ctrl+Alt+F2`로 관리자 로그인 뒤:
 

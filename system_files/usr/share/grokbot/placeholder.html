@@ -30,10 +30,9 @@
       처리합니다. 이 OS는 계정을 만들지 않고 비밀번호도 저장하지 않습니다.
     </p>
     <p>
-      실제 화면으로 바꾸려면 이미지를 다시 빌드할 때
-      <code>GROKBOT_WEB_URL</code>을 Grok Bot 웹 앱 주소로 넣거나,
-      Grok Bot Linux 빌드(AppImage, rpm, deb, Flatpak, 실행 파일)를
-      이미지에 넣으면 됩니다. 방법은 <code>docs/GROKBOT_APP.md</code>에 있습니다.
+      기본 이미지는 Grok Bot RPM을 넣습니다. 이 페이지는
+      <code>GROKBOT_DISABLE_BUNDLED_APP=1</code>로 그 RPM을 빼서 빌드했을
+      때만 나옵니다. 방법은 <code>docs/GROKBOT_APP.md</code>에 있습니다.
     </p>
     <ul>
       <li>설정 파일: <code>/etc/grokbot/app.conf</code></li>

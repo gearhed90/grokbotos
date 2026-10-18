@@ -992,3 +992,32 @@ Grok Bot Linux 빌드는 이 저장소에 없고, 공개 URL도 확인하지 못
 ### 이 항목을 쓸 때 확인하지 못한 것
 
 이 개발 환경에는 KVM과 fedora-bootc 이미지 빌드가 없다. 셸 테스트, shellcheck, 워크플로 YAML, `just --dry-run`만 돌렸다. 새 이미지의 부팅, Firefox 키오스크 렌더링, fuzzel, Flathub 설치, SELinux enforcing에서의 실행은 실기 또는 VM이 필요하다. 2026-07-09 UTM 확인은 이 트리가 아니다.
+
+## Grok Bot RPM을 두 아키텍처에 넣는다 (2026-10-18)
+
+기본 이미지는 플레이스홀더가 아니다. Grok Bot 0.71.2 RPM을 amd64와 arm64 모두에 넣는다. 이미지가 Fedora bootc라 deb가 아니라 RPM이다. 플레이스홀더는 `GROKBOT_DISABLE_BUNDLED_APP=1`일 때만 남는다.
+
+고정 URL과 sha256은 `docs/GROKBOT_APP.md`와 `build_files/install-grokbot-app.sh`에 있다. `api2.cursor.sh`의 latest 리다이렉트는 문서에만 적고 빌드는 쓰지 않는다. 다음 빌드로 바뀌면 체크섬이 달라져 빌드가 실패해야 하기 때문이다.
+
+이 환경에서 두 RPM을 받아 sha256이 문서의 값과 같은지 확인했다. x86_64는 92776633바이트, aarch64는 87733289바이트다. `rpm -qpl`, `rpm -qp --scripts`, `rpm -qp --requires`, 데스크톱 파일, x86_64 `grok-bot`의 `readelf -d` NEEDED를 봤다. `dnf5 install`과 부팅은 하지 않았다.
+
+### RPM이 하는 일과, 빌드가 그걸 그대로 두지 않는 이유
+
+패키지 이름은 `grok-bot`이고 파일은 `/opt/Grok Bot/grok-bot`에 있다. 데스크톱 파일은 `/usr/share/applications/grok-bot.desktop`이고 `StartupWMClass=grok-bot`, `Exec=grok-bot %U`, `MimeType=x-scheme-handler/grokbot;x-scheme-handler/sand`다.
+
+`%post`는 `/usr/bin/grok-bot`을 그 `/opt` 경로에 연결하고, `chrome-sandbox` 권한을 바꾸고, AppArmor 프로파일을 넣고, `/etc/yum.repos.d/grok-bot.repo`를 만든다. 셋 다 이 이미지에서 실행하면 안 된다.
+
+- `/opt`는 이 베이스에서 `/var/opt`다. 빌드 때 `/var`에 쓴 파일은 부팅 디스크에 안 남을 수 있다.
+- 경로에 공백이 있으면 Electron의 setuid `chrome-sandbox`가 동작하지 않는다. 페이로드의 `chrome-sandbox`는 `0755`였다.
+- AppArmor 프로파일은 Debian 쪽 설치 단계다.
+- yum 저장소를 넣으면 고정해 둔 RPM이 아니라 그 저장소의 다음 빌드를 받게 된다. 업데이트는 이미지를 다시 만들어 `bootc upgrade`하는 쪽이다.
+
+그래서 `dnf5 install --setopt=tsflags=noscripts`로 의존성만 받고, 트리를 `/usr/lib/grokbot/app`으로 옮긴 뒤 `chrome-sandbox`를 `4755`로 둔다. `/usr/bin/grok-bot`은 심볼릭 링크가 아니라 Wayland 래퍼다. `--ozone-platform=wayland`와 `--enable-features=UseOzonePlatform`을 붙인다. `--no-sandbox`는 넣지 않는다. 샌드박스가 SELinux에서 되는지는 부팅해서 봐야 한다.
+
+`rpm -V grok-bot`은 파일이 옮겨져서 어긋난다. 앱 업데이트는 그 rpm을 시스템 안에서 올리는 방식이 아니다.
+
+`Requires`는 `gtk3`, `nss`, `at-spi2-core`, `libnotify`, `xdg-utils`, `(libXtst or libXtst6)`, `(libuuid or libuuid1)`이다. NEEDED에는 그 밖에 cups, gbm, alsa, xkbcommon, Xcomposite 등이 있다. Fedora 패키지 이름을 `build.sh`에 적었다. 이름이 틀리면 이미지 빌드가 실패한다. 여기서는 그 dnf 설치를 실행하지 않았다.
+
+### 창
+
+`GROKBOT_APP_ID=grok-bot`이다. `Super+G` / `Alt+G`는 그 `app_id`에 포커스한다. Wayland `app_id`가 데스크톱 파일과 같은지는 미확인이다. `http`/`https`는 계속 `grokbot-open-browser`(별도 Firefox 프로필, `--new-window`)다. `grokbot://`와 `sand://`는 `grok-bot.desktop`이다. 예전의 `wm.py`가 OAuth 창을 자동으로 닫던 코드는 `legacy/`에만 있다. 닫기는 `Alt+F4`, 복귀는 `Alt+G`다.

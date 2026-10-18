@@ -82,9 +82,12 @@ jobs:
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >> ${GITHUB_ENV}
 
-      # This actually builds the container image
+      # This actually builds the container image. The arch selects which
+      # pinned Grok Bot RPM install-grokbot-app.sh downloads.
       - name: Build Image
         id: build-image
+        env:
+          GROKBOT_TARGET_ARCH: ${{ matrix.platform }}
         run: |
           sudo -E $(command -v just) build \
             ${IMAGE_NAME} \

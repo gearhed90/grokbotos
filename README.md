@@ -14,9 +14,9 @@
 
 ## 이 트리에서 부팅되는 것
 
-**플레이스홀더다.** 이 저장소와 공개된 곳에 Grok Bot Linux 빌드가 없다. 빌드할 때 앱을 지정하지 않으면 Firefox 키오스크가 로컬 안내 페이지(`file:///usr/share/grokbot/placeholder.html`)를 연다. 그 페이지는 로그인 화면이 아니다.
+**기본 이미지는 Grok Bot 0.71.2 RPM을 넣는다.** amd64와 arm64 둘 다다. 빌드가 아키텍처에 맞는 고정 URL을 받고, sha256이 다르면 실패한다. 설치 경로와 체크섬은 [`docs/GROKBOT_APP.md`](docs/GROKBOT_APP.md)에 있다.
 
-`GROKBOT_WEB_URL`을 넣으면 그 주소가 첫 화면이 된다. AppImage, rpm, deb, Flatpak, 실행 파일을 체크섬과 함께 넣으면 `/usr/local/bin/grokbot-launch`가 그 바이너리를 실행한다. 없는 앱을 만들어 넣지 않는다.
+`GROKBOT_DISABLE_BUNDLED_APP=1`이면 Firefox 키오스크가 로컬 안내 페이지(`file:///usr/share/grokbot/placeholder.html`)를 연다. 그 페이지는 로그인 화면이 아니다. 다른 AppImage, rpm, deb, Flatpak, 실행 파일을 체크섬과 함께 넣으면 그 바이너리를 실행한다. 없는 앱을 만들어 넣지 않는다.
 
 로그인, 구독, 로그아웃은 Grok Bot(또는 그 웹 앱)이 한다. 이 OS는 계정을 만들지 않고 비밀번호를 저장하지 않는다.
 
@@ -27,8 +27,8 @@ getty tty1 자동 로그인 (사용자 grokbot, 비밀번호 없음)
   -> sway  (패널 없음, 창 테두리 없음)
     -> grokbot-kiosk  (앱이 끝나면 1초 뒤 다시 실행)
       -> grokbot-launch
+           native (기본):  /usr/bin/grok-bot  (Wayland 래퍼)
            placeholder: Firefox --kiosk --no-remote (전용 프로필)
-           native:      /usr/lib/grokbot/grokbot-native
 ```
 
 키:
@@ -43,7 +43,7 @@ getty tty1 자동 로그인 (사용자 grokbot, 비밀번호 없음)
 
 Alt 조합을 같이 둔 이유: UTM 같은 VM은 Super 키를 넘기지 않는 경우가 있었다.
 
-세션 데이터는 `/var/home/grokbot`에 남는다. tmpfiles가 매 부팅에 이 디렉터리를 만들되, 들어 있는 파일은 지우지 않는다. 플레이스홀더의 브라우저 쿠키는 `~/.local/share/grokbot/firefox-profile`에 있다. 플레이스홀더에서 로그아웃하려면 `grokbot-sign-out`을 실행한다. 이 명령은 그 프로필만 지운다. 네이티브 앱은 앱 안의 로그아웃을 쓴다.
+세션 데이터는 `/var/home/grokbot`에 남는다. tmpfiles가 매 부팅에 이 디렉터리를 만들되, 들어 있는 파일은 지우지 않는다. 네이티브 앱의 로그아웃은 앱 안에서 한다. `grokbot-sign-out`은 플레이스홀더 Firefox 프로필만 지운다. `http`/`https`는 그 프로필과 다른 Firefox 창으로 열고, `grokbot://`와 `sand://`는 Grok Bot으로 연다. `Alt+G`는 `app_id`가 `grok-bot`인 창으로 돌아온다.
 
 ## 디렉터리
 
@@ -74,13 +74,19 @@ Podman, bootc, just가 있는 머신에서. 이 개발 샌드박스에서는 이
 just build
 ```
 
-웹 앱을 첫 화면으로:
+아키텍처를 직접 지정할 때 (CI는 매트릭스 값을 넘긴다):
 
 ```bash
-GROKBOT_WEB_URL='https://확인된-주소' just build
+GROKBOT_TARGET_ARCH=amd64 just build   # 또는 arm64
 ```
 
-바이너리:
+플레이스홀더만 넣을 때:
+
+```bash
+GROKBOT_DISABLE_BUNDLED_APP=1 just build
+```
+
+다른 바이너리를 넣을 때는 체크섬이 필수다. 없으면 빌드는 실패한다.
 
 ```bash
 GROKBOT_APP_SOURCE='https://example.invalid/GrokBot.AppImage' \
@@ -88,13 +94,11 @@ GROKBOT_APP_SHA256='64자리hex' \
 just build
 ```
 
-체크섬이 없으면 빌드는 실패한다.
-
 ## 여기서 확인한 것, 실기가 필요한 것
 
 2026-07-09에 **이전 이미지**를 Apple Silicon UTM(arm64)에서 ISO로 설치하고, 재부팅한 뒤 `bootc status`가 `ghcr.io/head77x/oais-arm64:latest`를 가리키는 것까지 확인했다. tty1 자동 로그인 뒤 sway가 뜨는 것도 그 계열에서 봤다.
 
-이 전환 이후 이미지(플레이스홀더, `grokbot` 계정, Flatpak, 앱 전환)는 여기서 부팅하지 않았다. KVM도 podman 빌드도 없다. 이 환경에서 돌리는 것은 `tests/run-tests.sh`, shellcheck, 워크플로 YAML, `just --list` / `just --dry-run`이다.
+이 전환 이후 이미지는 여기서 부팅하지 않았다. KVM도 podman 빌드도 없다. Grok Bot 0.71.2 RPM 두 개는 받아서 sha256과 파일 목록, 스크립트릿, x86_64 바이너리의 `NEEDED`까지 봤다. `dnf5 install`은 하지 않았다. 이 환경에서 돌리는 것은 `tests/run-tests.sh`, shellcheck, 워크플로 YAML, `just --list` / `just --dry-run`이다.
 
 ## 이름을 바꾸지 않은 것
 

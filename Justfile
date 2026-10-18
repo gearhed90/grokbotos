@@ -101,8 +101,9 @@ build $target_image=image_name $tag=default_tag:
     BUILD_ARGS=()
     LABELS=()
 
-    # Optional Grok Bot payload. Unset means the placeholder kiosk.
-    # docs/GROKBOT_APP.md. The GHCR image name stays ${image_name}.
+    # Empty SOURCE installs the pinned Grok Bot RPM for the target arch.
+    # GROKBOT_DISABLE_BUNDLED_APP=1 keeps the placeholder. docs/GROKBOT_APP.md.
+    # The GHCR image name stays ${image_name}.
     if [[ -n "${GROKBOT_APP_SOURCE:-}" ]]; then
         BUILD_ARGS+=("--build-arg" "GROKBOT_APP_SOURCE=${GROKBOT_APP_SOURCE}")
     fi
@@ -120,6 +121,12 @@ build $target_image=image_name $tag=default_tag:
     fi
     if [[ -n "${GROKBOT_WEB_URL:-}" ]]; then
         BUILD_ARGS+=("--build-arg" "GROKBOT_WEB_URL=${GROKBOT_WEB_URL}")
+    fi
+    if [[ -n "${GROKBOT_TARGET_ARCH:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "GROKBOT_TARGET_ARCH=${GROKBOT_TARGET_ARCH}")
+    fi
+    if [[ -n "${GROKBOT_DISABLE_BUNDLED_APP:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "GROKBOT_DISABLE_BUNDLED_APP=${GROKBOT_DISABLE_BUNDLED_APP}")
     fi
     if [[ -z "$(git status -s)" ]]; then
         GIT_SHA=$(git rev-parse --short HEAD)

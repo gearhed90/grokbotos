@@ -5,6 +5,11 @@ set -ouex pipefail
 # Copy system_files/ from the build context onto the image root.
 cp -avf "/ctx/system_files"/. /
 
+# Electron/Chromium libraries the grok-bot RPM links and does not always
+# declare. The RPM's own Requires (gtk3, nss, at-spi2-core, libnotify,
+# xdg-utils, libXtst, libuuid) are pulled again by dnf when the RPM is
+# installed. Names are Fedora package names, from readelf NEEDED on
+# grok-bot 0.71.2 plus the RPM header.
 dnf5 install -y \
     tmux \
     htop \
@@ -16,7 +21,27 @@ dnf5 install -y \
     xdg-utils \
     fuse \
     fuse-libs \
-    curl
+    curl \
+    gtk3 \
+    nss \
+    nspr \
+    at-spi2-core \
+    at-spi2-atk \
+    libnotify \
+    libXtst \
+    libuuid \
+    libXScrnSaver \
+    libXcomposite \
+    libXdamage \
+    libXfixes \
+    libXrandr \
+    mesa-libgbm \
+    libxkbcommon \
+    libdrm \
+    alsa-lib \
+    cups-libs \
+    libsecret \
+    systemd-libs
 
 # Brand /usr/lib/os-release (the file /etc/os-release points at) while
 # leaving ID and ID_LIKE as fedora. Package managers and bootc key off ID.
@@ -58,8 +83,10 @@ x-scheme-handler/unknown=grokbot-browser.desktop
 EOF
 echo 'BROWSER=/usr/local/bin/grokbot-open-browser' >>/etc/environment
 
-# Placeholder, or a real Grok Bot build when GROKBOT_APP_SOURCE / a local
-# payload and its checksum are set. See build_files/install-grokbot-app.sh.
+# Default: pinned Grok Bot RPM for this architecture, sha256-checked,
+# installed with dnf5 --setopt=tsflags=noscripts, then moved out of
+# /opt. GROKBOT_DISABLE_BUNDLED_APP=1 keeps the Firefox placeholder.
+# See build_files/install-grokbot-app.sh.
 /ctx/install-grokbot-app.sh
 
 # Kiosk account, separate from the admin user Anaconda creates at install

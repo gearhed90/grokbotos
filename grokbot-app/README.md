@@ -1,6 +1,6 @@
 # grokbot-app/
 
-이미지를 만들 때 Grok Bot Linux 앱을 넣는 자리다. 기본값은 비어 있고, 그때 이미지는 **플레이스홀더**로 부팅한다. 이 저장소에는 실제 Grok Bot 바이너리가 없다. 만들지 않는다.
+이미지를 만들 때 Grok Bot Linux 앱을 넣는 자리다. 비어 있으면 빌드는 아키텍처에 맞는 고정 RPM URL을 받는다. `GROKBOT_DISABLE_BUNDLED_APP=1`이면 플레이스홀더다. 이 저장소에 RPM 파일을 커밋하지 않는다.
 
 파일을 넣을 때 이름은 `payload` 하나다.
 

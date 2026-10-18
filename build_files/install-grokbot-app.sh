@@ -5,18 +5,43 @@
 # /etc/grokbot/app.conf. This script is the only writer of that choice
 # during the image build.
 #
+# Default, when no other payload is configured: the pinned Grok Bot RPM
+# for the target architecture (amd64 and arm64). sha256 is checked before
+# install. A mismatch fails the build.
+#
+# GROKBOT_DISABLE_BUNDLED_APP=1 skips that default and writes the
+# placeholder. An explicit GROKBOT_APP_SOURCE or grokbot-app/payload
+# still wins over the placeholder.
+#
 # Inputs (environment, from Containerfile ARGs or the caller):
 #   GROKBOT_APP_SOURCE   https URL or absolute path. Optional.
 #   GROKBOT_APP_SHA256   64 hex chars. Required when a payload is installed.
+#                        For the bundled RPM, the pinned checksum is used
+#                        when this is empty.
 #   GROKBOT_APP_KIND     auto|appimage|rpm|deb|flatpak|binary. Default auto.
-#   GROKBOT_APP_EXEC     absolute path of the installed binary (rpm, deb, binary).
+#   GROKBOT_APP_EXEC     absolute path of the installed binary for a generic
+#                        rpm, deb, or binary. Not used for the official
+#                        grok-bot RPM.
 #   GROKBOT_FLATPAK_ID   flatpak application id when KIND=flatpak.
 #   GROKBOT_WEB_URL      placeholder web app URL. Empty shows the local page.
+#                        Ignored when a native payload is installed.
+#   GROKBOT_TARGET_ARCH  amd64|arm64|x86_64|aarch64. Default: TARGETARCH,
+#                        then uname -m. Selects the bundled RPM.
+#   GROKBOT_DISABLE_BUNDLED_APP=1  do not download the pinned RPM.
 #   GROKBOT_LOCAL_PAYLOAD  default /ctx/grokbot-app/payload
 #   GROKBOT_DESTDIR      prefix for tests. Empty writes to the image root.
-#   GROKBOT_SKIP_PACKAGE_INSTALL=1  skip dnf/flatpak/ar (tests only).
+#                        The official RPM is extracted with rpm2cpio here
+#                        instead of dnf, so tests do not need Fedora.
+#   GROKBOT_SKIP_PACKAGE_INSTALL=1  skip dnf/flatpak/ar for generic packages.
+#   GROKBOT_DRY_RUN=1    print the resolved payload and exit before download.
 #
-# A missing payload installs the placeholder. It does not invent an app.
+# The official RPM's scriptlets are not run. They register a floating yum
+# repo, install an AppArmor profile, and point /usr/bin/grok-bot at
+# "/opt/Grok Bot/grok-bot". That path contains a space (Electron's setuid
+# chrome-sandbox ignores it) and /opt is /var/opt on this bootc image, so
+# a build-time copy there may not ship. After dnf installs dependencies,
+# the tree is moved to /usr/lib/grokbot/app and /usr/bin/grok-bot becomes
+# a Wayland wrapper.
 set -euo pipefail
 
 DESTDIR="${GROKBOT_DESTDIR:-}"
@@ -29,15 +54,30 @@ WEB_URL="${GROKBOT_WEB_URL:-}"
 LOCAL_PAYLOAD="${GROKBOT_LOCAL_PAYLOAD:-/ctx/grokbot-app/payload}"
 SUMS_FILE="${GROKBOT_SHA256SUMS:-/ctx/grokbot-app/SHA256SUMS}"
 SKIP="${GROKBOT_SKIP_PACKAGE_INSTALL:-}"
+DISABLE_BUNDLED="${GROKBOT_DISABLE_BUNDLED_APP:-}"
 
-if [[ -z "$DESTDIR" && "$(id -u)" -ne 0 ]]; then
-    echo "install-grokbot-app.sh: refusing to write / without root; set GROKBOT_DESTDIR" >&2
-    exit 1
-fi
+# Pinned Grok Bot 0.71.2 RPMs. "latest" redirects are documented in
+# docs/GROKBOT_APP.md and are not used here.
+BUNDLED_AMD64_URL="https://downloads.cursor.com/grokbot/stable/92808c0ad869b2e3725dbc3b8fa2fcc991687502/linux/x64/grok-bot-0.71.2-1.x86_64.rpm"
+BUNDLED_AMD64_SHA="ba68a9332675238deb3102dfcdab6d6e7978fa2aa281df5bbf11cbb61a19418a"
+BUNDLED_ARM64_URL="https://downloads.cursor.com/grokbot/stable/92808c0ad869b2e3725dbc3b8fa2fcc991687502/linux/arm64/grok-bot-0.71.2-1.aarch64.rpm"
+BUNDLED_ARM64_SHA="9ff82fb7468ce08509e9a67945e96bc72fa2fb35283dc6132060e90ddd5da0be"
 
 die() {
     echo "install-grokbot-app.sh: $*" >&2
     exit 1
+}
+
+target_arch() {
+    local raw="${GROKBOT_TARGET_ARCH:-${TARGETARCH:-$(uname -m)}}"
+    case "$raw" in
+        amd64 | x86_64) printf '%s\n' amd64 ;;
+        arm64 | aarch64) printf '%s\n' arm64 ;;
+        *)
+            echo "install-grokbot-app.sh: unsupported architecture: ${raw}" >&2
+            return 1
+            ;;
+    esac
 }
 
 assert_safe_assignment() {
@@ -100,8 +140,139 @@ verify_sha256() {
     fi
 }
 
+append_scheme_handlers() {
+    local file="${DESTDIR}/etc/xdg/mimeapps.list"
+    local line
+    install -d -m 0755 "${DESTDIR}/etc/xdg"
+    if [[ ! -f "$file" ]]; then
+        printf '%s\n' '[Default Applications]' >"$file"
+    fi
+    # http(s) stay on grokbot-browser.desktop (a separate Firefox profile).
+    # grokbot:// and sand:// belong to the native app.
+    for line in \
+        'x-scheme-handler/grokbot=grok-bot.desktop' \
+        'x-scheme-handler/sand=grok-bot.desktop'; do
+        if ! grep -Fxq "$line" "$file"; then
+            printf '%s\n' "$line" >>"$file"
+        fi
+    done
+    chmod 644 "$file"
+}
+
+# True when this RPM is the official Grok Bot package (the layout we
+# relocate). A non-rpm file with SKIP set is "not official" so the generic
+# test path can still require GROKBOT_APP_EXEC. A non-rpm without SKIP fails.
+is_official_grok_bot_rpm() {
+    [[ "$KIND" == "rpm" ]] || return 1
+    if ! command -v rpm >/dev/null 2>&1; then
+        [[ -n "$SKIP" ]] && return 1
+        die "rpm is required to inspect the payload"
+    fi
+    local listing
+    if ! listing=$(rpm -qp --nosignature -l "$blob" 2>/dev/null); then
+        [[ -n "$SKIP" ]] && return 1
+        die "payload is not a readable rpm"
+    fi
+    grep -Fq '/opt/Grok Bot/grok-bot' <<<"$listing"
+}
+
+install_official_grok_bot_rpm() {
+    local arch rpm_arch expect root spaced dest
+    arch=$(target_arch) || exit 1
+    rpm_arch=$(rpm -qp --nosignature --qf '%{ARCH}' "$blob")
+    case "$arch" in
+        amd64) expect="x86_64" ;;
+        arm64) expect="aarch64" ;;
+    esac
+    if [[ "$rpm_arch" != "$expect" && "$rpm_arch" != "noarch" ]]; then
+        die "rpm architecture ${rpm_arch} does not match target ${arch} (${expect})"
+    fi
+
+    if [[ -n "$DESTDIR" ]]; then
+        command -v rpm2cpio >/dev/null 2>&1 || die "rpm2cpio is required to extract into GROKBOT_DESTDIR"
+        command -v cpio >/dev/null 2>&1 || die "cpio is required to extract into GROKBOT_DESTDIR"
+        install -d -m 0755 "$DESTDIR"
+        # --no-absolute-filenames keeps the extract inside DESTDIR.
+        (
+            cd "$DESTDIR"
+            rpm2cpio "$blob" | cpio -idm --quiet --no-absolute-filenames
+        ) || die "failed to extract the rpm"
+    else
+        [[ -z "$SKIP" ]] || die "official grok-bot rpm cannot use GROKBOT_SKIP_PACKAGE_INSTALL"
+        command -v dnf5 >/dev/null 2>&1 || die "dnf5 is required to install the rpm"
+        # noscripts: do not register the yum repo, install AppArmor, or
+        # symlink /usr/bin/grok-bot at the spaced /opt path.
+        dnf5 install -y --setopt=tsflags=noscripts "$blob"
+    fi
+
+    root="$DESTDIR"
+    spaced="${root}/opt/Grok Bot"
+    dest="${root}/usr/lib/grokbot/app"
+    [[ -e "${spaced}/grok-bot" ]] || die "rpm did not install /opt/Grok Bot/grok-bot"
+    [[ -e "${spaced}/chrome-sandbox" ]] || die "rpm did not install chrome-sandbox"
+    install -d -m 0755 "${root}/usr/lib/grokbot"
+    rm -rf "$dest"
+    mv "$spaced" "$dest"
+    if [[ -d "${root}/opt" && ! -L "${root}/opt" ]]; then
+        rmdir "${root}/opt" 2>/dev/null || true
+    fi
+    # 4755 on a path with no space. The RPM scriptlet would chmod the copy
+    # under "/opt/Grok Bot", which Electron's setuid sandbox does not use
+    # when the executable path contains a space.
+    chmod 4755 "${dest}/chrome-sandbox" || die "chmod chrome-sandbox failed"
+
+    install -d -m 0755 "${root}/usr/bin"
+    cat >"${root}/usr/bin/grok-bot" <<'EOF'
+#!/bin/bash
+# Wayland wrapper. Replaces the RPM's /usr/bin/grok-bot symlink, which
+# would point at "/opt/Grok Bot/grok-bot".
+set -euo pipefail
+export ELECTRON_OZONE_PLATFORM_HINT="${ELECTRON_OZONE_PLATFORM_HINT:-wayland}"
+exec /usr/lib/grokbot/app/grok-bot \
+    --ozone-platform=wayland \
+    --enable-features=UseOzonePlatform \
+    --start-fullscreen \
+    "$@"
+EOF
+    chmod 755 "${root}/usr/bin/grok-bot"
+    write_conf "native" "" "grok-bot" "/usr/bin/grok-bot"
+    append_scheme_handlers
+}
+
 if [[ -z "$SHA" && -f "$SUMS_FILE" && -f "$LOCAL_PAYLOAD" && -z "$SOURCE" ]]; then
     SHA=$(awk 'NF { print $1; exit }' "$SUMS_FILE")
+fi
+
+resolved_arch=""
+if [[ -z "$SOURCE" && ! -f "$LOCAL_PAYLOAD" && "$DISABLE_BUNDLED" != "1" ]]; then
+    resolved_arch=$(target_arch) || exit 1
+    case "$resolved_arch" in
+        amd64)
+            SOURCE="$BUNDLED_AMD64_URL"
+            [[ -n "$SHA" ]] || SHA="$BUNDLED_AMD64_SHA"
+            ;;
+        arm64)
+            SOURCE="$BUNDLED_ARM64_URL"
+            [[ -n "$SHA" ]] || SHA="$BUNDLED_ARM64_SHA"
+            ;;
+    esac
+    if [[ "$KIND" == "auto" ]]; then
+        KIND="rpm"
+    fi
+fi
+
+if [[ "${GROKBOT_DRY_RUN:-}" == "1" ]]; then
+    if [[ -z "$SOURCE" && ! -f "$LOCAL_PAYLOAD" ]]; then
+        echo "install-grokbot-app.sh: dry-run mode=placeholder"
+        exit 0
+    fi
+    echo "install-grokbot-app.sh: dry-run target_arch=${resolved_arch:-unset} kind=${KIND} source=${SOURCE:-local} sha256=${SHA}"
+    exit 0
+fi
+
+if [[ -z "$DESTDIR" && "$(id -u)" -ne 0 ]]; then
+    echo "install-grokbot-app.sh: refusing to write / without root; set GROKBOT_DESTDIR" >&2
+    exit 1
 fi
 
 have_payload=0
@@ -157,6 +328,10 @@ if [[ "$KIND" == "auto" ]]; then
     esac
 fi
 
+if [[ -n "$WEB_URL" && "$KIND" != "placeholder" ]]; then
+    echo "install-grokbot-app.sh: GROKBOT_WEB_URL is ignored because a native payload is installed" >&2
+fi
+
 case "$KIND" in
     appimage)
         install -d -m 0755 "${DESTDIR}/usr/lib/grokbot"
@@ -181,22 +356,34 @@ exec /usr/lib/grokbot/grokbot.AppImage "$@"'
         write_wrapper "exec ${APP_EXEC} \"\$@\""
         write_conf "native" "" "grokbot" "/usr/lib/grokbot/grokbot-native"
         ;;
-    rpm | deb)
-        [[ -n "$APP_EXEC" ]] || die "GROKBOT_APP_EXEC is required for ${KIND}"
+    rpm)
+        if is_official_grok_bot_rpm; then
+            install_official_grok_bot_rpm
+        else
+            [[ -n "$APP_EXEC" ]] || die "GROKBOT_APP_EXEC is required for rpm"
+            assert_abs_exec "$APP_EXEC"
+            if [[ -n "$DESTDIR" && -z "$SKIP" ]]; then
+                die "rpm install does not honor GROKBOT_DESTDIR; use the image build"
+            fi
+            if [[ -z "$SKIP" ]]; then
+                dnf5 install -y "$blob"
+            fi
+            write_wrapper "exec ${APP_EXEC} \"\$@\""
+            write_conf "native" "" "grokbot" "/usr/lib/grokbot/grokbot-native"
+        fi
+        ;;
+    deb)
+        [[ -n "$APP_EXEC" ]] || die "GROKBOT_APP_EXEC is required for deb"
         assert_abs_exec "$APP_EXEC"
         if [[ -n "$DESTDIR" && -z "$SKIP" ]]; then
-            die "${KIND} install does not honor GROKBOT_DESTDIR; use the image build"
+            die "deb install does not honor GROKBOT_DESTDIR; use the image build"
         fi
         if [[ -z "$SKIP" ]]; then
-            if [[ "$KIND" == "rpm" ]]; then
-                dnf5 install -y "$blob"
-            else
-                dnf5 install -y binutils tar
-                (cd "$work" && ar x "$blob")
-                data_tar=$(find "$work" -maxdepth 1 -type f -name 'data.tar.*' -print -quit)
-                [[ -n "$data_tar" ]] || die "deb did not contain data.tar.*"
-                tar -C "${DESTDIR}/" -xf "$data_tar"
-            fi
+            dnf5 install -y binutils tar
+            (cd "$work" && ar x "$blob")
+            data_tar=$(find "$work" -maxdepth 1 -type f -name 'data.tar.*' -print -quit)
+            [[ -n "$data_tar" ]] || die "deb did not contain data.tar.*"
+            tar -C "${DESTDIR}/" -xf "$data_tar"
         fi
         write_wrapper "exec ${APP_EXEC} \"\$@\""
         write_conf "native" "" "grokbot" "/usr/lib/grokbot/grokbot-native"

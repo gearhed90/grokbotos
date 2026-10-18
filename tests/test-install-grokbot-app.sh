@@ -27,13 +27,17 @@ run() {
         GROKBOT_LOCAL_PAYLOAD="${GROKBOT_LOCAL_PAYLOAD:-${tmp}/no-payload}" \
         GROKBOT_SHA256SUMS="${GROKBOT_SHA256SUMS:-${tmp}/no-sums}" \
         GROKBOT_SKIP_PACKAGE_INSTALL="${GROKBOT_SKIP_PACKAGE_INSTALL:-}" \
+        GROKBOT_DISABLE_BUNDLED_APP="${GROKBOT_DISABLE_BUNDLED_APP:-1}" \
+        GROKBOT_TARGET_ARCH="${GROKBOT_TARGET_ARCH:-}" \
+        GROKBOT_DRY_RUN="${GROKBOT_DRY_RUN:-}" \
         bash "$script"
 }
 
 reset_env() {
     unset GROKBOT_APP_SOURCE GROKBOT_APP_SHA256 GROKBOT_APP_KIND GROKBOT_APP_EXEC
     unset GROKBOT_FLATPAK_ID GROKBOT_WEB_URL GROKBOT_LOCAL_PAYLOAD GROKBOT_SHA256SUMS
-    unset GROKBOT_SKIP_PACKAGE_INSTALL
+    unset GROKBOT_SKIP_PACKAGE_INSTALL GROKBOT_DISABLE_BUNDLED_APP GROKBOT_TARGET_ARCH
+    unset GROKBOT_DRY_RUN
     DESTDIR="${tmp}/root-$$"
 }
 
@@ -172,5 +176,136 @@ GROKBOT_APP_KIND="flatpak"
 GROKBOT_FLATPAK_ID="not-an-id"
 GROKBOT_SKIP_PACKAGE_INSTALL=1
 expect_fail
+
+AMD64_URL="https://downloads.cursor.com/grokbot/stable/92808c0ad869b2e3725dbc3b8fa2fcc991687502/linux/x64/grok-bot-0.71.2-1.x86_64.rpm"
+AMD64_SHA="ba68a9332675238deb3102dfcdab6d6e7978fa2aa281df5bbf11cbb61a19418a"
+ARM64_URL="https://downloads.cursor.com/grokbot/stable/92808c0ad869b2e3725dbc3b8fa2fcc991687502/linux/arm64/grok-bot-0.71.2-1.aarch64.rpm"
+ARM64_SHA="9ff82fb7468ce08509e9a67945e96bc72fa2fb35283dc6132060e90ddd5da0be"
+
+reset_env
+DESTDIR="${tmp}/dry-amd64"
+GROKBOT_DISABLE_BUNDLED_APP=0
+GROKBOT_TARGET_ARCH=amd64
+GROKBOT_DRY_RUN=1
+run >"${tmp}/out"
+assert_contains "${tmp}/out" "$AMD64_URL"
+assert_contains "${tmp}/out" "$AMD64_SHA"
+assert_contains "${tmp}/out" "target_arch=amd64"
+assert_contains "${tmp}/out" "kind=rpm"
+
+reset_env
+DESTDIR="${tmp}/dry-arm64"
+GROKBOT_DISABLE_BUNDLED_APP=0
+GROKBOT_TARGET_ARCH=aarch64
+GROKBOT_DRY_RUN=1
+run >"${tmp}/out"
+assert_contains "${tmp}/out" "$ARM64_URL"
+assert_contains "${tmp}/out" "$ARM64_SHA"
+assert_contains "${tmp}/out" "target_arch=arm64"
+
+reset_env
+DESTDIR="${tmp}/dry-bad-arch"
+GROKBOT_DISABLE_BUNDLED_APP=0
+GROKBOT_TARGET_ARCH=ppc64le
+GROKBOT_DRY_RUN=1
+expect_fail
+assert_contains "${tmp}/err" "unsupported architecture"
+
+# A tiny RPM with the official layout. dnf is not used; DESTDIR extracts
+# with rpm2cpio. The host arch is the RPM arch.
+case "$(uname -m)" in
+    x86_64) host_target=amd64 ;;
+    aarch64) host_target=arm64 ;;
+    *)
+        echo "test-install-grokbot-app.sh: skipping rpm fixture on $(uname -m)" >&2
+        host_target=""
+        ;;
+esac
+
+if [[ -n "$host_target" ]]; then
+    command -v rpmbuild >/dev/null
+    command -v rpm2cpio >/dev/null
+    command -v cpio >/dev/null
+    rpm_home="${tmp}/rpmhome"
+    mkdir -p "${rpm_home}/rpmbuild/SPECS"
+    cat >"${rpm_home}/rpmbuild/SPECS/grok-bot.spec" <<'EOF'
+Name: grok-bot
+Version: 0.0.1
+Release: 1
+Summary: fixture
+License: MIT
+
+%description
+fixture
+
+%install
+mkdir -p "%{buildroot}/opt/Grok Bot"
+mkdir -p %{buildroot}/usr/share/applications
+printf '#!/bin/sh\n' > "%{buildroot}/opt/Grok Bot/grok-bot"
+printf 'sandbox\n' > "%{buildroot}/opt/Grok Bot/chrome-sandbox"
+chmod 755 "%{buildroot}/opt/Grok Bot/grok-bot"
+chmod 755 "%{buildroot}/opt/Grok Bot/chrome-sandbox"
+cat > %{buildroot}/usr/share/applications/grok-bot.desktop << 'DESK'
+[Desktop Entry]
+Name=Grok Bot
+Exec=grok-bot %U
+StartupWMClass=grok-bot
+MimeType=x-scheme-handler/grokbot;x-scheme-handler/sand;
+Type=Application
+DESK
+
+%files
+"/opt/Grok Bot"
+/usr/share/applications/grok-bot.desktop
+EOF
+    if ! HOME="$rpm_home" rpmbuild -bb "${rpm_home}/rpmbuild/SPECS/grok-bot.spec" >"${tmp}/rpmbuild.log" 2>&1; then
+        cat "${tmp}/rpmbuild.log" >&2
+        fail "rpmbuild failed"
+    fi
+    fixture=$(find "${rpm_home}/rpmbuild/RPMS" -name '*.rpm' -print -quit)
+    [[ -n "$fixture" ]]
+    fixture_sha=$(sha256sum "$fixture" | awk '{print $1}')
+
+    reset_env
+    DESTDIR="${tmp}/official"
+    GROKBOT_DISABLE_BUNDLED_APP=0
+    GROKBOT_TARGET_ARCH="$host_target"
+    GROKBOT_APP_SOURCE="$fixture"
+    GROKBOT_APP_SHA256="$fixture_sha"
+    GROKBOT_APP_KIND=rpm
+    run >/dev/null
+    [[ -x "${DESTDIR}/usr/lib/grokbot/app/grok-bot" ]]
+    [[ ! -e "${DESTDIR}/opt/Grok Bot/grok-bot" ]]
+    [[ "$(stat -c %a "${DESTDIR}/usr/lib/grokbot/app/chrome-sandbox")" == "4755" ]]
+    assert_contains "${DESTDIR}/usr/bin/grok-bot" "--ozone-platform=wayland"
+    assert_contains "${DESTDIR}/usr/bin/grok-bot" "--enable-features=UseOzonePlatform"
+    assert_contains "${DESTDIR}/usr/bin/grok-bot" "exec /usr/lib/grokbot/app/grok-bot"
+    if grep -E '^[[:space:]]*exec ' "${DESTDIR}/usr/bin/grok-bot" | grep -F -q '/opt/Grok Bot'; then
+        fail "wrapper exec still points at the spaced /opt path"
+    fi
+    bash -n "${DESTDIR}/usr/bin/grok-bot"
+    assert_contains "${DESTDIR}/etc/grokbot/app.conf" 'GROKBOT_MODE="native"'
+    assert_contains "${DESTDIR}/etc/grokbot/app.conf" 'GROKBOT_APP_ID="grok-bot"'
+    assert_contains "${DESTDIR}/etc/grokbot/app.conf" 'GROKBOT_EXEC="/usr/bin/grok-bot"'
+    assert_contains "${DESTDIR}/etc/xdg/mimeapps.list" "x-scheme-handler/grokbot=grok-bot.desktop"
+    assert_contains "${DESTDIR}/etc/xdg/mimeapps.list" "x-scheme-handler/sand=grok-bot.desktop"
+    [[ ! -e "${DESTDIR}/etc/yum.repos.d/grok-bot.repo" ]]
+    [[ ! -e "${DESTDIR}/etc/apparmor.d/grok-bot" ]]
+    assert_contains "${DESTDIR}/usr/share/applications/grok-bot.desktop" "StartupWMClass=grok-bot"
+
+    case "$host_target" in
+        amd64) other=arm64 ;;
+        arm64) other=amd64 ;;
+    esac
+    reset_env
+    DESTDIR="${tmp}/official-arch"
+    GROKBOT_DISABLE_BUNDLED_APP=0
+    GROKBOT_TARGET_ARCH="$other"
+    GROKBOT_APP_SOURCE="$fixture"
+    GROKBOT_APP_SHA256="$fixture_sha"
+    GROKBOT_APP_KIND=rpm
+    expect_fail
+    assert_contains "${tmp}/err" "does not match target"
+fi
 
 echo "PASS test-install-grokbot-app.sh"

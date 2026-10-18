@@ -38,6 +38,18 @@ assert_contains disk_config/iso.toml "ghcr.io/head77x/oais:latest"
 assert_contains .github/workflows/build-disk.yml 's#ghcr.io/head77x/oais:latest#'
 assert_contains .github/workflows/build.yml "oais-arm64"
 assert_contains system_files/usr/local/bin/grokbot-kiosk "while true"
+assert_contains build_files/install-grokbot-app.sh "ba68a9332675238deb3102dfcdab6d6e7978fa2aa281df5bbf11cbb61a19418a"
+assert_contains build_files/install-grokbot-app.sh "9ff82fb7468ce08509e9a67945e96bc72fa2fb35283dc6132060e90ddd5da0be"
+assert_contains build_files/install-grokbot-app.sh "grok-bot-0.71.2-1.x86_64.rpm"
+assert_contains build_files/install-grokbot-app.sh "grok-bot-0.71.2-1.aarch64.rpm"
+assert_contains build_files/install-grokbot-app.sh "--ozone-platform=wayland"
+assert_contains build_files/install-grokbot-app.sh "--enable-features=UseOzonePlatform"
+assert_contains build_files/install-grokbot-app.sh "tsflags=noscripts"
+assert_contains build_files/install-grokbot-app.sh "x-scheme-handler/grokbot=grok-bot.desktop"
+assert_contains build_files/install-grokbot-app.sh "x-scheme-handler/sand=grok-bot.desktop"
+assert_contains build_files/build.sh "mesa-libgbm"
+assert_contains build_files/build.sh "cups-libs"
+assert_contains .github/workflows/build.yml "GROKBOT_TARGET_ARCH"
 
 python3 - <<'PY'
 import json, pathlib, sys
