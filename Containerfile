@@ -2,7 +2,7 @@
 FROM scratch AS ctx
 COPY build_files /
 COPY system_files /system_files
-COPY orchestrator /orchestrator
+COPY grokbot-app /grokbot-app
 
 # Base Image
 # quay.io/fedora/fedora-bootc: minimal Fedora Atomic (bootc) image with no
@@ -14,6 +14,15 @@ COPY orchestrator /orchestrator
 # sandbox to resolve one; pin it once resolvable (from CI logs or a
 # machine with normal network access).
 FROM quay.io/fedora/fedora-bootc:latest
+
+# Optional Grok Bot Linux app. Leave these empty to boot the placeholder.
+# See docs/GROKBOT_APP.md and build_files/install-grokbot-app.sh.
+ARG GROKBOT_APP_SOURCE=
+ARG GROKBOT_APP_SHA256=
+ARG GROKBOT_APP_KIND=auto
+ARG GROKBOT_APP_EXEC=
+ARG GROKBOT_FLATPAK_ID=
+ARG GROKBOT_WEB_URL=
 
 ### MODIFICATIONS
 ## make modifications desired in your image and install packages by modifying the build.sh script

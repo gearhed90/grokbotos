@@ -29,6 +29,8 @@ jobs:
     # into one multi-arch manifest list -- simpler and easier to debug for
     # now; revisit if a single `oais:latest` that resolves per-client-arch
     # is worth the added complexity later.
+    # The product name is Grok Bot OS. The GHCR image names stay oais and
+    # oais-arm64 so existing pulls, kickstart sed, and S3 prefixes keep working.
     runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false

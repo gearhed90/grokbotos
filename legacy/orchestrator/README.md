@@ -1,3 +1,10 @@
+# ARCHIVED — not part of the Grok Bot OS image
+
+This tree is historical. Nothing in `Containerfile`, `build_files/build.sh`,
+or the boot session imports or starts it. See [`../README.md`](../README.md)
+and `docs/DECISIONS.md` (2026-10-18 pivot). The notes below describe the
+old AI-OS orchestrator as it existed when it was archived.
+
 # orchestrator (Phase 2 prototype)
 
 Local prototype of the closed-loop pipeline from `docs/ROADMAP.md` Phase 2:
@@ -78,6 +85,6 @@ print(result.path, result.exec_manifest)
 ## Tests
 
 ```bash
-cd orchestrator
+cd legacy/orchestrator
 python3 -m unittest discover -s tests -v
 ```

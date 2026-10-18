@@ -1,0 +1,10 @@
+#!/bin/bash
+# App launcher overlay. Bound to Super+Space and Alt+Space.
+# fuzzel draws on the layer shell, so the fullscreen window rule does not cover it.
+set -euo pipefail
+
+if ! command -v fuzzel >/dev/null 2>&1; then
+    echo "grokbot-switch: fuzzel is not installed" >&2
+    exit 1
+fi
+exec fuzzel --prompt "앱 실행 "

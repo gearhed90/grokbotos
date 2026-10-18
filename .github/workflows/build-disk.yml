@@ -129,7 +129,9 @@ jobs:
       # iso.toml's kickstart has a hardcoded `bootc switch` target so the
       # installed system tracks the right image post-install -- point it
       # at whichever image (oais vs oais-arm64) this run actually built
-      # the ISO from.
+      # the ISO from. The sed needle is the literal string
+      # ghcr.io/head77x/oais:latest; do not "rebrand" that string.
+      # Product name is Grok Bot OS; the registry image name stays oais.
       - name: Point ISO kickstart at this run's image
         if: matrix.disk-type == 'anaconda-iso'
         run: |

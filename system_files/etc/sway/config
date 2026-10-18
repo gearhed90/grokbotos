@@ -1,48 +1,39 @@
-# Minimal kiosk config for the AI-OS shell (ROADMAP.md Phase 4).
-# `webshell_cli` starts a local HTTP server and opens Firefox in --kiosk
-# mode against it -- that Firefox window IS the desktop the user sees
-# (prompt bar + command/app tile grid), not a terminal. Any other window
-# it opens along the way (e.g. `claude auth login`'s own OAuth redirect,
-# opened via /usr/local/bin/oais-open-browser -- see build_files/build.sh
-# and docs/DECISIONS.md 2026-07-13 for why that wrapper exists instead of
-# a bare `firefox`) is fullscreened by the same rule below; webshell/wm.py
-# closes it automatically once that login flow's subprocess exits. The
-# `/cli` built-in command (webshell/commands.py) spawns `foot` directly --
-# also fullscreened.
+# Grok Bot OS kiosk. No panel, no desktop, no window chrome.
+# tty1 autologins grokbot, whose shell execs sway, which runs grokbot-kiosk.
+# grokbot-kiosk restarts grokbot-launch whenever that process exits.
+# sway itself does not restart a crashed exec child.
 #
-# This kiosk has NO window chrome (no title bar/tab bar/close button) by
-# design, so it needs real fallbacks for a human to move between windows
-# without relying solely on wm.py guessing right every time:
-#   - Alt+Tab / Alt+Shift+Tab: cycle focus between whatever windows are
-#     currently open (kiosk shell, a login popup, a /cli terminal) --
-#     sway's built-in sibling-cycling, close enough to a real desktop's
-#     alt-tab given everything here lives flat in one workspace.
-#   - Alt+F4: kill the focused window outright, for anything wm.py's
-#     automatic close doesn't catch (swaymsg unavailable, a window it
-#     doesn't know to close, etc.).
-# Both use Mod1 (Alt) rather than a Super/Mod4 key some keyboards/VMs
-# don't forward. Still no bar, no window borders, no other desktop chrome.
+# The visible app is whatever grokbot-launch starts (placeholder Firefox
+# or the real Grok Bot binary). Other installed apps are also fullscreen.
+# fuzzel is a layer-shell launcher, so it is not a window and is not
+# covered by the fullscreen rule.
 #
-# stdout/stderr (Python tracebacks, Firefox's own errors -- it's a
-# subprocess of webshell_cli, inherits the same fds) are redirected to a
-# log file instead of going nowhere: sway takes over the console's
-# graphics mode, so anything not captured is simply unrecoverable if this
-# fails silently. Switch to another VT (e.g. Ctrl+Alt+F2) and
-# `cat ~aios/.local/share/oais/shell.log` (as root, or `sudo -u aios`) to
-# read it after a failed boot.
+# Keybindings (Alt as well as Super): some VM consoles, including UTM,
+# do not forward the Super key. Alt+Tab / Alt+F4 are the fallbacks that
+# were added after a real kiosk boot left the user with no way to move
+# or close a window (docs/DECISIONS.md, 2026-07-11 and 2026-07-13).
+#
+# Logs: this process's stdout/stderr, including the app it launches.
+# Read them from another VT: cat ~grokbot/.local/share/grokbot/shell.log
 
-exec sh -c 'mkdir -p "$HOME/.local/share/oais" && cd /usr/lib/oais/orchestrator && exec python3 -m orchestrator.webshell_cli >>"$HOME/.local/share/oais/shell.log" 2>&1'
+output * background #000000 solid_color
+
+exec sh -c 'mkdir -p "$HOME/.local/share/grokbot" "$HOME/Apps" "$HOME/.local/share/applications" && exec /usr/local/bin/grokbot-kiosk >>"$HOME/.local/share/grokbot/shell.log" 2>&1'
 
 default_border none
 default_floating_border none
+hide_edge_borders both
 
 bar {
     mode invisible
 }
 
-for_window [app_id="firefox"] fullscreen enable
-for_window [app_id="foot"] fullscreen enable
+for_window [app_id=".*"] fullscreen enable
 
+bindsym Mod4+space exec /usr/local/bin/grokbot-switch
+bindsym Mod1+space exec /usr/local/bin/grokbot-switch
+bindsym Mod4+g exec /usr/local/bin/grokbot-focus
+bindsym Mod1+g exec /usr/local/bin/grokbot-focus
 bindsym Mod1+Tab focus next
 bindsym Mod1+Shift+Tab focus prev
 bindsym Mod1+F4 kill
