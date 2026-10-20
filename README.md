@@ -36,6 +36,7 @@
 - 앱을 이미지에 넣는 방법: [`docs/GROKBOT_APP.md`](docs/GROKBOT_APP.md)
 - 설치 명령 규격: [`docs/GROKBOT_INSTALL.md`](docs/GROKBOT_INSTALL.md)
 - 독(위·아래·왼쪽·오른쪽), 창 배치: [`docs/DOCK.md`](docs/DOCK.md)
+- 배경화면, 바탕화면 층(아이콘 없음): [`docs/DESKTOP.md`](docs/DESKTOP.md)
 
 ## 이 트리에서 부팅되는 것
 
@@ -50,6 +51,7 @@
 ```text
 getty tty1 자동 로그인 (사용자 grokbot, 비밀번호 없음)
   -> sway  (바탕화면 아이콘 없음, 창 테두리 없음)
+    -> grokbot-desktop (배경화면 swaybg, 아이콘 없음. docs/DESKTOP.md)
     -> grokbot-dock   (가장자리 독, 기본: 아래 독 아이콘만. docs/DOCK.md)
     -> grokbot-kiosk  (앱이 끝나면 1초 뒤 다시 실행)
       -> grokbot-launch
