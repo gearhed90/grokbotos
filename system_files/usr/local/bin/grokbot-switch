@@ -1,10 +1,13 @@
 #!/bin/bash
 # App launcher overlay. Bound to Super+Space and Alt+Space.
-# fuzzel draws on the layer shell, so the fullscreen window rule does not cover it.
+# fuzzel draws on the layer shell. Its default layer is "top", which sway
+# hides behind a fullscreen view, and every kiosk window is fullscreen.
+# --layer overlay keeps the launcher above the Grok Bot window (seen in a
+# QEMU boot 2026-10-20: Alt+Space did nothing visible without it).
 set -euo pipefail
 
 if ! command -v fuzzel >/dev/null 2>&1; then
     echo "grokbot-switch: fuzzel is not installed" >&2
     exit 1
 fi
-exec fuzzel --prompt "앱 실행 "
+exec fuzzel --layer overlay --prompt "앱 실행 "
