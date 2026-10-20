@@ -167,8 +167,9 @@ class Dock:
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), prov,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGHUP, self.reload)
-        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self.quit)
+        add_signal = getattr(GLib, "unix_signal_add")
+        add_signal(GLib.PRIORITY_DEFAULT, signal.SIGHUP, self.reload)
+        add_signal(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self.quit)
         self.rebuild()
         GLib.timeout_add(1500, self.refresh)
 
@@ -240,6 +241,9 @@ class Dock:
                 if mode == "labels":
                     lab = Gtk.Label(label=name, xalign=0)
                     lab.get_style_context().add_class("name")
+                    # Without a width request GTK shrinks an ellipsizing
+                    # label to just "...".
+                    lab.set_width_chars(14)
                     lab.set_max_width_chars(18)
                     lab.set_ellipsize(3)  # Pango.EllipsizeMode.END
                     inner.pack_start(lab, True, True, 0)

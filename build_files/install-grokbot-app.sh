@@ -239,6 +239,11 @@ exec /usr/lib/grokbot/app/grok-bot \
     "$@"
 EOF
     chmod 755 "${root}/usr/bin/grok-bot"
+    # noscripts also skipped the icon cache refresh. A stale hicolor cache
+    # hides the grok-bot icon from GTK (the dock showed a fallback icon).
+    if [[ -z "$DESTDIR" ]] && command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+    fi
     write_conf "native" "" "grok-bot" "/usr/bin/grok-bot"
     append_scheme_handlers
 }
