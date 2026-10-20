@@ -35,6 +35,7 @@
 - 결정 기록: [`docs/DECISIONS.md`](docs/DECISIONS.md)
 - 앱을 이미지에 넣는 방법: [`docs/GROKBOT_APP.md`](docs/GROKBOT_APP.md)
 - 설치 명령 규격: [`docs/GROKBOT_INSTALL.md`](docs/GROKBOT_INSTALL.md)
+- 독(위·아래·왼쪽·오른쪽), 창 배치: [`docs/DOCK.md`](docs/DOCK.md)
 
 ## 이 트리에서 부팅되는 것
 
@@ -48,7 +49,8 @@
 
 ```text
 getty tty1 자동 로그인 (사용자 grokbot, 비밀번호 없음)
-  -> sway  (패널 없음, 창 테두리 없음)
+  -> sway  (바탕화면 아이콘 없음, 창 테두리 없음)
+    -> grokbot-dock   (가장자리 독, 기본: 아래 독 아이콘만. docs/DOCK.md)
     -> grokbot-kiosk  (앱이 끝나면 1초 뒤 다시 실행)
       -> grokbot-launch
            native (기본):  /usr/bin/grok-bot  (Wayland 래퍼)
@@ -61,9 +63,11 @@ getty tty1 자동 로그인 (사용자 grokbot, 비밀번호 없음)
 |---|---|
 | `Super+Space`, `Alt+Space` | 설치한 앱 목록 (fuzzel) |
 | `Super+G`, `Alt+G` | Grok Bot 창으로 포커스 |
-| `Alt+Tab`, `Alt+Shift+Tab` | 창 순환 |
-| `Alt+F4` | 보고 있는 창 닫기 |
+| `Alt+Tab`, `Alt+Shift+Tab` | 모든 작업 공간의 창 전환 |
+| `Alt+F4`, `Super+Q` | 보고 있는 창 닫기 |
 | `Ctrl+Alt+F2` | 설치할 때 만든 관리자 콘솔 |
+
+창은 전체화면이 아니라 독을 뺀 영역에 최대화된다. Grok Bot은 작업 공간 1, 다른 앱은 각자 새 작업 공간에 열린다. 독 위치·모드는 `grokbot-dock-config`로 바꾼다.
 
 Alt 조합을 같이 둔 이유: UTM 같은 VM은 Super 키를 넘기지 않는 경우가 있었다.
 
