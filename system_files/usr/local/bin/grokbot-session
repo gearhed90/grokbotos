@@ -39,4 +39,9 @@ if command -v flatpak >/dev/null 2>&1; then
         >>"${HOME}/.local/share/grokbot/shell.log" 2>&1 || true
 fi
 
+# agetty runs this directly, so no locale is set (C/POSIX). fuzzel then
+# rejects the Korean prompt ("invalid prompt") and Alt+Space shows nothing.
+# Seen in a QEMU boot 2026-10-20.
+export LANG="${LANG:-C.UTF-8}"
+
 exec sway
