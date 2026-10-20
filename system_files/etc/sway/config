@@ -18,7 +18,10 @@
 # Logs: this process's stdout/stderr, including the app it launches.
 # Read them from another VT: cat ~grokbot/.local/share/grokbot/shell.log
 
-output * background #000000 solid_color
+# Wallpaper: grokbot-desktop runs swaybg from /etc/grokbot/desktop.conf
+# (user override via grokbot-wallpaper). No `output background` here, or
+# sway would start a second swaybg. Never any desktop icons.
+exec /usr/local/bin/grokbot-desktop >>"$HOME/.local/share/grokbot/desktop.log" 2>&1
 
 exec sh -c 'mkdir -p "$HOME/.local/share/grokbot" "$HOME/Apps" "$HOME/.local/share/applications" && exec /usr/local/bin/grokbot-kiosk >>"$HOME/.local/share/grokbot/shell.log" 2>&1'
 

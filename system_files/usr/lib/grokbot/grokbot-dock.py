@@ -249,6 +249,10 @@ class Dock:
                     inner.pack_start(lab, True, True, 0)
             btn.add(inner)
             btn.connect("clicked", self.on_click, info)
+            # GTK keeps a tooltip up after a click while the pointer stays
+            # still, and the window it belonged to has moved on. Drop it on
+            # click and allow it again once the pointer leaves.
+            btn.connect("leave-notify-event", self.on_leave)
             box.pack_start(btn, False, False, 0)
             self.buttons.append((btn, app_keys(info), info))
         scroller = Gtk.ScrolledWindow()
@@ -267,7 +271,12 @@ class Dock:
         except ValueError:
             return []
 
-    def on_click(self, _btn, info):
+    def on_leave(self, btn, _event):
+        btn.set_has_tooltip(True)
+        return False
+
+    def on_click(self, btn, info):
+        btn.set_has_tooltip(False)
         keys = app_keys(info)
         for v in self.current_views():
             if window_key(v) in keys:

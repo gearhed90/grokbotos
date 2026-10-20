@@ -17,6 +17,7 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     tmux \
     htop \
     sway \
+    swaybg \
     firefox \
     flatpak \
     fuzzel \
