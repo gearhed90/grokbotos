@@ -10,7 +10,10 @@ cp -avf "/ctx/system_files"/. /
 # xdg-utils, libXtst, libuuid) are pulled again by dnf when the RPM is
 # installed. Names are Fedora package names, from readelf NEEDED on
 # grok-bot 0.71.2 plus the RPM header.
-dnf5 install -y \
+# fedora-cisco-openh264 (ciscobinary.openh264.org) is often unreachable from
+# build sandboxes and is only a weak dep of firefox (H.264). Skip it so the
+# build does not fail on a mirror timeout.
+dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     tmux \
     htop \
     sway \

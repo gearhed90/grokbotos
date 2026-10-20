@@ -21,16 +21,20 @@ export XDG_DATA_DIRS="${HOME}/.local/share:${HOME}/.local/share/flatpak/exports/
 
 # Hide the distro Firefox launcher. The kiosk already is a Firefox window
 # in placeholder mode, and a second Firefox from the app list fights it.
-firefox_mask="${HOME}/.local/share/applications/firefox.desktop"
-if [[ ! -e "$firefox_mask" ]]; then
-    cat >"$firefox_mask" <<'EOF'
+# Fedora ships the launcher as org.mozilla.firefox.desktop, so a mask has
+# to use that desktop-file id. firefox.desktop is kept for older builds.
+for firefox_id in firefox.desktop org.mozilla.firefox.desktop; do
+    firefox_mask="${HOME}/.local/share/applications/${firefox_id}"
+    if [[ ! -e "$firefox_mask" ]]; then
+        cat >"$firefox_mask" <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=Firefox
 NoDisplay=true
 Hidden=true
 EOF
-fi
+    fi
+done
 
 # Best-effort. No network on first boot must not block the kiosk.
 if command -v flatpak >/dev/null 2>&1; then
@@ -38,5 +42,10 @@ if command -v flatpak >/dev/null 2>&1; then
         https://dl.flathub.org/repo/flathub.flatpakrepo \
         >>"${HOME}/.local/share/grokbot/shell.log" 2>&1 || true
 fi
+
+# agetty runs this directly, so no locale is set (C/POSIX). fuzzel then
+# rejects the Korean prompt ("invalid prompt") and Alt+Space shows nothing.
+# Seen in a QEMU boot 2026-10-20.
+export LANG="${LANG:-C.UTF-8}"
 
 exec sway

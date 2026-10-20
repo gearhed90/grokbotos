@@ -202,7 +202,12 @@ install_official_grok_bot_rpm() {
         command -v dnf5 >/dev/null 2>&1 || die "dnf5 is required to install the rpm"
         # noscripts: do not register the yum repo, install AppArmor, or
         # symlink /usr/bin/grok-bot at the spaced /opt path.
-        dnf5 install -y --setopt=tsflags=noscripts "$blob"
+        # dnf5 only treats an argument as a local package file when it ends
+        # in .rpm. "$blob" is ".../payload", which dnf5 resolves as a
+        # package name ("No match for argument").
+        cp -f -- "$blob" "${blob}.rpm"
+        dnf5 install -y --disablerepo=fedora-cisco-openh264 \
+            --setopt=tsflags=noscripts "${blob}.rpm"
     fi
 
     root="$DESTDIR"
@@ -366,7 +371,8 @@ exec /usr/lib/grokbot/grokbot.AppImage "$@"'
                 die "rpm install does not honor GROKBOT_DESTDIR; use the image build"
             fi
             if [[ -z "$SKIP" ]]; then
-                dnf5 install -y "$blob"
+                cp -f -- "$blob" "${blob}.rpm"
+                dnf5 install -y "${blob}.rpm"
             fi
             write_wrapper "exec ${APP_EXEC} \"\$@\""
             write_conf "native" "" "grokbot" "/usr/lib/grokbot/grokbot-native"
