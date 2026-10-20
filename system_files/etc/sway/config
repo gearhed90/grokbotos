@@ -6,7 +6,7 @@
 # The visible app is whatever grokbot-launch starts. The native Grok Bot
 # RPM's desktop file sets StartupWMClass=grok-bot, and app.conf sets
 # GROKBOT_APP_ID=grok-bot so Super+G / Alt+G can focus it. The placeholder
-# Firefox window uses app_id firefox. Other installed apps are also fullscreen.
+# Firefox window uses app_id firefox. Apps open maximized on their own workspace.
 # fuzzel is a layer-shell launcher, so it is not a window and is not
 # covered by the fullscreen rule.
 #
@@ -30,12 +30,25 @@ bar {
     mode invisible
 }
 
-for_window [app_id=".*"] fullscreen enable
+# Windows are not fullscreen: docks are layer-shell panels with exclusive
+# zones, and a fullscreen view would cover them. Instead every app opens
+# on its own workspace (grokbot-run / grokbot-dock), where a single tiled
+# window fills the area the docks leave free, i.e. it is "maximized".
+# Grok Bot always lives on workspace 1 and is the first thing on screen.
+assign [app_id="grok-bot"] workspace number 1
+workspace_layout default
+
+# No desktop icons, ever. The only app surfaces are the docks
+# (/etc/grokbot/dock.conf, grokbot-dock-config) and the fuzzel launcher.
+exec /usr/local/bin/grokbot-dock >>"$HOME/.local/share/grokbot/dock.log" 2>&1
 
 bindsym Mod4+space exec /usr/local/bin/grokbot-switch
 bindsym Mod1+space exec /usr/local/bin/grokbot-switch
 bindsym Mod4+g exec /usr/local/bin/grokbot-focus
 bindsym Mod1+g exec /usr/local/bin/grokbot-focus
-bindsym Mod1+Tab focus next
-bindsym Mod1+Shift+Tab focus prev
+# Alt+Tab cycles every window across workspaces.
+bindsym Mod1+Tab exec /usr/lib/grokbot/grokbot-alttab.py next
+bindsym Mod1+Shift+Tab exec /usr/lib/grokbot/grokbot-alttab.py prev
+# Close the focused window. Grok Bot is restarted by grokbot-kiosk.
 bindsym Mod1+F4 kill
+bindsym Mod4+q kill

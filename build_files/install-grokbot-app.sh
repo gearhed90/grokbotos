@@ -236,7 +236,6 @@ export ELECTRON_OZONE_PLATFORM_HINT="${ELECTRON_OZONE_PLATFORM_HINT:-wayland}"
 exec /usr/lib/grokbot/app/grok-bot \
     --ozone-platform=wayland \
     --enable-features=UseOzonePlatform \
-    --start-fullscreen \
     "$@"
 EOF
     chmod 755 "${root}/usr/bin/grok-bot"

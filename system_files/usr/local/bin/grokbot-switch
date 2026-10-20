@@ -15,4 +15,5 @@ case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in
     *UTF-8* | *utf8* | *UTF8* | *utf-8*) ;;
     *) export LC_ALL=C.UTF-8 ;;
 esac
-exec fuzzel --layer overlay --prompt "앱 실행 "
+# --launch-prefix: each app opens on its own workspace (see grokbot-run).
+exec fuzzel --layer overlay --launch-prefix=/usr/local/bin/grokbot-run --prompt "앱 실행 "
