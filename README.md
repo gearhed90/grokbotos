@@ -1,17 +1,40 @@
 # Grok Bot OS
 
-설치하고 켜면 화면에 Grok Bot만 나오는 Linux다. 사용자는 가지고 있는 Grok Bot 계정으로 로그인하거나 새로 구독하고, 그 다음부터는 이 PC를 Grok Bot으로 쓴다. 일을 시키고, 필요하면 앱을 설치하거나 Grok Bot이 만든 앱을 이 PC에 둔다.
+설치하고 켜면 화면에 Grok Bot만 나오는 Linux다. Fedora bootc(`quay.io/fedora/fedora-bootc`) 위에 만들었고, 미리 설치된 앱은 sway 키오스크에서 전체화면으로 도는 **Grok Bot Linux 앱 하나**뿐이다.
 
-기반은 [bootc](https://github.com/bootc-dev/bootc)와 `quay.io/fedora/fedora-bootc`다. 템플릿 골격은 [ublue-os/image-template](https://github.com/ublue-os/image-template)에서 왔다.
+사용자는 가지고 있는 Grok Bot 계정으로 로그인하거나 새로 구독하고, 그 다음부터는 이 PC를 Grok Bot으로 쓴다. 다른 앱이 필요하면 Flathub에서 설치하거나(`grokbot-install flatpak <app-id>`), Grok Bot이 이 PC에서 만든 앱을 사용자 홈(`~/Apps`)에 둔다(`grokbot-install local ...`). OS 업데이트는 bootc가 한다.
 
-저장소 이름은 `head77x/oais`이고, 컨테이너 이미지 이름도 `oais` / `oais-arm64` 그대로다. 제품 이름만 Grok Bot OS다.
+> **English summary.** Grok Bot OS is a Fedora bootc image whose only preinstalled app is the Grok Bot Linux app, running full screen in a sway kiosk. Users sign in with their Grok Bot account (or subscribe), install extra apps via Flatpak / `grokbot-install`, or have Grok Bot build apps locally. Updates come from bootc.
 
+템플릿 골격은 [ublue-os/image-template](https://github.com/ublue-os/image-template)에서 왔다. 저장소 이름은 `head77x/oais`이고, 컨테이너 이미지 이름도 `oais` / `oais-arm64` 그대로다(아래 "이름을 바꾸지 않은 것"). 제품 이름은 Grok Bot OS다.
+
+## 현재 상태
+
+**2026-10-20 로컬 VM에서 확인** (x86_64, QEMU, KVM 없이 TCG 에뮬레이션, UEFI. 디스크는 `bootc install to-filesystem`으로 수동 생성):
+
+- [x] `podman build`로 이미지 빌드, Grok Bot 0.71.2 RPM 설치 (#12에서 빌드 오류 2건 수정)
+- [x] 부팅 → tty1 자동 로그인 → sway → 전체화면 Grok Bot 로그인 화면 (`app_id` `grok-bot`, Wayland)
+- [x] `Alt+Space` → "앱 실행" 런처(fuzzel)가 Grok Bot 위에 표시, Firefox는 목록에서 숨김
+- [x] 런처에서 앱(Foot) 실행, `Alt+G`로 전체화면 Grok Bot 복귀
+- [x] `bootc status`, `grokbot-factory-reset --dry-run`
+
+**아직 확인하지 않은 것:**
+
+- [ ] SELinux enforcing (VM 디스크는 라벨 없이 설치되어 `selinux=0`으로 부팅)
+- [ ] bootc-image-builder로 만든 ISO / qcow2 설치
+- [ ] KVM 속도에서의 동작, 실제 하드웨어 ([`docs/HARDWARE.md`](docs/HARDWARE.md))
+- [ ] Grok Bot 계정 로그인 이후 화면
+
+2026-07-09에는 **이전 이미지**를 Apple Silicon UTM(arm64)에 ISO로 설치하고 `bootc status`까지 확인했다. 지금 이미지의 arm64 부팅은 확인하지 않았다.
+
+## 문서
+
+- 로컬에서 빠르게 테스트하기: [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md)
 - 로드맵: [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- 하드웨어와 드라이버: [`docs/HARDWARE.md`](docs/HARDWARE.md)
 - 결정 기록: [`docs/DECISIONS.md`](docs/DECISIONS.md)
-- 실기에서만 할 일: [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md)
 - 앱을 이미지에 넣는 방법: [`docs/GROKBOT_APP.md`](docs/GROKBOT_APP.md)
 - 설치 명령 규격: [`docs/GROKBOT_INSTALL.md`](docs/GROKBOT_INSTALL.md)
-- 하드웨어와 드라이버: [`docs/HARDWARE.md`](docs/HARDWARE.md)
 
 ## 이 트리에서 부팅되는 것
 
@@ -46,6 +69,15 @@ Alt 조합을 같이 둔 이유: UTM 같은 VM은 Super 키를 넘기지 않는 
 
 세션 데이터는 `/var/home/grokbot`에 남는다. tmpfiles가 매 부팅에 이 디렉터리를 만들되, 들어 있는 파일은 지우지 않는다. 네이티브 앱의 로그아웃은 앱 안에서 한다. `grokbot-sign-out`은 플레이스홀더 Firefox 프로필만 지운다. `http`/`https`는 그 프로필과 다른 Firefox 창으로 열고, `grokbot://`와 `sand://`는 Grok Bot으로 연다. `Alt+G`는 `app_id`가 `grok-bot`인 창으로 돌아온다.
 
+## 공장 초기화
+
+```bash
+sudo grokbot-factory-reset --dry-run        # 지울 목록만 출력
+sudo grokbot-factory-reset --confirm RESET  # /var/home/grokbot 안의 내용만 지움
+```
+
+`--confirm RESET` 없이는 아무것도 지우지 않고, `--dry-run`이 있으면 항상 지우지 않는다. `/usr`와 bootc 배포는 건드리지 않는다. 전체 `/var` 초기화와 첫 부팅 재실행은 아직 없다([`docs/DECISIONS.md`](docs/DECISIONS.md)).
+
 ## 디렉터리
 
 ```text
@@ -64,12 +96,12 @@ disk_config/                          ISO / qcow2
 .github/workflows/check.yml           셸 테스트. 이미지는 안 만듦
 docs/
 tests/
-legacy/orchestrator/                  이전 AI-OS 오케스트레이터. 이미지에 없음
+legacy/orchestrator/                  예전 OAIS(AI-OS) 오케스트레이터 코드. 이미지에 없음, 참고용
 ```
 
 ## 로컬 빌드
 
-Podman, bootc, just가 있는 머신에서. 이 개발 샌드박스에서는 이미지가 안 만들어진다.
+Podman과 just가 있는 Linux 머신에서. VM으로 띄우는 순서는 [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md).
 
 ```bash
 just build
@@ -94,12 +126,6 @@ GROKBOT_APP_SOURCE='https://example.invalid/GrokBot.AppImage' \
 GROKBOT_APP_SHA256='64자리hex' \
 just build
 ```
-
-## 여기서 확인한 것, 실기가 필요한 것
-
-2026-07-09에 **이전 이미지**를 Apple Silicon UTM(arm64)에서 ISO로 설치하고, 재부팅한 뒤 `bootc status`가 `ghcr.io/head77x/oais-arm64:latest`를 가리키는 것까지 확인했다. tty1 자동 로그인 뒤 sway가 뜨는 것도 그 계열에서 봤다.
-
-이 전환 이후 이미지는 여기서 부팅하지 않았다. KVM도 podman 빌드도 없다. Grok Bot 0.71.2 RPM 두 개는 받아서 sha256과 파일 목록, 스크립트릿, x86_64 바이너리의 `NEEDED`까지 봤다. `dnf5 install`은 하지 않았다. 이 환경에서 돌리는 것은 `tests/run-tests.sh`, shellcheck, 워크플로 YAML, `just --list` / `just --dry-run`이다.
 
 ## 이름을 바꾸지 않은 것
 
