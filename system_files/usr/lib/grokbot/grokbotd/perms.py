@@ -61,6 +61,10 @@ SCOPES = {
     "audit": ("감사 기록", "Audit log"),
 }
 
+# scope -> {"read", "write"}: which access levels have methods. Filled
+# from the schema by rpc.Dispatcher; used for display only.
+SCOPE_ACCESS = {}
+
 # These never become silent: each use session / action is confirmed.
 ALWAYS_ASK = frozenset({"camera", "microphone", "power"})
 

@@ -353,7 +353,9 @@ class Dock:
 
     def on_status_click(self, _btn, sid):
         if sid == "network":
-            subprocess.Popen(["/usr/local/bin/grokbot-wifi"])
+            subprocess.Popen(["/usr/local/bin/grokbot-settings", "wifi"])
+        elif sid.startswith("inuse-"):
+            subprocess.Popen(["/usr/local/bin/grokbot-settings", "permissions"])
         elif sid == "volume":
             subprocess.Popen(["/usr/local/bin/grokbot-volume", "mute"])
         GLib.timeout_add(400, self.refresh_status_once)

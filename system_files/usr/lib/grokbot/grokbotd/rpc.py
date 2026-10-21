@@ -56,6 +56,9 @@ class Dispatcher:
                    if m not in SPECIAL and m not in METHODS and m not in CTX_METHODS]
         if missing:
             raise ValueError("schema methods without a backend: %s" % ", ".join(missing))
+        for s in self.methods.values():
+            if s.get("scope"):
+                perms.SCOPE_ACCESS.setdefault(s["scope"], set()).add(s.get("access", "read"))
         self._req_lock = threading.Lock()
         self._last_request = {}
 

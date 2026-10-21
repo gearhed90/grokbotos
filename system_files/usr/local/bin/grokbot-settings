@@ -1,0 +1,41 @@
+#!/bin/bash
+# Open the Settings web app: grokbot-settings [wifi|sound|display|notifications|lock|keyboard|permissions|audit]
+# The app is static files served by grokbotd on its own origin
+# (http://settings.app.localhost:7311) and talks only to the public OS API.
+# It is shown in a chromeless Firefox window (--kiosk) with its own
+# profile and app_id grokbot-settings; sway tiles it like any app window
+# (for_window ... fullscreen disable), so the docks stay visible.
+# One instance: a second call focuses the open window.
+set -euo pipefail
+page=${1:-}
+if [[ -n $page && ! $page =~ ^[a-z]+$ ]]; then
+    echo "usage: grokbot-settings [page]" >&2
+    exit 2
+fi
+port=${GROKBOT_API_PORT:-7311}
+url="http://settings.app.localhost:${port}/${page:+#$page}"
+if [[ ${GROKBOT_SETTINGS_PRINT:-} == 1 ]]; then
+    echo "$url"
+    exit 0
+fi
+if swaymsg -q '[app_id="grokbot-settings"] focus' 2>/dev/null; then
+    exit 0
+fi
+profile="${HOME}/.local/share/grokbot/settings-profile"
+mkdir -p "$profile"
+if [[ ! -f $profile/user.js ]]; then
+    # No first-run pages, telemetry, password saving or session restore.
+    cat >"$profile/user.js" <<'JS'
+user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("browser.startup.homepage_override.mstone", "ignore");
+user_pref("startup.homepage_welcome_url", "");
+user_pref("datareporting.policy.dataSubmissionEnabled", false);
+user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
+user_pref("signon.rememberSignons", false);
+user_pref("browser.sessionstore.resume_from_crash", false);
+user_pref("browser.translations.automaticallyPopup", false);
+user_pref("intl.accept_languages", "ko-KR, ko, en-US, en");
+JS
+fi
+exec /usr/local/bin/grokbot-run firefox --new-instance --no-remote --profile "$profile" \
+    --name grokbot-settings --class grokbot-settings --kiosk "$url"
