@@ -893,7 +893,7 @@
       }
     },
     "audit.list": {
-      "description": "Recent audit log entries, newest last. Filters: principal, decision, method.",
+      "description": "Recent audit log entries, newest last. Filters: principal, decision, method, access.",
       "capability": "audit.read",
       "scope": "audit",
       "access": "read",
@@ -925,6 +925,14 @@
           "method": {
             "type": "string",
             "maxLength": 64
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ],
+            "description": "Only reads or only writes (the dock's status polling is reads)."
           }
         },
         "additionalProperties": false

@@ -115,6 +115,8 @@ Where the mode comes from (first match wins):
 2. System defaults in `/etc/grokbot/api-permissions.json`: `local` (modes for the user's own processes) and `origins` (`{"http://x.app.localhost:7311": {"audio": "ask"}}`). The phase-1 form, a list of capabilities, still works but grants **reads only**; `"*"` is ignored.
 3. Built in: the local user may read everything and is asked for writes; anything else is denied.
 
+The local user's **reads are always allowed**, whatever is stored (the dock polls status every 2 s); stored modes for `local` govern writes only.
+
 Hard rules that no file can change:
 
 - `camera`, `microphone` and `power` writes **always ask**, with no Always allow button; `permissions.set` cannot store `allow` for them.
@@ -142,7 +144,7 @@ Revoke: `permissions.revoke {principal, scope?}`, `grokbot-os revoke <origin> [s
 grokbot-os [--json] methods
 grokbot-os [--json] <method> [key=value ...]    # grokbot-os system.info
 grokbot-os [--json] <ns> <verb> [key=value ...] # grokbot-os windows list workspace=2
-grokbot-os audit [-n N] [principal=P] [decision=allow|deny|error] [method=M]
+grokbot-os audit [-n N] [principal=P] [decision=allow|deny|error] [method=M] [access=write]
 grokbot-os grants [principal]                    # modes per scope
 grokbot-os grant <principal> <scope> allow|ask|deny  # always asks you to confirm
 grokbot-os revoke <principal> [scope]

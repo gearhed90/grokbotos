@@ -4,7 +4,7 @@
   grokbot-os [--json] methods
   grokbot-os [--json] <method> [key=value ...]     e.g. grokbot-os windows.list
   grokbot-os [--json] call <method> [key=value ...]
-  grokbot-os audit [-n N] [principal=P] [decision=allow|deny|error] [method=M]
+  grokbot-os audit [-n N] [principal=P] [decision=allow|deny|error] [method=M] [access=write]
   grokbot-os grants [principal]                     permissions per scope
   grokbot-os grant <principal> <scope> allow|ask|deny   (asks you to confirm)
   grokbot-os revoke <principal> [scope]
@@ -170,7 +170,7 @@ def cmd_audit(args, as_json):
         rest = rest[2:]
     for a in rest:
         k, eq, v = a.partition("=")
-        if not eq or k not in ("principal", "decision", "method"):
+        if not eq or k not in ("principal", "decision", "method", "access"):
             return _usage("usage: audit [-n N] [principal=P] [decision=D] [method=M]")
         params[k] = v
     try:
