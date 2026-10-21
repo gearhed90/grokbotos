@@ -137,6 +137,63 @@ curl -s 127.0.0.1:7311/v1/health
 - **VM에서 써 보기 / Try it in a VM:** [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md)
 - **테스트 / Tests:** `bash tests/run-tests.sh` (셸 테스트, grokbotd 단위 테스트, shellcheck. CI의 `check.yml`도 같은 테스트를 돌린다)
 
+## 설치하기 / Installation (onboarding)
+
+> **상태 / Status: 미리보기, 아직 일반 사용자용 아님 / preview, not yet ready for end users.**
+> ✅ = VM(QEMU, OVMF/SeaBIOS)에서 직접 확인 / verified in a VM · ⚠️ = 미검증 / unverified.
+> 실제 노트북에서는 아직 시험하지 않았다. / Not yet tested on real laptop hardware.
+
+### 1. 요구 사항 / Requirements
+- x86_64 PC (x86_64-v2 이상, 32비트 불가 / no 32-bit). arm64는 별도 이미지 / separate image.
+- RAM 4 GB 이상 (✅ 4 GB로 테스트 / tested with 4 GB), 디스크 30 GB 이상 / disk ≥ 30 GB.
+- 설치 디스크는 **전부 지워진다** / the target disk is **wiped entirely**.
+- UEFI (✅), UEFI + Secure Boot (✅, Microsoft 키 / MS keys), 레거시 BIOS (✅ `--generic-image` 설치 시 / with `--generic-image`).
+- Wi-Fi: Intel(iwlwifi), Realtek, Atheros, MediaTek, Broadcom brcmfmac 펌웨어 포함 (⚠️ 실기기 미검증). Broadcom `wl`(독점 드라이버) 칩은 **지원 안 함** / unsupported.
+- NVIDIA: 오픈소스 nouveau만 / nouveau only (⚠️ 미검증).
+
+### 2. 다운로드 / Download
+- ⚠️ 설치 ISO는 아직 공개 배포되지 않았다 / no public installer ISO yet. `iso.toml` + bootc-image-builder(`--type anaconda-iso`)로 만들 수 있지만 검증되지 않았다.
+- ⚠️ `ghcr.io/head77x/oais` 이미지는 현재 익명 pull이 안 된다(403) / not anonymously pullable yet.
+
+### 3. USB 만들기 / Write the USB stick (⚠️ ISO 미검증)
+- **Fedora Media Writer**: "Select .iso file" → USB 선택 → Write.
+- **dd** (Linux/macOS): `sudo dd if=grokbot.iso of=/dev/sdX bs=4M status=progress oflag=sync` (`sdX`를 반드시 확인 / double-check `sdX`).
+- **Ventoy**: ISO 파일을 USB에 복사 / copy the ISO onto the Ventoy drive.
+
+### 4. BIOS 설정과 부팅 키 / Firmware settings & boot keys
+- 부팅 메뉴 / boot menu: Dell F12 · Lenovo F12 (또는 Novo 버튼) · HP F9 (Esc) · ASUS F8/Esc · Acer F12 · MSI F11 · Samsung F10 · Mac Option(⌥).
+- SATA 모드는 AHCI 권장 (Intel RST/RAID에서는 디스크가 안 보일 수 있음) / use AHCI, not RST/RAID.
+- Secure Boot는 켜둬도 된다 (✅) / Secure Boot can stay on.
+
+### 5. 설치 / Install
+- **ISO(Anaconda)** ⚠️ 미검증: USB로 부팅 → 설치 디스크 선택 → 설치 → 재부팅. 네트워크 설정 화면은 없다(첫 부팅 후 설정).
+- **다른 리눅스에서 디스크로 직접 / from a live Linux to a disk** ✅ (VM에서 검증):
+  ```sh
+  sudo podman run --rm --privileged --pid=host -v /dev:/dev -v /var/lib/containers:/var/lib/containers \
+    --security-opt label=type:unconfined_t ghcr.io/head77x/oais:latest \
+    bootc install to-disk --wipe --generic-image --filesystem xfs \
+    --target-imgref ghcr.io/head77x/oais:latest /dev/sdX
+  ```
+  - `--generic-image`: UEFI와 BIOS 부트로더를 모두 설치. 없으면 UEFI로 부팅한 호스트에서는 BIOS 부팅이 안 된다 (✅ 확인).
+  - `--target-imgref`: 업데이트 받을 이미지 주소 / where `bootc upgrade` pulls from (⚠️ 미검증).
+  - 파티션 / partitions: BIOS-BOOT 1 MiB + EFI 512 MiB + 루트 XFS(나머지 전부) ✅.
+
+### 6. 첫 부팅 / First boot
+- 바로 Grok Bot 화면이 뜬다 ✅ (UEFI, Secure Boot, BIOS).
+- **Wi-Fi**: 독의 Wi-Fi 아이콘 또는 `Super+N` / `Alt+N` → nmtui (✅ 실행 확인, ⚠️ 실제 무선 접속 미검증). 유선은 자동 연결.
+- **Grok Bot 로그인/구독 / sign-in & subscription**: "Sign in" → 브라우저 계정 로그인 (⚠️ 이 문서 작성 중 로그인은 시험하지 않음).
+
+### 7. 업데이트와 롤백 / Updates & rollback (⚠️ 미검증)
+- `sudo bootc upgrade` 후 재부팅 / then reboot. `sudo bootc status`로 확인.
+- 문제가 있으면 `sudo bootc rollback` 후 재부팅, 또는 GRUB 메뉴에서 이전 항목 선택 (이전 항목은 첫 업데이트 후 생긴다).
+
+### 8. 문제 해결 / Troubleshooting
+- BIOS 노트북에서 "Booting from Hard Disk..."에서 멈춤 → `--generic-image` 없이 설치됨. 다시 설치 / reinstall with `--generic-image`.
+- `No root filesystem specified` → `--filesystem xfs` 추가 (이 이미지에는 기본값이 들어 있다).
+- Wi-Fi 목록이 비었음 → `nmcli radio wifi on`, `nmcli device`; Broadcom `wl` 칩은 미지원.
+- 화면이 검게 나옴(NVIDIA) → GRUB에서 `e` → 커널 인자에 `nomodeset` 추가.
+- 업데이트 실패(403) → GHCR 이미지가 아직 공개되지 않았다 / image not public yet.
+
 ## 로컬 빌드 / Build locally
 
 Podman과 just가 있는 Linux 머신에서. VM으로 띄우는 순서는 [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md).
