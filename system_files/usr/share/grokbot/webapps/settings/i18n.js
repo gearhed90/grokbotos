@@ -36,7 +36,7 @@ window.I18N = {
     show_all: "Show all functions", show_granted: "Show granted only",
     audit_title: "Audit log", audit_sub: "Every OS API call, allowed or denied. Passwords are never recorded.",
     time: "Time", who: "Who", method: "Action", decision: "Result", all: "All",
-    dec_allow: "allowed", dec_deny: "denied", dec_error: "error", entries: "entries"
+    writes_only: "Changes only", dec_allow: "allowed", dec_deny: "denied", dec_error: "error", entries: "entries"
   },
   ko: {
     app_title: "설정", lang_other: "English",
@@ -73,6 +73,6 @@ window.I18N = {
     show_all: "모든 기능 보기", show_granted: "권한 있는 것만 보기",
     audit_title: "감사 기록", audit_sub: "허용·거부된 모든 OS API 호출. 비밀번호는 기록하지 않습니다.",
     time: "시각", who: "누가", method: "동작", decision: "결과", all: "전체",
-    dec_allow: "허용", dec_deny: "거부", dec_error: "오류", entries: "건"
+    writes_only: "변경만", dec_allow: "허용", dec_deny: "거부", dec_error: "오류", entries: "건"
   }
 };

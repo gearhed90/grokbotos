@@ -197,12 +197,14 @@
       ...cards];
   };
 
-  let auditFilter = "";
+  let auditFilter = "", auditWrites = true;
   pages.audit = async () => {
     const params = { limit: 200 }; if (auditFilter) params.decision = auditFilter;
+    if (auditWrites) params.access = "write";
     const a = await rpc("audit.list", params);
     const filters = h("div", { class: "filters" }, ...["", "allow", "deny", "error"].map((d) =>
       h("button", { type: "button", class: d === auditFilter ? "primary" : "", onclick: () => { auditFilter = d; render(); } }, d ? t("dec_" + d) : t("all"))),
+      h("button", { type: "button", class: auditWrites ? "primary" : "", onclick: () => { auditWrites = !auditWrites; render(); } }, t("writes_only")),
       h("button", { type: "button", onclick: render }, t("refresh")), h("span", { class: "dim" }, a.total + " " + t("entries")));
     const tbl = h("table", {}, h("tr", {}, h("th", {}, t("time")), h("th", {}, t("who")), h("th", {}, t("method")), h("th", {}, t("scope")), h("th", {}, t("decision"))));
     for (const e of a.entries.slice().reverse()) {
