@@ -105,6 +105,14 @@ class MediaKeyTests(tg.Base):
         self.assertIsNone(self.rpc_unix("media.keys.wait", {"timeout": 0})["result"]["key"])
         self.assertIn("error", self.rpc_unix("media.keys.press", {"key": "rm"}))
 
+    def test_wait_is_audited_once_per_subscription(self):
+        def n():
+            return len([x for x in self.audit() if x.get("method") == "media.keys.wait"])
+        before = n()
+        for _ in range(4):   # back-to-back polls = one subscription
+            self.rpc_unix("media.keys.wait", {"timeout": 0})
+        self.assertLessEqual(n() - before, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

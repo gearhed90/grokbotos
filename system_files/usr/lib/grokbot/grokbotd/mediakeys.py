@@ -52,4 +52,31 @@ def wait(params):
             _waiters.remove(token)
 
 
+# Audit once per subscription, not once per long poll: a player re-polls
+# every ~25 s, which would flood the log. A wait that starts within
+# GAP_S of the same caller's previous wait ending (or while one is open)
+# continues that subscription.
+GAP_S = 10
+_subs = {}            # principal -> [open waits, last end time]
+
+
+def begin(principal):
+    """True when this wait starts a new subscription (so it is audited)."""
+    with _cond:
+        st = _subs.get(principal)
+        new = st is None or (st[0] == 0 and time.time() - st[1] > GAP_S)
+        if st is None or new:
+            st = _subs[principal] = [0, 0.0]
+        st[0] += 1
+        return new
+
+
+def end(principal):
+    with _cond:
+        st = _subs.get(principal)
+        if st:
+            st[0] = max(0, st[0] - 1)
+            st[1] = time.time()
+
+
 METHODS = {"media.keys.press": press, "media.keys.wait": wait}

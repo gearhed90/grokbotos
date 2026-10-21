@@ -58,7 +58,7 @@ prompt. See "Permission model" below and the threat model in
 | `files.read` | `files` read | `files.read` | File content (max 16 MB), `encoding` `utf-8` (default) or `base64` |
 | `files.write` | `files-write` write | `files.write` | Create a file, or replace it with `overwrite: true` (atomic rename). Max 16 MB |
 | `files.mkdir` / `files.move` / `files.trash` | `files-write` write | `files.write` | New folder; rename or move (`path`, `to`); move to the freedesktop trash (`~/.local/share/Trash`) |
-| `media.keys.wait` | `mediakeys` read | `mediakeys.read` | Long poll (`timeout` ≤ 55 s) for a media key: `{key}` (`play-pause`, `play`, `pause`, `next`, `previous`, `stop`) or `{key: null}`. The newest waiter gets the key |
+| `media.keys.wait` | `mediakeys` read | `mediakeys.read` | Long poll (`timeout` ≤ 55 s; audited once per subscription, not per poll) for a media key: `{key}` (`play-pause`, `play`, `pause`, `next`, `previous`, `stop`) or `{key: null}`. The newest waiter gets the key |
 | `media.keys.press` | `mediakeys` write | `mediakeys.write` | Deliver a media key (sway's XF86Audio* bindings run `grokbot-os media-key KEY`; with no waiter it falls back to playerctl) |
 | `audit.list` | `audit` read | `audit.read` | Recent audit log entries, newest last. Filters: principal, decision, method. |
 
