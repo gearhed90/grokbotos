@@ -1037,3 +1037,9 @@ The earlier "names kept on purpose" decision is reversed. `IMAGE_NAME=grokbotos`
 Only `ID=fedora` in os-release stays (bootc and package tooling read it).
 Mentions of `oais` above are history and were left as written. Existing installs
 migrate with `sudo bootc switch ghcr.io/head77x/grokbotos:latest` (arm64: `-arm64`).
+
+## 2026-10-22 legacy/orchestrator 삭제, 베이스 이미지 다이제스트 고정 (보안 리뷰)
+
+보안 리뷰(커밋 6f4d32f)의 L 항목: `legacy/orchestrator/webshell/server.py`의 `/api/prompt`는 인증과 Origin 검사가 없어서, 아무 웹사이트나 명령을 실행시킬 수 있었다(고정 포트 8765). 이미지에는 들어가지 않았지만 되살릴 계획이 없으므로 저장소에서 지웠다. 필요하면 git 기록에서 찾는다. `test-contracts.sh`는 그 디렉터리가 돌아오면 실패한다.
+
+항목 #8: `Containerfile`의 `fedora-bootc`와 `grokbotos.env`의 `BIB_IMAGE`를 다이제스트로 고정했다(태그는 주석과 `:latest@sha256:` 형태로 남김). 업데이트는 다이제스트를 바꾸는 커밋으로만 한다. `.github/workflows/build-disk.yml`의 `BIB_IMAGE`와 `check.yml`의 `permissions:`는 규칙상 이 PR에서 고치지 않았다.

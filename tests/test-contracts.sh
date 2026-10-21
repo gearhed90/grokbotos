@@ -14,6 +14,14 @@ fi
 if grep -n 'legacy' Containerfile; then
     fail "Containerfile references legacy/"
 fi
+# Security review L: the old orchestrator (unauthenticated web shell) is
+# gone from the repository, not just from the image.
+if [[ -e legacy/orchestrator || -e orchestrator ]]; then
+    fail "legacy orchestrator code is back in the repository"
+fi
+# Security review #8: base image and bootc-image-builder pinned by digest.
+grep -qE '^FROM [^ ]+@sha256:[0-9a-f]{64}' Containerfile || fail "Containerfile base is not pinned by digest"
+grep -qE '^BIB_IMAGE="[^"]+@sha256:[0-9a-f]{64}"' grokbotos.env || fail "BIB_IMAGE is not pinned by digest"
 
 if grep -RInE '(^|[^[:alnum:]_])aios([^[:alnum:]_]|$)' \
     system_files build_files Containerfile Justfile; then
