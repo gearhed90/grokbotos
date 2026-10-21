@@ -14,7 +14,8 @@
     "lock.read": "Screen lock and idle state: whether a PIN is set, locked, idle timeouts",
     "audio.read": "Output and input volume and mute state",
     "display.read": "Display backlight brightness",
-    "notifications.read": "Notification app names and summaries (never bodies) and Do Not Disturb state"
+    "notifications.read": "Notification app names and summaries (never bodies) and Do Not Disturb state",
+    "capture.read": "Screenshot folder, file names and sizes (never image data)"
   },
   "methods": {
     "api.methods": {
@@ -94,6 +95,12 @@
       "capability": "notifications.read",
       "params": {"type": "object", "properties": {"include_history": {"type": "boolean", "default": false}}, "additionalProperties": false},
       "result": {"type": "object", "required": ["daemon_running", "dnd", "notifications"]}
+    },
+    "capture.status": {
+      "description": "Screenshot folder, number of PNG files, the newest `limit` (name, size, mtime) and whether grim, slurp and wl-copy are installed. Never returns image data.",
+      "capability": "capture.read",
+      "params": {"type": "object", "properties": {"limit": {"type": "integer", "default": 10}}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["dir", "count", "recent", "tools"]}
     }
   }
 }

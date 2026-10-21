@@ -27,6 +27,7 @@ first, Chromium only, `.gbapp` bundles, polkit for privileged actions).
 | `audio.status` | `audio.read` | `available`, `output` and `input`: `volume_percent`, `muted` |
 | `display.brightness` | `display.read` | Backlight `devices`: name, brightness, max_brightness, percent |
 | `notifications.list` | `notifications.read` | `daemon_running`, `dnd`, `notifications` (id, app, summary, urgency; never the body). Param `include_history` |
+| `capture.status` | `capture.read` | Screenshot `dir`, `count`, `recent` (name, size, mtime; never image data), `tools`. Param `limit` |
 
 Errors are JSON-RPC errors:
 

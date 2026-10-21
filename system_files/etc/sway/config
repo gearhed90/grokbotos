@@ -81,6 +81,10 @@ bindsym --locked XF86AudioPrev exec playerctl previous
 exec /usr/local/bin/grokbot-notify --serve >>"$HOME/.local/share/grokbot/notify.log" 2>&1
 bindsym Mod4+Shift+n exec /usr/local/bin/grokbot-notify-dnd toggle
 bindsym Mod1+Shift+n exec /usr/local/bin/grokbot-notify-dnd toggle
+# Screenshots: Print = whole screen, Shift+Print = region. Saved to
+# ~/Pictures/Screenshots and copied to the clipboard.
+bindsym Print exec /usr/local/bin/grokbot-capture full
+bindsym Shift+Print exec /usr/local/bin/grokbot-capture region
 bindsym Mod1+Tab exec /usr/lib/grokbot/grokbot-alttab.py next
 bindsym Mod1+Shift+Tab exec /usr/lib/grokbot/grokbot-alttab.py prev
 # Close the focused window. Grok Bot is restarted by grokbot-kiosk.

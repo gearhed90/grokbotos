@@ -29,6 +29,8 @@ The end of the dock shows Wi-Fi, volume, battery and the clock. Click Wi-Fi for 
 | `Alt+F4`, `Super+Q` | 창 닫기 / close window |
 | `Super+L`, `Alt+L` | 화면 잠금 / lock the screen ([잠금 / lock](lock-and-idle.md)) |
 | `Super+Shift+N`, `Alt+Shift+N` | 방해 금지 켜기/끄기 / toggle Do Not Disturb |
+| `Print` | 전체 화면 스크린샷 / full screenshot |
+| `Shift+Print` | 영역 스크린샷 / region screenshot |
 | 볼륨 키 / volume keys, 음소거 / mute | 볼륨 조절, 화면에 막대 표시 / change volume with an on-screen bar |
 | 밝기 키 / brightness keys | 화면 밝기 / screen brightness |
 | 재생·다음·이전 / play, next, previous | 미디어 재생 제어 / media control (playerctl) |
