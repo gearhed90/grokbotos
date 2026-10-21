@@ -282,6 +282,7 @@ def stage_url(url, tmp):
             _, _, mb = _fetch(urllib.parse.urljoin(final, found.manifest), MAX_FETCH)
             man_url = urllib.parse.urljoin(final, found.manifest)
             man = parse_manifest(json.loads(mb))
+            man["from_manifest"] = True
         except (InstallError, ValueError, OSError):
             man = None
     if man is None:
@@ -429,8 +430,10 @@ def install(params, ctx):
         else:
             man, origin, icon_file = stage_url(params["url"], tmp)
             source, src = "url", None
-        app_id = params.get("id") or man.get("id") or _slug(man.get("short_name") or man["name"]) or \
-            (_slug(urllib.parse.urlsplit(man["start_url"]).hostname) if source == "url" else None)
+        host_slug = _slug((urllib.parse.urlsplit(man["start_url"]).hostname or "").replace(".", "-")) \
+            if source == "url" else None
+        app_id = params.get("id") or man.get("id") or _slug(man.get("short_name")) or \
+            (host_slug if source == "url" and not man.get("from_manifest") else None) or _slug(man["name"]) or host_slug
         if not app_id or not ID_RE.fullmatch(app_id):
             raise InstallError("app id must match [a-z][a-z0-9-]{0,30}; pass id=")
         if app_id in RESERVED or os.path.isdir(os.path.join(system_dir(), app_id)):

@@ -11,7 +11,8 @@
       onbat: "배터리 사용 중", online: "인터넷 연결됨", offline_net: "연결 안 됨", rx: "받기", tx: "보내기",
       allow: "허용", deny: "거부", error: "오류", callers: "많이 부른 곳", lastdeny: "최근 거부",
       history: "저장된 기록 %s개 (이 앱 전용 저장소, 다시 시작해도 유지)", persist: "영구 저장소: %s", yes: "예", no: "아니요",
-      local: "이 컴퓨터의 프로그램", none: "없음", asking: "확인 창에서 선택해 주세요…" },
+      local: "이 컴퓨터의 프로그램", none: "없음", asking: "확인 창에서 선택해 주세요…",
+      askmode: "\"%s\" 권한이 \"매번 확인\"이라 자동으로 새로 고치지 않습니다. 설정 > 권한에서 \"허용\"으로 바꾸거나:", showonce: "지금 한 번 보기" },
     en: { title: "System Monitor", cpu: "CPU", memory: "Memory", disk: "Disk", battery: "Battery", network: "Network",
       audit: "OS API audit (last 200)", lang: "한국어", live: "Live", offline: "Offline · saved history",
       need: "This needs the \"%s\" permission.", ask: "Ask for permission", denied: "Denied. Change it in Settings > Permissions.",
@@ -20,7 +21,8 @@
       onbat: "On battery", online: "Online", offline_net: "Offline", rx: "In", tx: "Out",
       allow: "allowed", deny: "denied", error: "error", callers: "Top callers", lastdeny: "Recent denials",
       history: "%s samples saved (this app's own storage, kept across restarts)", persist: "Persistent storage: %s", yes: "yes", no: "no",
-      local: "Program on this computer", none: "none", asking: "Answer the prompt…" }
+      local: "Program on this computer", none: "none", asking: "Answer the prompt…",
+      askmode: "\"%s\" is set to ask every time, so this does not refresh by itself. Allow it in Settings > Permissions, or:", showonce: "Show once now" }
   };
   const SCOPE = { system: ["시스템 정보", "System information"], power: ["전원", "Power"], network: ["네트워크", "Network"], audit: ["감사 기록", "Audit log"] };
   let lang = localStorage.getItem("sysmon.lang") || "ko";
@@ -93,7 +95,7 @@
     el.replaceChildren(el.firstElementChild && el.firstElementChild.tagName === "H2" ? el.firstElementChild : h("h2", {}, ""));
     const name = SCOPE[scope][lang === "ko" ? 0 : 1];
     const box = h("div", { class: "need" }, h("div", {}, t("need", name)));
-    const msg = h("div", { class: "dim" }, err === "deny" ? t("denied") : "");
+    const msg = h("div", { class: "dim" }, "");
     box.append(h("button", { type: "button", class: "primary", onclick: () => ask(scope, msg) }, t("ask")), msg);
     el.append(box);
   }
@@ -103,10 +105,25 @@
       const r = await rpc("permissions.request", { scope, reason: lang === "ko" ? "시스템 모니터 화면에 표시" : "Shown in System Monitor" });
       msg.textContent = r.mode === "deny" ? t("denied") : "";
       need[scope] = r.mode === "deny";
+      await refreshModes();
       tick(true);
     } catch (e) { msg.textContent = e.code === -32001 && e.data && e.data.retry_after_s ? t("later") : e.message; }
   }
-  async function guarded(scope, el, fn) {
+  // Effective mode per method (api.methods needs no grant). Only "allow"
+  // methods are polled: an "ask" scope would prompt on every poll.
+  let modes = {};
+  async function refreshModes() {
+    try { const m = await rpc("api.methods"); modes = Object.fromEntries(m.methods.map((x) => [x.name, x.mode])); } catch (e) { /* offline */ }
+  }
+  function askCard(el, scope, method) {
+    el.dataset.need = "1";
+    el.replaceChildren(el.firstElementChild && el.firstElementChild.tagName === "H2" ? el.firstElementChild : h("h2", {}, ""));
+    el.append(h("div", { class: "need" }, h("div", {}, t("askmode", SCOPE[scope][lang === "ko" ? 0 : 1])),
+      h("button", { type: "button", onclick: () => { modes[method] = "allow"; tick(true).finally(refreshModes); } }, t("showonce"))));
+  }
+  async function guarded(scope, el, fn, method) {
+    if (method && modes[method] === "ask") { askCard(el, scope, method); return null; }
+    if (method && modes[method] === "deny") { needCard(el, scope); need[scope] = true; return null; }
     try { const r = await fn(); need[scope] = false; return r; }
     catch (e) {
       if (e.code === -32001) { need[scope] = true; needCard(el, scope, e.data && e.data.mode); return null; }
@@ -116,7 +133,7 @@
 
   let lastNet = null, online = true;
   async function resources() {
-    const r = await guarded("system", $("c-cpu"), () => rpc("system.resources"));
+    const r = await guarded("system", $("c-cpu"), () => rpc("system.resources"), "system.resources");
     if (!r) { needCard($("c-mem"), "system"); needCard($("c-disk"), "system"); return; }
     restore("c-cpu"); restore("c-mem"); restore("c-disk");
     const cpu = r.cpu.percent, mem = r.memory, memPct = mem.total_bytes ? 100 * (1 - mem.available_bytes / mem.total_bytes) : 0;
@@ -140,7 +157,7 @@
   function restore(id) { if (saved[id] && $(id).dataset.need !== "0") { $(id).replaceChildren(...saved[id]); $(id).dataset.need = "0"; } }
 
   async function battery() {
-    const p = await guarded("power", $("c-bat"), () => rpc("power.status"));
+    const p = await guarded("power", $("c-bat"), () => rpc("power.status"), "power.status");
     if (!p) return;
     restore("c-bat");
     const el = $("bat-v");
@@ -150,7 +167,7 @@
   }
 
   async function network() {
-    const n = await guarded("network", $("c-net"), () => rpc("network.status"));
+    const n = await guarded("network", $("c-net"), () => rpc("network.status"), "network.status");
     if (!n) return;
     restore("c-net");
     const rows = [h("div", { class: "kv" }, h("b", {}, n.online ? t("online") : t("offline_net")),
@@ -168,7 +185,7 @@
     return p;
   }
   async function auditSummary() {
-    const a = await guarded("audit", $("c-audit"), () => rpc("audit.list", { limit: 200 }));
+    const a = await guarded("audit", $("c-audit"), () => rpc("audit.list", { limit: 200 }), "audit.list");
     if (!a) return;
     restore("c-audit");
     const e = a.entries || [], cnt = { allow: 0, deny: 0, error: 0 }, by = {};
@@ -187,13 +204,17 @@
     $("status").textContent = ok ? t("live") : t("offline");
     if (!ok) { spark($("cpu-g"), samples.map((x) => x.cpu), "#3b82f6"); spark($("mem-g"), samples.map((x) => x.mem), "#22c55e"); }
   }
-  let slow = 0;
+  let slow = 0, busy = false;
   async function tick(all) {
+    if (busy) return;  // never stack calls behind an open prompt
+    busy = true;
     try {
+      if (all || slow % 5 === 0) await refreshModes();
       await resources();
       if (all || slow++ % 5 === 0) await Promise.all([battery(), network(), auditSummary()]);
       status(true);
     } catch (e) { status(false); }
+    finally { busy = false; }
     foot();
   }
   let persisted = null;

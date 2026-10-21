@@ -168,6 +168,21 @@ def run_call(method, params, as_json):
     return 0
 
 
+def _install_human(p):
+    try:
+        resp = Client().call("apps.install", p)
+    except Unreachable as e:
+        sys.stderr.write("grokbot-os: %s\n" % e)
+        return 1
+    if "error" in resp:
+        sys.stderr.write("grokbot-os: %s (%s)\n" % (resp["error"].get("message"), resp["error"].get("code")))
+        return 2 if resp["error"].get("code") in (-32602, -32001) else 1
+    a = resp["result"]
+    print("installed %s  %s  %s  asks for: %s" % (a["id"], a.get("name_ko") or a["name"], a["origin"],
+                                                ", ".join(a.get("scopes") or []) or "-"))
+    return 0
+
+
 def cmd_apps(args, as_json):
     sub = args[0] if args else "list"
     rest = args[1:]
@@ -192,7 +207,8 @@ def cmd_apps(args, as_json):
         p = {"url": src} if src.startswith(("http://", "https://")) else {"path": os.path.abspath(src)}
         if len(rest) == 2:
             p["id"] = rest[1]
-        return run_call("apps.install", p, as_json)
+        rc = run_call("apps.install", p, True) if as_json else _install_human(p)
+        return rc
     if sub == "uninstall" and rest and len(rest) <= 2 and (len(rest) == 1 or rest[1] == "--keep-data"):
         return run_call("apps.uninstall", {"id": rest[0], "keep_data": len(rest) == 2}, as_json)
     if sub == "launch" and len(rest) == 1:
