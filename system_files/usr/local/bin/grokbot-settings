@@ -28,9 +28,9 @@ mkdir -p "$profile/chrome"
 cat >"$profile/chrome/userChrome.css" <<'CSS'
 #TabsToolbar, #nav-bar, #PersonalToolbar, #titlebar, #sidebar-box { visibility: collapse !important; }
 CSS
-if [[ ! -f $profile/user.js ]]; then
-    # No first-run pages, telemetry, password saving or session restore.
-    cat >"$profile/user.js" <<'JS'
+# Rewritten on every launch so new prefs reach existing profiles.
+# No first-run pages, telemetry, password saving or session restore.
+cat >"$profile/user.js" <<'JS'
 user_pref("browser.shell.checkDefaultBrowser", false);
 user_pref("browser.startup.homepage_override.mstone", "ignore");
 user_pref("startup.homepage_welcome_url", "");
@@ -42,7 +42,10 @@ user_pref("browser.translations.automaticallyPopup", false);
 user_pref("intl.accept_languages", "ko-KR, ko, en-US, en");
 user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
 user_pref("browser.tabs.inTitlebar", 0);
+// Service worker (offline shell) needs a secure context; the host is loopback.
+user_pref("dom.serviceWorkers.enabled", true);
+user_pref("dom.securecontext.allowlist", "settings.app.localhost");
+user_pref("privacy.clearOnShutdown.offlineApps", false);
 JS
-fi
 exec /usr/local/bin/grokbot-run firefox --new-instance --no-remote --profile "$profile" \
     --name grokbot-settings --class grokbot-settings "$url"

@@ -240,9 +240,18 @@
       const kids = await fn();
       main.replaceChildren(...kids);
     } catch (e) {
+      if (!(e instanceof ApiError)) {
+        // fetch failed: grokbotd is not answering. Show an offline view and retry.
+        main.replaceChildren(h("h2", {}, t("nav_" + page)), card(null,
+          h("p", { class: "err" }, t("offline_title")), h("p", { class: "dim" }, t("offline_body")),
+          h("button", { type: "button", onclick: render }, t("offline_retry"))));
+        clearTimeout(render.retry); render.retry = setTimeout(render, 5000);
+        return;
+      }
       main.replaceChildren(h("h2", {}, t("nav_" + page)), card(null, h("p", { class: "err" }, explain(e))));
     }
   }
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   document.getElementById("lang").addEventListener("click", () => {
     lang = lang === "ko" ? "en" : "ko"; localStorage.setItem("lang", lang); applyStatic(); render();
   });
