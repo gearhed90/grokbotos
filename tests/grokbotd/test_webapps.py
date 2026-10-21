@@ -46,8 +46,13 @@ class WebappTests(tg.Base):
             json.dump({"origins": {o: {"audio": "allow"}}}, f)
         try:
             code, _, body = self.http("/v1/rpc", {"jsonrpc": "2.0", "id": 1, "method": "audio.status"},
-                                      {"Host": o[7:], "Sec-Fetch-Site": "same-origin"})
+                                      {"Host": o[7:], "Sec-Fetch-Site": "same-origin",
+                                       "Cookie": "gbt=" + self.app_token(o)})
             self.assertEqual(code, 200, body)
+            # without the launcher's cookie the same request is anonymous
+            code, _, _ = self.http("/v1/rpc", {"jsonrpc": "2.0", "id": 1, "method": "audio.status"},
+                                   {"Host": o[7:], "Sec-Fetch-Site": "same-origin"})
+            self.assertEqual(code, 403)
             # cross-site without Origin stays anonymous
             code, _, _ = self.http("/v1/rpc", {"jsonrpc": "2.0", "id": 1, "method": "audio.status"},
                                    {"Host": o[7:], "Sec-Fetch-Site": "cross-site"})
@@ -107,3 +112,92 @@ class SettingsStaticTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AppTokenTests(tg.Base):
+    """Finding #3: a local process can write any Origin header."""
+
+    def rpc(self, headers):
+        return self.http("/v1/rpc", {"jsonrpc": "2.0", "id": 1, "method": "audio.status"}, headers)
+
+    def test_app_origin_needs_launcher_cookie(self):
+        o = "http://settings.app.localhost:%d" % self.port
+        with open(os.path.join(self.tmp.name, "cfg", "grokbot", "api-permissions.json"), "w") as f:
+            json.dump({"origins": {o: {"audio": "allow"}}}, f)
+        try:
+            self.assertEqual(self.rpc({"Origin": o})[0], 200)
+            self.assertEqual(self.rpc({"Origin": o, "Cookie": "gbt=" + "0" * 64})[0], 403)
+            self.assertEqual(self.rpc({"Origin": o, "Cookie": "x=1"})[0], 403)
+            # a token is bound to its origin
+            other = self.app_token("http://notes.app.localhost:%d" % self.port)
+            self.assertEqual(self.rpc({"Origin": o, "Cookie": "gbt=" + other})[0], 403)
+            ev = [e for e in self.audit() if e.get("error") == "app_token_missing"]
+            self.assertTrue(ev)
+        finally:
+            self.grant({})
+
+    def test_launch_url_sets_cookie_and_redirects(self):
+        o = "http://settings.app.localhost:%d" % self.port
+        tok = self.app_token(o)
+        conn = __import__("http.client").client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        conn.request("GET", "/?gbt=%s&x=1" % tok, headers={"Host": o[7:]})
+        r = conn.getresponse()
+        r.read()
+        self.assertEqual(r.status, 303)
+        self.assertEqual(r.getheader("Location"), "/?x=1")
+        c = r.getheader("Set-Cookie")
+        self.assertIn("gbt=" + tok, c)
+        for a in ("HttpOnly", "SameSite=Strict", "Path=/"):
+            self.assertIn(a, c)
+        conn.request("GET", "/?gbt=bad", headers={"Host": o[7:]})
+        r = conn.getresponse()
+        r.read()
+        self.assertEqual(r.status, 303)
+        self.assertIsNone(r.getheader("Set-Cookie"))
+        conn.close()
+        key = os.path.join(self.tmp.name, "state", "grokbot", "webapp-key")
+        self.assertEqual(os.stat(key).st_mode & 0o777, 0o600)
+
+
+class OriginPeerTests(tg.Base):
+    """Origin from a program that is not a browser is ignored."""
+
+    trust_peer = False
+
+    def test_script_origin_is_anonymous(self):
+        o = "http://settings.app.localhost:%d" % self.port
+        with open(os.path.join(self.tmp.name, "cfg", "grokbot", "api-permissions.json"), "w") as f:
+            json.dump({"origins": {o: {"audio": "allow"}}}, f)
+        try:
+            code, h, _ = self.http("/v1/rpc", {"jsonrpc": "2.0", "id": 1, "method": "audio.status"}, {"Origin": o})
+            self.assertEqual(code, 403)
+            self.assertNotIn("Access-Control-Allow-Origin", h)
+            self.assertTrue([e for e in self.audit() if e.get("error") == "origin_untrusted_peer"])
+        finally:
+            self.grant({})
+
+
+class PeerUnitTests(unittest.TestCase):
+    def test_peer_is_browser(self):
+        from grokbotd import policy
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            def proc(pid, exe, root, inode):
+                os.makedirs(os.path.join(d, str(pid), "fd"))
+                os.symlink(exe, os.path.join(d, str(pid), "exe"))
+                os.symlink(root, os.path.join(d, str(pid), "root"))
+                os.symlink("socket:[%d]" % inode, os.path.join(d, str(pid), "fd", "7"))
+            proc(10, "/usr/lib64/firefox/firefox", "/", 100)
+            proc(11, "/usr/bin/curl", "/", 101)
+            proc(12, "/app/bin/firefox", "/proc/12/root-elsewhere", 102)
+            old = os.environ.pop("GROKBOT_TRUST_ANY_ORIGIN_PEER", None)
+            try:
+                self.assertEqual(policy.socket_owner(100, d), 10)
+                self.assertTrue(policy.peer_is_browser(100, d))
+                self.assertFalse(policy.peer_is_browser(101, d))
+                self.assertFalse(policy.peer_is_browser(102, d))  # sandboxed
+                self.assertFalse(policy.peer_is_browser(999, d))
+                self.assertFalse(policy.peer_is_browser(None, d))
+            finally:
+                if old is not None:
+                    os.environ["GROKBOT_TRUST_ANY_ORIGIN_PEER"] = old

@@ -3,6 +3,7 @@
 Runs the real daemon in a temporary XDG tree with a fake sway IPC socket.
 """
 import json
+import re
 import os
 import socket
 import socketserver
@@ -74,6 +75,7 @@ def free_port():
 
 
 class Base(unittest.TestCase):
+    trust_peer = True
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
@@ -94,6 +96,8 @@ class Base(unittest.TestCase):
             "GROKBOT_WEBAPPS_DIR": os.path.join(SF, "usr", "share", "grokbot", "webapps"),
             "GROKBOT_UPDATE_RUN": os.path.join(t, "run-update"),
             "GROKBOT_HEALTH_DIR": os.path.join(t, "health"),
+            # urllib stands in for the browser; OriginPeerTests turns this off.
+            "GROKBOT_TRUST_ANY_ORIGIN_PEER": "1" if cls.trust_peer else "0",
         })
         # Fake tools: the daemon must never touch the real machine in tests
         # (systemctl suspend, nmcli, wpctl ...). Each logs its argv.
@@ -166,6 +170,10 @@ class Base(unittest.TestCase):
         if body is not None:
             h["Content-Type"] = "application/json"
         h.update(headers or {})
+        o = h.get("Origin") or ""
+        if re.fullmatch(r"http://[a-z0-9-]+\.app\.localhost(:\d+)?", o) and "Cookie" not in h \
+                and not getattr(self, "no_app_cookie", False):
+            h["Cookie"] = "gbt=" + self.app_token(o)
         req = urllib.request.Request("http://127.0.0.1:%d%s" % (self.port, path),
                                      data=None if body is None else json.dumps(body).encode(),
                                      headers=h, method=method)
@@ -175,6 +183,11 @@ class Base(unittest.TestCase):
         except urllib.error.HTTPError as e:
             data = e.read()
             return e.code, dict(e.headers), json.loads(data) if data else None
+
+    def app_token(self, origin):
+        env = dict(os.environ, XDG_STATE_HOME=self.env["XDG_STATE_HOME"])
+        return subprocess.run([sys.executable, "-m", "grokbotd.apptoken", origin], env=dict(env, PYTHONPATH=LIB),
+                              capture_output=True, text=True, check=True).stdout.strip()
 
     def grant(self, origins):
         with open(os.path.join(self.tmp.name, "cfg", "grokbot", "api-permissions.json"), "w") as f:

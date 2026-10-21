@@ -68,8 +68,15 @@ if pgrep -f -- "--profile $profile" >/dev/null 2>&1; then
 fi
 # grokbot-run hands the command to sway and returns at once, so keep the
 # lock until the window maps (max 10 s) to cover a quick second launch.
+# System web apps must show the per-origin token once (grokbotd/apptoken.py):
+# the server turns it into an HttpOnly cookie and redirects to the clean URL.
+gb_token() {
+    PYTHONPATH=${GROKBOT_LIB:-/usr/lib/grokbot} python3 -m grokbotd.apptoken "$1"
+}
+origin="http://settings.app.localhost:${port}"
+launch_url="${origin}/?gbt=$(gb_token "$origin")${page:+#$page}"
 /usr/local/bin/grokbot-run firefox --new-instance --no-remote --profile "$profile" \
-    --name grokbot-settings --class grokbot-settings "$url"
+    --name grokbot-settings --class grokbot-settings "$launch_url"
 for _ in $(seq 1 40); do
     swaymsg -t get_tree 2>/dev/null | grep -q '"app_id": "grokbot-settings"' && exit 0
     sleep 0.25
