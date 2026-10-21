@@ -336,6 +336,8 @@ class Dock:
             lab.set_text(item["text"] if (horiz or mode == "labels" or item["icon"] is None) else "")
             if item["id"] == "clock" and not horiz and mode != "labels":
                 lab.set_text(item["text"].replace(":", "\n"))
+            # Every dock, including icon-only top/bottom: the label lives
+            # in the tooltip (충전 중, 전원 연결됨, 전원 연결됨 (가득 참), NN%).
             btn.set_tooltip_text(item["tooltip"])
         return True
 

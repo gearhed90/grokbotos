@@ -66,11 +66,14 @@ def _battery(power):
         text = "충전 중"
         tip = "충전 중 / Charging %s" % pct
     elif plugged:
-        # ac-adapter-symbolic is Adwaita's plug icon.
-        icon = "ac-adapter-symbolic"
         if status == "full":
+            # Adwaita status icon: full battery plus a charged mark.
+            # Not charging keeps the plug (ac-adapter-symbolic) so an
+            # icon-only dock can tell the two apart.
+            icon = "battery-level-100-charged-symbolic"
             text, tip = "전원 연결됨 (가득 참)", "전원 연결됨 (가득 참) / Plugged in (full)"
         else:
+            icon = "ac-adapter-symbolic"
             text, tip = "전원 연결됨", "전원 연결됨 / Plugged in %s" % pct
     else:
         icon = "battery-missing-symbolic" if level is None else "battery-level-%d-symbolic" % level

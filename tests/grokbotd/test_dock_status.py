@@ -69,6 +69,7 @@ class StatusTests(unittest.TestCase):
         charging = battery("Charging", 42, True)
         self.assertEqual(charging["icon"], "battery-level-40-charging-symbolic")
         self.assertEqual(charging["text"], "충전 중")
+        self.assertIn("충전 중", charging["tooltip"])
         self.assertNotIn("전원 연결됨", charging["text"])
 
         charging_off_ac = battery("Charging", 42, False)
@@ -76,16 +77,20 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(charging_off_ac["text"], "충전 중")
 
         full = battery("Full", 100, True)
-        self.assertEqual(full["icon"], "ac-adapter-symbolic")
+        self.assertEqual(full["icon"], "battery-level-100-charged-symbolic")
         self.assertEqual(full["text"], "전원 연결됨 (가득 참)")
+        self.assertIn("전원 연결됨 (가득 참)", full["tooltip"])
 
         held = battery("Not charging", 80, True)
         self.assertEqual(held["icon"], "ac-adapter-symbolic")
         self.assertEqual(held["text"], "전원 연결됨")
+        self.assertIn("전원 연결됨", held["tooltip"])
+        self.assertNotIn("가득", held["tooltip"])
 
         discharging = battery("Discharging", 78, False)
         self.assertEqual(discharging["icon"], "battery-level-80-symbolic")
         self.assertEqual(discharging["text"], "78%")
+        self.assertIn("78%", discharging["tooltip"])
         self.assertEqual(discharging["tooltip"], "배터리 / Battery 78%")
 
         # AC alone does not mean plugged-in or charging when the pack is discharging.
