@@ -179,7 +179,8 @@ class SchemaTests(unittest.TestCase):
         from grokbotd import schema
         for name in schema.load(SCHEMA)["methods"]:
             verb = name.split(".")[1]
-            self.assertIn(verb, ("methods", "info", "list", "get", "status"), name)
+            # "brightness" is a read (display.brightness), not a setter.
+            self.assertIn(verb, ("methods", "info", "list", "get", "status", "brightness"), name)
 
 
 class DaemonTests(Base):

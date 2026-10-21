@@ -31,6 +31,7 @@ exec qemu-system-x86_64 -accel "$accel" -m "$GBVM_MEM" -smp "$GBVM_SMP" -cpu max
     -device virtio-vga,xres=1280,yres=800 -display none \
     -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
     -device qemu-xhci -device usb-kbd -device usb-tablet \
+    -audiodev none,id=snd0 -device intel-hda -device hda-duplex,audiodev=snd0 \
     -serial "file:$GBVM_DIR/serial-$mode.log" \
     -monitor "unix:$GBVM_DIR/mon.sock,server,nowait" \
     -qmp "unix:$GBVM_DIR/qmp.sock,server,nowait"

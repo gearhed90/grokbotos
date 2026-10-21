@@ -11,7 +11,9 @@
     "apps.read": "Installed apps and launcher entries",
     "power.read": "Battery and AC status",
     "network.read": "Network interfaces, addresses and default route",
-    "lock.read": "Screen lock and idle state: whether a PIN is set, locked, idle timeouts"
+    "lock.read": "Screen lock and idle state: whether a PIN is set, locked, idle timeouts",
+    "audio.read": "Output and input volume and mute state",
+    "display.read": "Display backlight brightness"
   },
   "methods": {
     "api.methods": {
@@ -73,6 +75,18 @@
       "capability": "lock.read",
       "params": {"type": "object", "properties": {}, "additionalProperties": false},
       "result": {"type": "object", "required": ["pin_set", "locked", "idle_running", "screen_off_s", "lock_s"]}
+    },
+    "audio.status": {
+      "description": "Default output and input volume (percent) and mute state from PipeWire (wpctl).",
+      "capability": "audio.read",
+      "params": {"type": "object", "properties": {}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["available", "output", "input"]}
+    },
+    "display.brightness": {
+      "description": "Backlight devices with brightness, max_brightness and percent. Empty on desktops and VMs.",
+      "capability": "display.read",
+      "params": {"type": "object", "properties": {}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["available", "devices"]}
     }
   }
 }
