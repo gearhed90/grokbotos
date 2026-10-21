@@ -22,5 +22,6 @@ grokbot-dock-config reset
 | `Alt+G`, `Super+G` | Grok Bot으로 / back to Grok Bot |
 | `Alt+Tab`, `Alt+Shift+Tab` | 창 전환 / switch windows |
 | `Alt+F4`, `Super+Q` | 창 닫기 / close window |
+| `Super+L`, `Alt+L` | 화면 잠금 / lock the screen ([잠금 / lock](lock-and-idle.md)) |
 
 자세한 구현은 / Details: [`docs/DOCK.md`](../docs/DOCK.md)

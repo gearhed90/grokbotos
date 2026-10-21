@@ -12,7 +12,7 @@ import platform
 import socket
 import subprocess
 
-from . import paths, sway
+from . import lock, paths, sway
 
 
 class BackendError(RuntimeError):
@@ -252,4 +252,5 @@ METHODS = {
     "apps.list": apps_list,
     "power.status": power_status,
     "network.status": network_status,
+    "lock.status": lock.lock_status,
 }

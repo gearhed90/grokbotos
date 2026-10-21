@@ -56,6 +56,14 @@ bindsym Mod1+g exec /usr/local/bin/grokbot-focus
 # Wi-Fi / network setup (nmtui in a terminal). Works before Grok Bot sign-in.
 bindsym Mod4+n exec /usr/local/bin/grokbot-wifi
 bindsym Mod1+n exec /usr/local/bin/grokbot-wifi
+# Screen lock and idle (grokbot-idle: screen off 5 min, lock 10 min,
+# lock before sleep). Without a PIN, grokbot-lock opens the PIN setup.
+exec /usr/local/bin/grokbot-idle >>"$HOME/.local/share/grokbot/idle.log" 2>&1
+exec /usr/local/bin/grokbot-lock --first-boot
+for_window [app_id="grokbot-lock-setup"] floating enable, resize set 720 360, move position center
+for_window [app_id=".*"] inhibit_idle fullscreen
+bindsym Mod4+l exec /usr/local/bin/grokbot-lock
+bindsym Mod1+l exec /usr/local/bin/grokbot-lock
 bindsym Mod1+Tab exec /usr/lib/grokbot/grokbot-alttab.py next
 bindsym Mod1+Shift+Tab exec /usr/lib/grokbot/grokbot-alttab.py prev
 # Close the focused window. Grok Bot is restarted by grokbot-kiosk.

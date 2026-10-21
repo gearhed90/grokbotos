@@ -23,6 +23,7 @@ first, Chromium only, `.gbapp` bundles, polkit for privileged actions).
 | `apps.list` | `apps.read` | `installed` (records written by `grokbot-install`) and `launchers` (visible .desktop entries). Param `include_launchers` (default true) |
 | `power.status` | `power.read` | Batteries (capacity, status) and `on_ac` |
 | `network.status` | `network.read` | Interfaces (state, MAC, wireless, addresses), default route, `online` |
+| `lock.status` | `lock.read` | `pin_set` (never the PIN), `setup_skipped`, `locked`, `idle_running`, `screen_off_s`, `lock_s` |
 
 Errors are JSON-RPC errors:
 

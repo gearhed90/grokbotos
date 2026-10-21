@@ -1,0 +1,3 @@
+# The kiosk user may set its own screen-lock PIN (grokbot-lock-setup).
+# The helper only ever changes the password of $SUDO_USER.
+grokbot ALL=(root) NOPASSWD: /usr/lib/grokbot/lock-setpin.sh
