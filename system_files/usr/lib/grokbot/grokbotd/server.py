@@ -75,6 +75,20 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_file(self, full):
+        with open(full, "rb") as f:
+            data = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", WEBAPP_TYPES[os.path.splitext(full)[1]])
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", CSP)
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.end_headers()
+        self.wfile.write(data)
+
     def _guard(self):
         uid = policy.tcp_peer_uid(self.client_address[1], self.server.server_address[1])
         if uid != os.getuid():
@@ -88,6 +102,11 @@ class HttpHandler(BaseHTTPRequestHandler):
             self._send(403, {"error": "forbidden host"})
             return None
         origin = self.headers.get("Origin")
+        if origin is None and self.headers.get("Sec-Fetch-Site") == "same-origin" and \
+                webapp_file(self.headers.get("Host"), "/index.html"):
+            # Browsers may omit Origin on same-origin requests; Sec-Fetch-*
+            # cannot be set by page scripts.
+            origin = "http://" + self.headers.get("Host").lower()
         if origin is None:
             return ("http:no-origin", None)
         if not _origin_ok(origin):
@@ -120,6 +139,8 @@ class HttpHandler(BaseHTTPRequestHandler):
             self._send(200, {"ok": True, "service": "grokbotd", "version": VERSION}, cors)
         elif self.path == "/v1/schema":
             self._send(200, self.server.dispatcher.schema, cors)
+        elif not self.path.startswith("/v1/") and webapp_file(self.headers.get("Host"), self.path):
+            self._send_file(webapp_file(self.headers.get("Host"), self.path))
         else:
             self._send(404, {"error": "not found"}, cors)
 
@@ -153,6 +174,39 @@ class HttpHandler(BaseHTTPRequestHandler):
         if "error" in resp and resp["error"]["code"] == -32001:
             code = 403
         self._send(code, resp, cors)
+
+
+WEBAPP_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+                ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
+                ".json": "application/json", ".woff2": "font/woff2"}
+# System web apps are static files from the read-only image, served on
+# their own origin http://<id>.app.localhost:<port>. They reach the OS only
+# through /v1/rpc on that origin, with that origin's grants.
+CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+       "connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+
+
+def webapp_file(host, path):
+    """Absolute file for GET path on host, or None. No traversal, no
+    dotfiles, no symlinks out of the app directory."""
+    m = re.fullmatch(r"([a-z0-9][a-z0-9-]*)\.app\.localhost:\d+", (host or "").lower())
+    if not m:
+        return None
+    root = os.path.realpath(os.path.join(paths.webapps_dir(), m.group(1)))
+    if not os.path.isdir(root):
+        return None
+    rel = path.split("?", 1)[0].split("#", 1)[0]
+    if rel.endswith("/"):
+        rel += "index.html"
+    parts = [x for x in rel.split("/") if x]
+    if any(x.startswith(".") or "\\" in x for x in parts):
+        return None
+    full = os.path.realpath(os.path.join(root, *parts))
+    if not full.startswith(root + os.sep) or not os.path.isfile(full):
+        return None
+    if os.path.splitext(full)[1] not in WEBAPP_TYPES:
+        return None
+    return full
 
 
 class HttpServer(ThreadingHTTPServer):

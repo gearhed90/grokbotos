@@ -139,6 +139,12 @@ Revoke: `permissions.revoke {principal, scope?}`, `grokbot-os revoke <origin> [s
 - **Limits.** Bodies over 64 KB are rejected. The HTTP access log is off, because the audit log is the record.
 - **Audit.** Every call is appended to `~/.local/state/grokbot/audit.jsonl` (mode 0600, rotated at 5 MB to `.1`), whether it was allowed, denied or failed. Each line records the time, transport, principal, self-reported client, method, scope, access, mode and its source, the consent answer, redacted parameters for writes, decision and error. Read it with `audit.list` (scope `audit`), `grokbot-os audit` or the Settings app.
 
+## System web apps
+
+grokbotd serves static web apps from the read-only image, `/usr/share/grokbot/webapps/<id>/`, on their own origin `http://<id>.app.localhost:7311` (only `GET`, only files under that directory, no dotfiles or traversal, fixed content types). Every response carries a strict CSP (`script-src 'self'`, `connect-src 'self'`, no inline script, `frame-ancestors 'none'`), `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`. The app reaches the OS only through `POST /v1/rpc` on the same origin, with that origin's grants; if a browser omits `Origin` on a same-origin request, `Sec-Fetch-Site: same-origin` plus a served `Host` identifies it.
+
+The only app today is **Settings** (`grokbot-settings`, `manual/settings.md`). Its system grant is in `/etc/grokbot/api-permissions.json`: `system`, `network`, `audio`, `display`, `notifications`, `lock`, `input`, `permissions`, `audit` allow, `power` ask; nothing else. It is shown in Firefox (already in the image; Chromium is not) with a dedicated profile, its tab strip and address bar hidden by userChrome.css, and app_id `grokbot-settings`, tiled by sway so the docks stay visible (`--kiosk` was tried and covers the docks).
+
 ## CLI: grokbot-os
 
 ```

@@ -244,7 +244,8 @@ def privacy_status(params):
 # ---------------- permissions / audit ----------------
 
 def permissions_list(params, ctx=None):
-    return {"scopes": {k: {"ko": v[0], "en": v[1], "always_ask": k in perms.ALWAYS_ASK}
+    return {"scopes": {k: {"ko": v[0], "en": v[1], "always_ask": k in perms.ALWAYS_ASK,
+                           "access": sorted(perms.SCOPE_ACCESS.get(k, ()))}
                        for k, v in perms.SCOPES.items()},
             "principals": perms.listing(params.get("principal"),
                                         include=(ctx or {}).get("principal"))}

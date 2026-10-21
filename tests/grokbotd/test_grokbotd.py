@@ -90,6 +90,7 @@ class Base(unittest.TestCase):
             "GROKBOT_DOCK_SYS_CONF": os.path.join(SF, "etc", "grokbot", "dock.conf"),
             "GROKBOT_DESKTOP_SYS_CONF": os.path.join(SF, "etc", "grokbot", "desktop.conf"),
             "GROKBOT_API_PORT": str(cls.port),
+            "GROKBOT_WEBAPPS_DIR": os.path.join(SF, "usr", "share", "grokbot", "webapps"),
         })
         # Fake tools: the daemon must never touch the real machine in tests
         # (systemctl suspend, nmcli, wpctl ...). Each logs its argv.

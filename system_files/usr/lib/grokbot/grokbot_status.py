@@ -71,7 +71,7 @@ def _network(net):
     dev = next((i for i in up if i.get("name") == route.get("interface")), up[0] if up else None)
     if not net.get("online") or dev is None:
         return {"id": "network", "icon": "network-offline-symbolic", "text": "오프라인",
-                "tooltip": "연결 안 됨 / Offline. 클릭: Wi-Fi 설정 / Click: Wi-Fi setup"}
+                "tooltip": "연결 안 됨 / Offline. 클릭: Wi-Fi 설정 / Click: Wi-Fi settings"}
     if dev.get("wireless"):
         return {"id": "network", "icon": "network-wireless-signal-good-symbolic", "text": "Wi-Fi",
                 "tooltip": "Wi-Fi: %s" % dev["name"]}
@@ -115,7 +115,7 @@ def _privacy(priv):
         ss = [x for x in priv.get("sessions", []) if x.get("kind") == kind]
         if ss:
             out.append({"id": "inuse-" + kind, "icon": icon, "text": ko, "alert": True,
-                        "tooltip": "%s / %s: %s" % (ko, en, ", ".join(_who(x) for x in ss))})
+                        "tooltip": "%s / %s: %s. 클릭: 권한 / Click: permissions" % (ko, en, ", ".join(_who(x) for x in ss))})
     return out
 
 

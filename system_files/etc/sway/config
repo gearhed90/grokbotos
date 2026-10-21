@@ -61,6 +61,7 @@ bindsym Mod1+n exec /usr/local/bin/grokbot-wifi
 exec /usr/local/bin/grokbot-idle >>"$HOME/.local/share/grokbot/idle.log" 2>&1
 exec /usr/local/bin/grokbot-lock --first-boot
 for_window [app_id="grokbot-lock-setup"] floating enable, resize set 720 360, move position center, focus
+for_window [app_id="grokbot-settings"] fullscreen disable
 for_window [app_id=".*"] inhibit_idle fullscreen
 bindsym Mod4+l exec /usr/local/bin/grokbot-lock
 bindsym Mod1+l exec /usr/local/bin/grokbot-lock
