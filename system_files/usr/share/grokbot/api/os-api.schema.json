@@ -10,7 +10,8 @@
     "desktop.read": "Dock and wallpaper configuration",
     "apps.read": "Installed apps and launcher entries",
     "power.read": "Battery and AC status",
-    "network.read": "Network interfaces, addresses and default route"
+    "network.read": "Network interfaces, addresses and default route",
+    "lock.read": "Screen lock and idle state: whether a PIN is set, locked, idle timeouts"
   },
   "methods": {
     "api.methods": {
@@ -66,6 +67,12 @@
       "capability": "network.read",
       "params": {"type": "object", "properties": {}, "additionalProperties": false},
       "result": {"type": "object", "required": ["interfaces"]}
+    },
+    "lock.status": {
+      "description": "Screen lock and idle state: PIN set (never the PIN), locked now, swayidle running, screen-off and lock timeouts in seconds.",
+      "capability": "lock.read",
+      "params": {"type": "object", "properties": {}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["pin_set", "locked", "idle_running", "screen_off_s", "lock_s"]}
     }
   }
 }

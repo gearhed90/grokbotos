@@ -184,8 +184,9 @@ class SchemaTests(unittest.TestCase):
 
 class DaemonTests(Base):
     def test_unix_all_methods(self):
-        for m in ("system.info", "windows.list", "workspaces.list", "dock.get", "wallpaper.get",
-                  "apps.list", "power.status", "network.status", "api.methods"):
+        with open(SCHEMA) as f:
+            names = list(json.load(f)["methods"])
+        for m in names:
             r = self.rpc_unix(m)
             self.assertIn("result", r, (m, r))
 
@@ -323,8 +324,10 @@ class DaemonTests(Base):
         self.assertEqual(set(r), {1, 2, 3, 4, 5})
         self.assertEqual(r[1]["result"]["serverInfo"]["name"], "grokbot-os")
         names = {t["name"] for t in r[2]["result"]["tools"]}
-        self.assertEqual(names, {"system_info", "windows_list", "workspaces_list", "dock_get",
-                                 "wallpaper_get", "apps_list", "power_status", "network_status"})
+        with open(SCHEMA) as f:
+            expected = {m.replace(".", "_") for m in json.load(f)["methods"]} - {"api_methods"}
+        self.assertEqual(names, expected)
+        self.assertTrue({"system_info", "windows_list", "power_status"} <= names)
         self.assertTrue(all(t["annotations"]["readOnlyHint"] for t in r[2]["result"]["tools"]))
         self.assertEqual(len(r[3]["result"]["structuredContent"]["workspaces"]), 2)
         self.assertTrue(r[4]["result"]["isError"])

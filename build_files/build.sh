@@ -22,6 +22,10 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     htop \
     sway \
     swaybg \
+    swaylock \
+    swayidle \
+    sudo \
+    openssl \
     firefox \
     flatpak \
     fuzzel \
@@ -87,6 +91,12 @@ if ! grep -q '^HOME_URL=' /usr/lib/os-release; then
 fi
 
 systemctl enable podman.socket
+
+# Screen lock PIN helper (grokbot-lock-setup). sudo ignores files that are
+# not 0440 root:root.
+chown root:root /etc/sudoers.d/grokbot-lock
+chmod 0440 /etc/sudoers.d/grokbot-lock
+visudo -cf /etc/sudoers.d/grokbot-lock
 
 # Grok Bot OS API daemon (docs/OS_API.md). A systemd user service, so it
 # runs as the session user, never root. --global enables it for every user.

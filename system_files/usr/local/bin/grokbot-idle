@@ -1,0 +1,42 @@
+#!/bin/bash
+# Idle policy for the kiosk session (swayidle). Started by sway.
+# /etc/grokbot/idle.conf, overridden by ~/.config/grokbot/idle.conf:
+#   [idle] screen_off = 300   lock = 600   (seconds, 0 = off)
+# Lid close: logind suspends (HandleLidSwitch=suspend); before-sleep locks.
+set -euo pipefail
+sys_conf=${GROKBOT_IDLE_SYS_CONF:-/etc/grokbot/idle.conf}
+user_conf="${XDG_CONFIG_HOME:-$HOME/.config}/grokbot/idle.conf"
+
+conf_get() {
+    local key=$1 def=$2 v="" f line
+    for f in "$sys_conf" "$user_conf"; do
+        [[ -f $f ]] || continue
+        while IFS= read -r line; do
+            if [[ $line =~ ^[[:space:]]*${key}[[:space:]]*=[[:space:]]*([0-9]+) ]]; then
+                v=${BASH_REMATCH[1]}
+            fi
+        done <"$f"
+    done
+    echo "${v:-$def}"
+}
+
+screen_off=$(conf_get screen_off 300)
+lock=$(conf_get lock 600)
+args=(-w)
+if (( screen_off > 0 )); then
+    args+=(timeout "$screen_off" 'swaymsg "output * power off"' resume 'swaymsg "output * power on"')
+fi
+if (( lock > 0 )); then
+    args+=(timeout "$lock" '/usr/local/bin/grokbot-lock')
+fi
+args+=(before-sleep '/usr/local/bin/grokbot-lock' lock '/usr/local/bin/grokbot-lock')
+
+if [[ ${1:-} == "--print" ]]; then
+    printf '%q ' swayidle "${args[@]}"
+    echo
+    exit 0
+fi
+while true; do
+    swayidle "${args[@]}" || true
+    sleep 1
+done
