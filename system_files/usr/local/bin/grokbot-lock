@@ -20,7 +20,26 @@ open_setup() {
 case ${1:-} in
     --first-boot)
         if [[ $pin_state == "unset" && ! -e $skip_file ]]; then
+            # Grok Bot maps its window after sway starts and takes focus.
+            # Wait for it (up to 90 s), then open the setup and focus it,
+            # or the PIN prompt gets no keystrokes (seen in a VM boot).
+            app_id=grok-bot
+            if [[ -r /etc/grokbot/app.conf ]]; then
+                # shellcheck disable=SC1091
+                app_id=$(source /etc/grokbot/app.conf && echo "${GROKBOT_APP_ID:-grok-bot}")
+            fi
+            for _ in $(seq 90); do
+                swaymsg -t get_tree 2>/dev/null | grep -q "\"app_id\": \"${app_id}\"" && break
+                sleep 1
+            done
+            sleep 2
             open_setup
+            for _ in $(seq 20); do
+                sleep 1
+                if swaymsg -q '[app_id="grokbot-lock-setup"] focus' 2>/dev/null; then
+                    break
+                fi
+            done
         fi
         exit 0
         ;;
