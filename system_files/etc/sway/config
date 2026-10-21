@@ -23,7 +23,7 @@
 # sway would start a second swaybg. Never any desktop icons.
 # grokbotd (systemd user service) gets the session environment so
 # system.info can report it. It finds the sway IPC socket on its own.
-exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_DATA_DIRS
+exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_DATA_DIRS XMODIFIERS QT_IM_MODULE SDL_IM_MODULE
 exec /usr/local/bin/grokbot-desktop >>"$HOME/.local/share/grokbot/desktop.log" 2>&1
 
 exec sh -c 'mkdir -p "$HOME/.local/share/grokbot" "$HOME/Apps" "$HOME/.local/share/applications" && exec /usr/local/bin/grokbot-kiosk >>"$HOME/.local/share/grokbot/shell.log" 2>&1'
@@ -85,6 +85,8 @@ bindsym Mod1+Shift+n exec /usr/local/bin/grokbot-notify-dnd toggle
 # ~/Pictures/Screenshots and copied to the clipboard.
 bindsym Print exec /usr/local/bin/grokbot-capture full
 bindsym Shift+Print exec /usr/local/bin/grokbot-capture region
+# Korean input: fcitx5 (한/영, Shift+Space, Right Alt). Config /etc/xdg/fcitx5.
+exec fcitx5 -d --replace >>"$HOME/.local/share/grokbot/fcitx5.log" 2>&1
 bindsym Mod1+Tab exec /usr/lib/grokbot/grokbot-alttab.py next
 bindsym Mod1+Shift+Tab exec /usr/lib/grokbot/grokbot-alttab.py prev
 # Close the focused window. Grok Bot is restarted by grokbot-kiosk.
