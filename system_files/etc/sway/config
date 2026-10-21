@@ -82,6 +82,9 @@ bindsym --locked XF86AudioPause exec /usr/local/bin/grokbot-os media-key play-pa
 bindsym --locked XF86AudioNext exec /usr/local/bin/grokbot-os media-key next
 bindsym --locked XF86AudioPrev exec /usr/local/bin/grokbot-os media-key previous
 bindsym --locked XF86AudioStop exec /usr/local/bin/grokbot-os media-key stop
+# Hovering focuses a window, so the first click on it reaches the app
+# instead of only moving focus (seen with Firefox app windows).
+focus_follows_mouse yes
 # Notifications (mako, top right). Super+Shift+N / Alt+Shift+N: Do Not Disturb.
 exec /usr/local/bin/grokbot-notify --serve >>"$HOME/.local/share/grokbot/notify.log" 2>&1
 bindsym Mod4+Shift+n exec /usr/local/bin/grokbot-notify-dnd toggle
@@ -97,3 +100,8 @@ bindsym Mod1+Shift+Tab exec /usr/lib/grokbot/grokbot-alttab.py prev
 # Close the focused window. Grok Bot is restarted by grokbot-kiosk.
 bindsym Mod1+F4 kill
 bindsym Mod4+q kill
+
+# Per-output scale / position / mode saved by Settings > Display (grokbotd
+# display.set). Last, so a problem in it cannot skip anything above;
+# grokbot-session creates it empty.
+include ~/.config/grokbot/outputs.conf

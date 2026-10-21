@@ -109,13 +109,96 @@
     return out;
   };
 
+  // Screens: scale and arrangement (sway outputs) + backlight. A layout change
+  // reverts by itself after 15 s unless kept, in case the screen became unusable.
+  const SCALES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+  let pendingRevert = null;
+  const applyDisplay = async (params, before) => {
+    await act(() => rpc("display.set", params));
+    if (before) {
+      clearTimeout(pendingRevert && pendingRevert.timer);
+      pendingRevert = { before, until: Date.now() + 15000,
+        timer: setTimeout(() => revertDisplay(), 15000) };
+    }
+    render();
+  };
+  const revertDisplay = async () => {
+    const p = pendingRevert; pendingRevert = null;
+    if (!p) return;
+    clearTimeout(p.timer);
+    try { await rpc("display.set", p.before); toast(t("disp_reverted")); } catch (e) { toast(explain(e), true); }
+    render();
+  };
+  const keepDisplay = () => { if (!pendingRevert) return; if (pendingRevert) clearTimeout(pendingRevert.timer); pendingRevert = null; render(); };
+  const arrangement = (o, ref) => {
+    if (!ref || o.name === ref.name) return "primary";
+    if (o.x >= ref.x + ref.width) return "right";
+    if (o.x + o.width <= ref.x) return "left";
+    if (o.y + o.height <= ref.y) return "above";
+    return "below";
+  };
+  const placeAt = (where, o, ref) => ({
+    right: { x: ref.x + ref.width, y: ref.y }, left: { x: ref.x - o.width, y: ref.y },
+    above: { x: ref.x, y: ref.y - o.height }, below: { x: ref.x, y: ref.y + ref.height } }[where]);
+  const layoutMap = (outs) => {
+    const act_ = outs.filter((o) => o.active);
+    if (act_.length < 2) return null;
+    const minX = Math.min(...act_.map((o) => o.x)), minY = Math.min(...act_.map((o) => o.y));
+    const maxX = Math.max(...act_.map((o) => o.x + o.width)), maxY = Math.max(...act_.map((o) => o.y + o.height));
+    const k = Math.min(520 / (maxX - minX), 160 / (maxY - minY));
+    const box = h("div", { class: "layout", style: "height:" + Math.round((maxY - minY) * k + 4) + "px" });
+    act_.forEach((o, i) => box.append(h("div", { class: "screen" + (o.focused ? " focused" : ""),
+      style: `left:${Math.round((o.x - minX) * k)}px;top:${Math.round((o.y - minY) * k)}px;width:${Math.round(o.width * k) - 4}px;height:${Math.round(o.height * k) - 4}px` },
+      h("b", {}, String(i + 1)), h("span", {}, o.name))));
+    return card(t("disp_layout"), box);
+  };
   pages.display = async () => {
-    const d = await rpc("display.brightness");
-    if (!d.available) return [...head("display"), card(t("brightness"), h("p", { class: "dim" }, t("no_backlight")))];
-    return [...head("display"), ...d.devices.map((dev) => {
-      const [s, out] = slider(dev.percent, (p) => act(() => rpc("display.set_brightness", { percent: Math.max(1, p) })));
-      return card(t("brightness") + " · " + dev.name, row(h("div", { class: "grow" }, s), out));
-    })];
+    const [l, d] = await Promise.all([rpc("display.list").catch(() => null), rpc("display.brightness")]);
+    const out = [...head("display")];
+    if (pendingRevert) {
+      const left = Math.max(0, Math.ceil((pendingRevert.until - Date.now()) / 1000));
+      const cd = h("div", { class: "dim", id: "disp-countdown" }, t("disp_revert_in", left));
+      out.push(card(null, row(h("span", { class: "grow" }, h("b", {}, t("disp_keep_q")), cd),
+        h("button", { type: "button", onclick: revertDisplay }, t("disp_revert")),
+        h("button", { type: "button", class: "primary", onclick: keepDisplay, onpointerdown: keepDisplay }, t("disp_keep")))));
+      // Update only the countdown text: re-rendering every second would
+      // replace the Keep button under the pointer and eat the click.
+      const tick = setInterval(() => {
+        if (!pendingRevert || !document.body.contains(cd)) return clearInterval(tick);
+        cd.textContent = t("disp_revert_in", Math.max(0, Math.ceil((pendingRevert.until - Date.now()) / 1000)));
+      }, 1000);
+    }
+    if (l && l.outputs.length) {
+      const outs = [...l.outputs].sort((a, b) => (a.x - b.x) || (a.y - b.y));
+      const ref = outs.find((o) => o.active);
+      const m = layoutMap(outs); if (m) out.push(m);
+      outs.forEach((o, i) => {
+        const res = o.mode ? `${o.mode.width}×${o.mode.height} @ ${Math.round(o.mode.refresh)} Hz` : "—";
+        const scaleSel = h("select", { "aria-label": t("disp_scale"), disabled: !o.active,
+          onchange: (e) => applyDisplay({ name: o.name, scale: Number(e.target.value) }, { name: o.name, scale: o.scale }) },
+          ...SCALES.map((s) => h("option", { value: s, selected: o.scale === s }, Math.round(s * 100) + "%")));
+        const rows = [row(h("span", { class: "grow dim" }, [o.make, o.model].filter(Boolean).join(" ") || o.name), h("span", { class: "dim mono" }, res)),
+          row(h("span", { class: "grow" }, t("disp_scale")), scaleSel)];
+        if (outs.length > 1) {
+          const where = arrangement(o, ref);
+          if (o !== ref) {
+            rows.push(row(h("span", { class: "grow" }, t("disp_position", ref.name)),
+              h("select", { "aria-label": t("disp_position", ref.name), disabled: !o.active,
+                onchange: (e) => applyDisplay({ name: o.name, ...placeAt(e.target.value, o, ref) }, { name: o.name, x: o.x, y: o.y }) },
+                ...["right", "left", "above", "below"].map((w) => h("option", { value: w, selected: where === w }, t("disp_" + w))))));
+          }
+          rows.push(row(h("span", { class: "grow" }, t("disp_on")),
+            sw(o.active, (on) => applyDisplay({ name: o.name, enabled: on }, { name: o.name, enabled: o.active }))));
+        }
+        out.push(card(t("disp_screen", i + 1) + " · " + o.name + (o.focused ? "  ·  " + t("disp_focused") : ""), ...rows));
+      });
+    }
+    if (!d.available) out.push(card(t("brightness"), h("p", { class: "dim" }, t("no_backlight"))));
+    else d.devices.forEach((dev) => {
+      const [s, o] = slider(dev.percent, (p) => act(() => rpc("display.set_brightness", { percent: Math.max(1, p) })));
+      out.push(card(t("brightness") + " · " + dev.name, row(h("div", { class: "grow" }, s), o)));
+    });
+    return out;
   };
 
   pages.notifications = async () => {

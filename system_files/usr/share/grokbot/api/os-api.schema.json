@@ -1441,6 +1441,104 @@
         "Roll back to the previous OS image (at next restart)"
       ],
       "consent": "always"
+    },
+    "display.list": {
+      "description": "Outputs (monitors) from sway: name, make/model, active, scale, position, current mode and offered modes; plus the saved per-output settings.",
+      "capability": "display.read",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "outputs"
+        ],
+        "properties": {
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "saved": {
+            "type": "object"
+          }
+        }
+      },
+      "scope": "display",
+      "access": "read",
+      "x-title": [
+        "화면 배치 보기",
+        "List screens"
+      ]
+    },
+    "display.set": {
+      "description": "Change one output: scale (0.5-4, 1/8 steps), position (x, y in layout pixels), mode, or enabled. Applies now and is saved (~/.config/grokbot/outputs.conf). Turning off the last active screen is refused.",
+      "capability": "display.write",
+      "scope": "display",
+      "access": "write",
+      "x-title": [
+        "화면 배치·배율 바꾸기",
+        "Change screen layout or scale"
+      ],
+      "params": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,64}$"
+          },
+          "scale": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 4
+          },
+          "x": {
+            "type": "integer",
+            "minimum": -32768,
+            "maximum": 32767
+          },
+          "y": {
+            "type": "integer",
+            "minimum": -32768,
+            "maximum": 32767
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "object",
+            "required": [
+              "width",
+              "height"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "width": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "refresh": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "type": "object"
+      }
     }
   },
   "x-scopes": {

@@ -166,9 +166,19 @@ def launch(info):
     swaymsg(f"workspace number {new_workspace()}; exec {cmd}")
 
 
+def monitors():
+    """Gdk monitors, the one at the origin (sway's primary layout spot) first."""
+    disp = Gdk.Display.get_default()
+    mons = [disp.get_monitor(i) for i in range(disp.get_n_monitors())]
+    if not mons:
+        return [None]
+    return sorted(mons, key=lambda m: (m.get_geometry().x, m.get_geometry().y))
+
+
 class Dock:
     def __init__(self):
         self.windows = {}
+        self.windows_monitors = []
         self.buttons = []  # (button, keys, info)
         self.status_box = None
         self.status_mode = None
@@ -184,6 +194,10 @@ class Dock:
         add_signal = getattr(GLib, "unix_signal_add")
         add_signal(GLib.PRIORITY_DEFAULT, signal.SIGHUP, self.reload)
         add_signal(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self.quit)
+        # One dock per output; rebuild when outputs come and go.
+        disp = Gdk.Display.get_default()
+        disp.connect("monitor-added", lambda *_: GLib.idle_add(self._rebuild_once))
+        disp.connect("monitor-removed", lambda *_: GLib.idle_add(self._rebuild_once))
         self.rebuild()
         GLib.timeout_add(1500, self.refresh)
         GLib.timeout_add_seconds(2, self.refresh_status)
@@ -197,6 +211,13 @@ class Dock:
         self.rebuild()
         return True
 
+    def _rebuild_once(self):
+        # Only when the set of outputs really changed (Wayland announces the
+        # existing outputs at startup too).
+        if len(monitors()) != len(getattr(self, "windows_monitors", [])):
+            self.rebuild()
+        return False
+
     def rebuild(self):
         for w in self.windows.values():
             w.destroy()
@@ -205,18 +226,25 @@ class Dock:
         self.status_box = None
         self.status_widgets = {}
         apps = app_list(self.conf["hide"])
-        for edge in EDGES:
-            mode = self.conf[edge]
-            if mode != "off":
-                self.windows[edge] = self.make_window(edge, mode, apps)
+        self.windows_monitors = monitors()
+        for i, mon in enumerate(self.windows_monitors):
+            for edge in EDGES:
+                mode = self.conf[edge]
+                if mode != "off":
+                    # status indicators only on the primary (first) output
+                    self.windows[(i, edge)] = self.make_window(edge, mode, apps, mon, primary=(i == 0))
         self.refresh()
         self.refresh_status()
 
-    def make_window(self, edge, mode, apps):
+    def make_window(self, edge, mode, apps, mon=None, primary=True):
         win = Gtk.Window()
         win.get_style_context().add_class("grokbot-dock")
         GtkLayerShell.init_for_window(win)
         GtkLayerShell.set_namespace(win, "grokbot-dock")
+        if mon is not None and len(self.windows_monitors) > 1:
+            # Pin to an output only with several; with one, let the
+            # compositor place it (unchanged single-screen behaviour).
+            GtkLayerShell.set_monitor(win, mon)
         GtkLayerShell.set_layer(win, GtkLayerShell.Layer.TOP)
         e = {"top": GtkLayerShell.Edge.TOP, "bottom": GtkLayerShell.Edge.BOTTOM,
              "left": GtkLayerShell.Edge.LEFT, "right": GtkLayerShell.Edge.RIGHT}
@@ -284,7 +312,7 @@ class Dock:
         scroller.set_propagate_natural_width(True)
         scroller.set_propagate_natural_height(True)
         scroller.add(box)
-        if grokbot_status.status_edge(self.conf) == edge:
+        if primary and grokbot_status.status_edge(self.conf) == edge:
             # Status area at the END of the dock: right end of a top/bottom
             # dock, bottom end of a left/right dock.
             outer = Gtk.Box(orientation=orient, spacing=0)

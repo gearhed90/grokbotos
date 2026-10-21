@@ -7,7 +7,7 @@ mode is "ask" -> backend. Every outcome is written to the audit log.
 import threading
 import time
 
-from . import audit, backends, consent, files, mediakeys, perms, schema, updates, webapps, writes
+from . import audit, backends, consent, displays, files, mediakeys, perms, schema, updates, webapps, writes
 
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
@@ -21,6 +21,7 @@ METHODS.update(writes.METHODS)
 METHODS.update(files.METHODS)
 METHODS.update(mediakeys.METHODS)
 METHODS.update(updates.METHODS)
+METHODS.update(displays.METHODS)
 CTX_METHODS = dict(writes.CTX_METHODS)
 SPECIAL = {"api.methods", "permissions.request"}
 REQUEST_COOLDOWN_S = 600
