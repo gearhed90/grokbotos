@@ -281,7 +281,8 @@ def permissions_revoke(params, ctx):
 def audit_list(params):
     path = paths.audit_path()
     lines = []
-    for p in (path + ".1", path):
+    from . import audit
+    for p in ["%s.%d" % (path, i) for i in range(audit.GENERATIONS, 0, -1)] + [path]:
         try:
             with open(p, encoding="utf-8") as f:
                 lines.extend(f.readlines())

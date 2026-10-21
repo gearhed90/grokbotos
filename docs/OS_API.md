@@ -80,7 +80,7 @@ Errors are JSON-RPC errors:
 | Transport | Address | Who | Access |
 |---|---|---|---|
 | Unix socket | `$XDG_RUNTIME_DIR/grokbot/api.sock` (dir 0700, socket 0600) | The session user: the CLI, MCP, and Grok Bot through local-exec | `SO_PEERCRED` must match the daemon's uid. Every read is allowed; writes follow the `local` modes |
-| HTTP | `127.0.0.1:7311` only | Web apps (and the Settings app) | The TCP peer must be the same uid (checked in `/proc/net/tcp`). Deny by default, per origin and scope |
+| HTTP | `127.0.0.1:7311` only | Web apps (and the Settings app) | The TCP peer must be the same uid (checked in `/proc/net/tcp`). `Origin` counts only from a host browser, and app origins also need the launcher cookie. Deny by default, per origin and scope |
 
 The unix socket protocol is one JSON-RPC 2.0 request per line, with one
 response per line.
@@ -147,10 +147,11 @@ Revoke: `permissions.revoke {principal, scope?}`, `grokbot-os revoke <origin> [s
 - **Loopback only.** The HTTP server binds 127.0.0.1, never 0.0.0.0. It runs as a systemd **user** service, never as root (`NoNewPrivileges`, address-family and namespace restrictions, `UMask=0077`). Power actions go through `systemctl` (logind and polkit decide, as for the session user).
 - **Same user only.** The unix socket checks `SO_PEERCRED`. The HTTP port checks that the connecting TCP socket belongs to the daemon's uid (`/proc/net/tcp`), so another local user cannot forge an `Origin` and borrow a web app's grants.
 - **Host check (DNS rebinding).** The `Host` header must be `127.0.0.1:7311`, `localhost:7311` or `<id>.app.localhost:7311`. Any other host gets 403.
+- **Origin semantics.** <a id="origin-semantics"></a>`Origin` only identifies callers that are browsers: page scripts cannot change it, but any local program can write any `Origin`. So grokbotd believes it only when (1) the TCP peer process (found from the socket inode in `/proc/net/tcp` and `/proc/*/fd`) runs a browser binary (`firefox`, `chromium`, `chrome`, `grok-bot`, …) whose root is the host root, so not a Flatpak or other sandbox; and (2) for `http://<id>.app.localhost` origins, the request carries the app's HttpOnly cookie `gbt` = HMAC-SHA256(key, origin). The key is `~/.local/state/grokbot/webapp-key` (0600). The launchers (`grokbot-webapp`, `grokbot-settings`) open `<start_url>?gbt=<token>`; grokbotd sets the cookie (`SameSite=Strict`) and redirects to the clean URL. Otherwise the call is `http:no-origin`, which gets nothing, and the audit log records `origin_untrusted_peer` or `app_token_missing`. Limits: a same-uid host program can read the key or drive the browser; it could use the unix socket anyway (SECURITY.md item 1). Flatpak browsers' origins are not trusted.
 - **CORS** headers are sent only to origins with some grant. Preflight from any other origin returns 403. Because `application/json` is required, a cross-site HTML form cannot send a "simple" request.
 - **Secrets.** Parameters marked `x-secret` (the Wi-Fi password) are replaced by `***` in the audit log and the prompt. The Wi-Fi password goes to `nmcli` through a 0600 `passwd-file` in `$XDG_RUNTIME_DIR`, never on a command line.
 - **Limits.** Bodies over 64 KB are rejected. The HTTP access log is off, because the audit log is the record.
-- **Audit.** Every call is appended to `~/.local/state/grokbot/audit.jsonl` (mode 0600, rotated at 5 MB to `.1`), whether it was allowed, denied or failed. Each line records the time, transport, principal, self-reported client, method, scope, access, mode and its source, the consent answer, redacted parameters for writes, decision and error. Read it with `audit.list` (scope `audit`), `grokbot-os audit` or the Settings app.
+- **Audit.** Every call is appended to `~/.local/state/grokbot/audit.jsonl` (mode 0600, rotated at 5 MB, 5 old generations `.1`–`.5`), whether it was allowed, denied or failed. Transport-level rejects that any web page can cause (bad Host, wrong Content-Type, refused preflight, foreign uid, ignored Origin) go to `audit-rejects.jsonl` instead, aggregated: the first per principal and error per minute, then one summary line with a `count`; at most 20 principals per minute, the rest as `*other*`. Every logged string is cut to 256 characters. Each line records the time, transport, principal, self-reported client, method, scope, access, mode and its source, the consent answer, redacted parameters for writes, decision and error. Read it with `audit.list` (scope `audit`), `grokbot-os audit` or the Settings app.
 
 ## System web apps
 
@@ -204,7 +205,7 @@ $ curl -s -H 'Origin: http://notes.app.localhost:7311' -H 'Content-Type: applica
     -d '{"jsonrpc":"2.0","id":1,"method":"system.info"}' 127.0.0.1:7311/v1/rpc
 ```
 
-The last call returns 403 (-32001) until that origin has the `system` scope.
+The last call always returns 403 (-32001): curl is not a browser, so its `Origin` is ignored (see [Origin semantics](#origin-semantics)).
 
 ```
 $ grokbot-os audio.set volume_percent=40          # local, audio=allow: no prompt
