@@ -1,0 +1,19 @@
+#!/bin/bash
+# App launcher overlay. Bound to Super+Space and Alt+Space.
+# fuzzel draws on the layer shell. Its default layer is "top", which sway
+# hides behind a fullscreen view, and every kiosk window is fullscreen.
+# --layer overlay keeps the launcher above the Grok Bot window (seen in a
+# QEMU boot 2026-10-20: Alt+Space did nothing visible without it).
+set -euo pipefail
+
+if ! command -v fuzzel >/dev/null 2>&1; then
+    echo "grokbot-switch: fuzzel is not installed" >&2
+    exit 1
+fi
+# Non-ASCII prompt needs a UTF-8 locale even if the session lost LANG.
+case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in
+    *UTF-8* | *utf8* | *UTF8* | *utf-8*) ;;
+    *) export LC_ALL=C.UTF-8 ;;
+esac
+# --launch-prefix: each app opens on its own workspace (see grokbot-run).
+exec fuzzel --layer overlay --launch-prefix=/usr/local/bin/grokbot-run --prompt "앱 실행 "

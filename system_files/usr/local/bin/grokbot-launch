@@ -1,0 +1,50 @@
+#!/bin/bash
+# The only interface that starts the Grok Bot UI.
+# sway -> grokbot-kiosk -> this program.
+# Placeholder mode and a baked-in native build share this path.
+set -euo pipefail
+
+CONF="${GROKBOT_CONF:-/etc/grokbot/app.conf}"
+if [[ ! -f "$CONF" ]]; then
+    echo "grokbot-launch: missing ${CONF}" >&2
+    exit 1
+fi
+# shellcheck disable=SC1090
+source "$CONF"
+
+mode="${GROKBOT_MODE:-placeholder}"
+case "$mode" in
+    placeholder)
+        if ! command -v firefox >/dev/null 2>&1; then
+            echo "grokbot-launch: firefox is not installed" >&2
+            exit 1
+        fi
+        profile="${HOME}/.local/share/grokbot/firefox-profile"
+        mkdir -p "$profile"
+        url="${GROKBOT_WEB_URL:-}"
+        if [[ -z "$url" ]]; then
+            url="file:///usr/share/grokbot/placeholder.html"
+        fi
+        # --no-remote plus a dedicated profile: this window does not accept
+        # URLs from xdg-open. grokbot-open-browser uses a different profile,
+        # so a login popup cannot replace the kiosk tab.
+        exec firefox \
+            --kiosk \
+            --no-remote \
+            --new-instance \
+            --profile "$profile" \
+            "$url"
+        ;;
+    native)
+        exec_path="${GROKBOT_EXEC:-}"
+        if [[ "$exec_path" != /* || ! -x "$exec_path" ]]; then
+            echo "grokbot-launch: GROKBOT_EXEC is not an executable absolute path: ${exec_path}" >&2
+            exit 1
+        fi
+        exec "$exec_path"
+        ;;
+    *)
+        echo "grokbot-launch: unknown GROKBOT_MODE: ${mode}" >&2
+        exit 1
+        ;;
+esac

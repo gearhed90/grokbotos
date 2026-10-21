@@ -1,0 +1,28 @@
+#!/bin/bash
+# Do Not Disturb for notifications.
+#   grokbot-notify-dnd [toggle|on|off|status]
+# While on, notifications are kept in history but not shown.
+set -euo pipefail
+mode=do-not-disturb
+
+is_on() {
+    makoctl mode 2>/dev/null | grep -qx "$mode"
+}
+
+case ${1:-toggle} in
+    status)
+        if is_on; then echo on; else echo off; fi
+        exit 0
+        ;;
+    on) is_on || makoctl mode -a "$mode" >/dev/null ;;
+    off) ! is_on || makoctl mode -r "$mode" >/dev/null ;;
+    toggle) makoctl mode -t "$mode" >/dev/null ;;
+    *) echo "usage: grokbot-notify-dnd [toggle|on|off|status]" >&2; exit 2 ;;
+esac
+if is_on; then
+    state="켬 / on"
+else
+    state="끔 / off"
+    notify-send -a "Grok Bot OS" -t 2000 "방해 금지 끔 / Do Not Disturb off" 2>/dev/null || true
+fi
+echo "do-not-disturb: $state"

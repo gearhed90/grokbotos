@@ -1,0 +1,58 @@
+#!/bin/bash
+# Sign out of the placeholder browser session.
+# Native Grok Bot builds own their account UI; this command does not
+# store, read, or forward credentials in either mode.
+set -euo pipefail
+
+# shellcheck source=/dev/null
+source "${GROKBOT_LIB:-/usr/lib/grokbot/common.sh}"
+
+CONF="${GROKBOT_CONF:-/etc/grokbot/app.conf}"
+if [[ ! -f "$CONF" ]]; then
+    echo "grokbot-sign-out: missing ${CONF}" >&2
+    exit 1
+fi
+# shellcheck disable=SC1090
+source "$CONF"
+
+mode="${GROKBOT_MODE:-placeholder}"
+case "$mode" in
+    native)
+        echo "Grok Bot 앱 안의 로그아웃을 사용하세요. 이 OS는 계정 정보를 보관하지 않습니다." >&2
+        exit 0
+        ;;
+    placeholder) ;;
+    *)
+        echo "grokbot-sign-out: unknown GROKBOT_MODE: ${mode}" >&2
+        exit 1
+        ;;
+esac
+
+profile="${HOME}/.local/share/grokbot/firefox-profile"
+if [[ -L "$profile" ]]; then
+    echo "grokbot-sign-out: refusing to follow a symlink" >&2
+    exit 1
+fi
+if [[ -e "$profile" ]]; then
+    if ! grokbot_under_dir "$profile" "${HOME}/.local/share/grokbot"; then
+        echo "grokbot-sign-out: refusing to delete a path outside the profile directory" >&2
+        exit 1
+    fi
+    real_profile=$(realpath -m -- "$profile")
+    case "$real_profile" in
+        */firefox-profile) ;;
+        *)
+            echo "grokbot-sign-out: refusing unexpected profile path" >&2
+            exit 1
+            ;;
+    esac
+    rm -rf -- "$real_profile"
+fi
+
+app_id="${GROKBOT_APP_ID:-firefox}"
+if [[ "$app_id" =~ ^[A-Za-z][A-Za-z0-9_.-]*$ ]] && command -v swaymsg >/dev/null 2>&1; then
+    swaymsg "[app_id=\"${app_id}\"] kill" || true
+fi
+
+echo "브라우저 세션을 지웠습니다. Grok Bot 창이 다시 뜨면 로그인 화면이어야 합니다."
+exit 0

@@ -1,0 +1,12 @@
+#!/bin/bash
+# Open network setup (Wi-Fi, wired, VPN) in a terminal: nmtui inside foot.
+# Bound to Super+N / Alt+N and listed in the launcher as "Wi-Fi 설정".
+# Usable before signing in to Grok Bot, so a new install can get online.
+set -euo pipefail
+if ! command -v nmtui >/dev/null 2>&1; then
+    echo "grokbot-wifi: nmtui is not installed" >&2
+    exit 1
+fi
+term=foot
+command -v "$term" >/dev/null 2>&1 || { echo "grokbot-wifi: foot is not installed" >&2; exit 1; }
+exec "$term" --app-id=grokbot-wifi --title="Wi-Fi 설정 / Network" nmtui "$@"

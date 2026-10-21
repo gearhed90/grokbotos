@@ -1,0 +1,11 @@
+cosign.key
+_build_*
+output
+_build-*/**
+grokbot-app/payload
+grokbot-app/SHA256SUMS
+
+# Python bytecode (never commit; the image build compiles it)
+__pycache__/
+*.pyc
+/.vm/

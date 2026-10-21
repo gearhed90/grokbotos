@@ -1,0 +1,60 @@
+#!/bin/bash
+# Login shell for the grokbot kiosk account.
+# Lives under /usr/local/bin because a ~/.bash_profile under /home is not
+# guaranteed to survive the image build (ostree /var). See build.sh.
+set -euo pipefail
+
+current_tty="$(tty || true)"
+if [[ "$current_tty" != "/dev/tty1" ]]; then
+    exec /bin/bash --login
+fi
+
+mkdir -p \
+    "${HOME}/.local/share/grokbot" \
+    "${HOME}/.local/share/applications" \
+    "${HOME}/Apps"
+
+# Flatpak's exported desktop files are invisible to fuzzel unless this
+# session's XDG_DATA_DIRS includes them. agetty runs this script directly,
+# so /etc/profile.d is not sourced.
+export XDG_DATA_DIRS="${HOME}/.local/share:${HOME}/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share"
+
+# Hide the distro Firefox launcher. The kiosk already is a Firefox window
+# in placeholder mode, and a second Firefox from the app list fights it.
+# Fedora ships the launcher as org.mozilla.firefox.desktop, so a mask has
+# to use that desktop-file id. firefox.desktop is kept for older builds.
+for firefox_id in firefox.desktop org.mozilla.firefox.desktop; do
+    firefox_mask="${HOME}/.local/share/applications/${firefox_id}"
+    if [[ ! -e "$firefox_mask" ]]; then
+        cat >"$firefox_mask" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Firefox
+NoDisplay=true
+Hidden=true
+EOF
+    fi
+done
+
+# Best-effort. No network on first boot must not block the kiosk.
+if command -v flatpak >/dev/null 2>&1; then
+    flatpak remote-add --user --if-not-exists flathub \
+        https://dl.flathub.org/repo/flathub.flatpakrepo \
+        >>"${HOME}/.local/share/grokbot/shell.log" 2>&1 || true
+fi
+
+# agetty runs this directly, so no locale is set (C/POSIX). fuzzel then
+# rejects the Korean prompt ("invalid prompt") and Alt+Space shows nothing.
+# Seen in a QEMU boot 2026-10-20.
+export LANG="${LANG:-C.UTF-8}"
+
+# Korean input (fcitx5 + hangul, started by sway). Wayland-native apps
+# (Grok Bot with --enable-wayland-ime, Firefox, foot) use text-input-v3;
+# XMODIFIERS covers X11 apps under XWayland, QT/SDL their own modules.
+# GTK_IM_MODULE is left unset on purpose: on Wayland GTK uses
+# text-input-v3, and forcing the fcitx module breaks that.
+export XMODIFIERS=@im=fcitx
+export QT_IM_MODULE=fcitx
+export SDL_IM_MODULE=fcitx
+
+exec sway
