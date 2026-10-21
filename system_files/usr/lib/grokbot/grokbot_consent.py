@@ -83,6 +83,9 @@ button.allow { background: #2563eb; color: #fff; }
 button.always { background: #1d4ed8; color: #fff; }
 .timer { color: #a1a1aa; font-size: 12px; }
 button.session { background: #1e40af; color: #fff; }
+/* Keyboard focus must be obvious: Tab moves between Deny / Allow buttons. */
+button { border: 3px solid transparent; outline: none; }
+button:focus { border-color: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,0.45); }
 .warn { color: #fbbf24; font-size: 14px; font-weight: bold; }
 .warn-en { color: #fbbf24; font-size: 12px; }
 """
