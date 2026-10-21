@@ -215,8 +215,9 @@
         : h("p", { class: "dim" }, t("upd_none_" + key)));
     const busy = u.running.filter((a) => a !== "status");
     const refreshSoon = () => { clearTimeout(pages.update.t); pages.update.t = setTimeout(() => { if (location.hash === "#update") render(); }, 4000); };
-    if (busy.length) refreshSoon();
-    const start = (method) => act(() => rpc(method), t("upd_started")).then(() => setTimeout(render, 800), () => {});
+    // keep polling briefly after starting an action: the root unit may not be "active" yet
+    if (busy.length || Date.now() < (pages.update.until || 0)) refreshSoon();
+    const start = (method) => act(() => rpc(method), t("upd_started")).then(() => { pages.update.until = Date.now() + 30000; setTimeout(render, 800); }, () => {});
     const btn = (label, method, primary, disabled) => h("button", { type: "button", class: primary ? "primary" : "", disabled: disabled || busy.length > 0,
       onclick: () => start(method) }, t(label));
     const state = busy.length ? t("upd_running_" + busy[0])
