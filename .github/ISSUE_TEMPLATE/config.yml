@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  - name: 제안 / Suggestions & ideas
+    url: https://github.com/head77x/grokbotos/discussions/categories/ideas
+    about: 기능 제안과 아이디어는 Discussions에 올려 주세요. 이슈는 재현된 버그 전용입니다. / Feature ideas go to Discussions. Issues are for verified bugs only.
+  - name: 질문과 지원 / Q&A and support
+    url: https://github.com/head77x/grokbotos/discussions/categories/q-a
+    about: 설치, 사용법, 문제 해결 질문 / Questions about installing, using and troubleshooting.
   - name: 보안 취약점 신고 / Report a security vulnerability
     url: https://github.com/head77x/grokbotos/security/advisories/new
     about: 공개 이슈 대신 비공개로 신고해 주세요 / Please report privately, not as a public issue.
