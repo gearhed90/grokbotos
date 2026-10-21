@@ -11,8 +11,13 @@ grokbot-dock-config show
 grokbot-dock-config set left labels   # 왼쪽 / left: 아이콘+이름 / icons + labels
 grokbot-dock-config set bottom off
 grokbot-dock-config icon-size 48
+grokbot-dock-config status bottom   # 상태 영역 위치 / status area: auto|off|top|bottom|left|right
 grokbot-dock-config reset
 ```
+
+### 상태 영역 / Status area
+독 끝에 Wi-Fi, 볼륨, 배터리, 시계가 보인다. Wi-Fi를 누르면 Wi-Fi 설정, 볼륨을 누르면 음소거, 볼륨 위에서 스크롤하면 조절. 마우스를 올리면 자세히 보인다.
+The end of the dock shows Wi-Fi, volume, battery and the clock. Click Wi-Fi for Wi-Fi setup, click volume to mute, scroll over it to adjust. Hover for details.
 
 ## 단축키 / Hotkeys
 

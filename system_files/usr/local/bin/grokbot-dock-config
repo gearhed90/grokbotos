@@ -4,10 +4,13 @@
 #   grokbot-dock-config show
 #   grokbot-dock-config set <top|bottom|left|right> <off|icons|labels>
 #   grokbot-dock-config icon-size <16-96>
+#   grokbot-dock-config status <auto|off|top|bottom|left|right>
 #   grokbot-dock-config reset
 #
 # Writes ~/.config/grokbot/dock.conf. Defaults stay in /etc/grokbot/dock.conf.
 # top and bottom are icon-only; "labels" is refused there.
+# status: clock, battery, Wi-Fi and volume at the end of one dock
+# (auto = bottom, else the first enabled edge).
 set -euo pipefail
 
 SYS_CONF="${GROKBOT_DOCK_SYS_CONF:-/etc/grokbot/dock.conf}"
@@ -17,7 +20,7 @@ USER_CONF="${USER_DIR}/dock.conf"
 die() { echo "grokbot-dock-config: $*" >&2; exit 2; }
 
 usage() {
-    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # Print the effective value of key from sys then user conf.
@@ -63,6 +66,13 @@ case "$cmd" in
             printf '%s = %s\n' "$e" "$(get "$e" "$d")"
         done
         printf 'icon_size = %s\n' "$(get icon_size 40)"
+        printf 'status = %s\n' "$(get status auto)"
+        ;;
+    status)
+        [[ $# -eq 2 ]] || die "usage: status <auto|off|top|bottom|left|right>"
+        case "$2" in auto | off | top | bottom | left | right) ;; *) die "unknown status place: $2" ;; esac
+        put status "$2"
+        reload
         ;;
     set)
         [[ $# -eq 3 ]] || die "usage: set <top|bottom|left|right> <off|icons|labels>"

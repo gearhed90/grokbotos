@@ -15,6 +15,7 @@ Config (later files override earlier keys):
   right = off | icons | labels
   icon_size = 40
   hide = footclient.desktop;foot-server.desktop
+  status = auto | off | top | bottom | left | right
 
 top/bottom are icon-only: "labels" there is treated as "icons".
 SIGHUP (or grokbot-dock-config) reloads the config.
@@ -28,6 +29,9 @@ import subprocess
 import sys
 
 import gi
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import grokbot_status  # noqa: E402
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("GtkLayerShell", "0.1")
@@ -50,6 +54,10 @@ window.grokbot-dock { background-color: rgba(24,24,27,0.94); }
 .grokbot-dock .dot { color: rgba(0,0,0,0); font-size: 8px; }
 .grokbot-dock button.running .dot { color: #60a5fa; }
 .grokbot-dock label.name { padding-left: 8px; padding-right: 8px; }
+.grokbot-dock .status { margin: 0 6px; }
+.grokbot-dock .status button { padding: 2px 4px; margin: 1px; }
+.grokbot-dock .status label { font-size: 13px; padding: 0 2px; }
+.grokbot-dock .sep { background-color: rgba(255,255,255,0.15); min-width: 1px; min-height: 1px; }
 """
 
 
@@ -72,6 +80,8 @@ def load_config():
     conf["hide"] = {h.strip() for h in
                     str(d.get("hide", "footclient.desktop;foot-server.desktop")).split(";")
                     if h.strip()}
+    st = str(d.get("status", "auto")).strip().lower()
+    conf["status"] = st if st in ("auto", "off") + EDGES else "auto"
     return conf
 
 
@@ -159,6 +169,9 @@ class Dock:
     def __init__(self):
         self.windows = {}
         self.buttons = []  # (button, keys, info)
+        self.status_box = None
+        self.status_mode = None
+        self.status_widgets = {}
         self.conf = load_config()
         self.monitor = Gio.AppInfoMonitor.get()
         self.monitor.connect("changed", lambda *_: self.rebuild())
@@ -172,6 +185,7 @@ class Dock:
         add_signal(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self.quit)
         self.rebuild()
         GLib.timeout_add(1500, self.refresh)
+        GLib.timeout_add_seconds(5, self.refresh_status)
 
     def quit(self):
         Gtk.main_quit()
@@ -187,12 +201,15 @@ class Dock:
             w.destroy()
         self.windows = {}
         self.buttons = []
+        self.status_box = None
+        self.status_widgets = {}
         apps = app_list(self.conf["hide"])
         for edge in EDGES:
             mode = self.conf[edge]
             if mode != "off":
                 self.windows[edge] = self.make_window(edge, mode, apps)
         self.refresh()
+        self.refresh_status()
 
     def make_window(self, edge, mode, apps):
         win = Gtk.Window()
@@ -266,9 +283,81 @@ class Dock:
         scroller.set_propagate_natural_width(True)
         scroller.set_propagate_natural_height(True)
         scroller.add(box)
-        win.add(scroller)
+        if grokbot_status.status_edge(self.conf) == edge:
+            # Status area at the END of the dock: right end of a top/bottom
+            # dock, bottom end of a left/right dock.
+            outer = Gtk.Box(orientation=orient, spacing=0)
+            outer.pack_start(scroller, True, True, 0)
+            sep = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL if horiz
+                                else Gtk.Orientation.HORIZONTAL)
+            sep.get_style_context().add_class("sep")
+            outer.pack_start(sep, False, False, 4)
+            self.status_box = Gtk.Box(orientation=orient, spacing=0)
+            self.status_box.get_style_context().add_class("status")
+            self.status_mode = (horiz, mode)
+            outer.pack_end(self.status_box, False, False, 0)
+            win.add(outer)
+        else:
+            win.add(scroller)
         win.show_all()
         return win
+
+    def refresh_status(self):
+        if self.status_box is None:
+            return True
+        horiz, mode = self.status_mode
+        size = max(16, min(24, self.conf["icon_size"] // 2))
+        for item in grokbot_status.items():
+            w = self.status_widgets.get(item["id"])
+            if w is None:
+                btn = Gtk.Button()
+                btn.set_relief(Gtk.ReliefStyle.NONE)
+                inner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL if (horiz or mode == "labels")
+                                else Gtk.Orientation.VERTICAL, spacing=4)
+                img = Gtk.Image()
+                lab = Gtk.Label()
+                if item["icon"]:
+                    inner.pack_start(img, False, False, 0)
+                # Top/bottom and left/right "icons": icon only, except the
+                # clock, which is its text. Left/right "labels": icon + text.
+                if item["icon"] is None or mode == "labels":
+                    inner.pack_start(lab, False, False, 0)
+                btn.add(inner)
+                btn.connect("clicked", self.on_status_click, item["id"])
+                btn.add_events(Gdk.EventMask.SCROLL_MASK)
+                btn.connect("scroll-event", self.on_status_scroll, item["id"])
+                self.status_box.pack_start(btn, False, False, 0)
+                btn.show_all()
+                w = self.status_widgets[item["id"]] = (btn, img, lab)
+            btn, img, lab = w
+            if item["icon"]:
+                img.set_from_icon_name(item["icon"], Gtk.IconSize.BUTTON)
+                img.set_pixel_size(size)
+            lab.set_text(item["text"] if (horiz or mode == "labels" or item["icon"] is None) else "")
+            if item["id"] == "clock" and not horiz and mode != "labels":
+                lab.set_text(item["text"].replace(":", "\n"))
+            btn.set_tooltip_text(item["tooltip"])
+        return True
+
+    def on_status_click(self, _btn, sid):
+        if sid == "network":
+            subprocess.Popen(["/usr/local/bin/grokbot-wifi"])
+        elif sid == "volume":
+            subprocess.Popen(["/usr/local/bin/grokbot-volume", "mute"])
+        GLib.timeout_add(400, self.refresh_status_once)
+
+    def on_status_scroll(self, _btn, event, sid):
+        if sid != "volume":
+            return False
+        up = event.direction == Gdk.ScrollDirection.UP or (
+            event.direction == Gdk.ScrollDirection.SMOOTH and event.delta_y < 0)
+        subprocess.Popen(["/usr/local/bin/grokbot-volume", "up" if up else "down"])
+        GLib.timeout_add(300, self.refresh_status_once)
+        return True
+
+    def refresh_status_once(self):
+        self.refresh_status()
+        return False
 
     def current_views(self):
         try:

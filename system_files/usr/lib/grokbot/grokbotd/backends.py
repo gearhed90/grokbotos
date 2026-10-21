@@ -137,6 +137,7 @@ def dock_get(params):
         "left": c.get("left", "off"), "right": c.get("right", "off"),
         "icon_size": size,
         "hide": [h for h in c.get("hide", "").split(";") if h],
+        "status": c.get("status", "auto"),
     }
 
 
