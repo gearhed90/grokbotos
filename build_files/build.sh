@@ -103,6 +103,21 @@ fi
 
 systemctl enable podman.socket
 
+# fcitx5 ships launchers for its Qt settings tool and a keyboard layout
+# viewer. They would show up in the dock and launcher; hide them. Korean
+# input is configured by /etc/xdg/fcitx5 (manual/korean-input.md).
+for launcher in fcitx5-configtool kbd-layout-viewer5; do
+    f="/usr/share/applications/${launcher}.desktop"
+    if [[ -f "$f" ]]; then
+        sed -i '/^\[Desktop Entry\]/a NoDisplay=true' "$f"
+    fi
+done
+# Right Alt is a 한/영 trigger. Do not let a lone Alt press open
+# Firefox's menu bar as well.
+cat >/usr/lib64/firefox/defaults/pref/grokbot.js <<'EOF'
+pref("ui.key.menuAccessKeyFocuses", false);
+EOF
+
 # Screen lock PIN helper (grokbot-lock-setup). sudo ignores files that are
 # not 0440 root:root.
 chown root:root /etc/sudoers.d/grokbot-lock
