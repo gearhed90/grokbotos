@@ -5,6 +5,10 @@ set -ouex pipefail
 # Copy system_files/ from the build context onto the image root.
 cp -avf "/ctx/system_files"/. /
 
+# Laptops: NetworkManager-wifi + wpa_supplicant are what make Wi-Fi work at
+# all (without them nmcli/nmtui see no wireless devices). iwlwifi-*-firmware
+# covers Intel Wi-Fi, alsa-sof-firmware covers Intel SOF audio on most
+# 2018+ laptops. foot is the terminal nmtui opens in (grokbot-wifi).
 # Electron/Chromium libraries the grok-bot RPM links and does not always
 # declare. The RPM's own Requires (gtk3, nss, at-spi2-core, libnotify,
 # xdg-utils, libXtst, libuuid) are pulled again by dnf when the RPM is
@@ -21,6 +25,12 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     firefox \
     flatpak \
     fuzzel \
+    foot \
+    NetworkManager-wifi \
+    wpa_supplicant \
+    iwlwifi-mvm-firmware \
+    iwlwifi-dvm-firmware \
+    alsa-sof-firmware \
     python3 \
     iproute \
     python3-gobject \
