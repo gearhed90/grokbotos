@@ -57,6 +57,7 @@ window.grokbot-dock { background-color: rgba(24,24,27,0.94); }
 .grokbot-dock .status { margin: 0 6px; }
 .grokbot-dock .status button { padding: 2px 4px; margin: 1px; }
 .grokbot-dock .status label { font-size: 13px; padding: 0 2px; }
+.grokbot-dock .status button.alert { background-color: #dc2626; color: #ffffff; }
 .grokbot-dock .sep { background-color: rgba(255,255,255,0.15); min-width: 1px; min-height: 1px; }
 """
 
@@ -185,7 +186,7 @@ class Dock:
         add_signal(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self.quit)
         self.rebuild()
         GLib.timeout_add(1500, self.refresh)
-        GLib.timeout_add_seconds(5, self.refresh_status)
+        GLib.timeout_add_seconds(2, self.refresh_status)
 
     def quit(self):
         Gtk.main_quit()
@@ -307,7 +308,11 @@ class Dock:
             return True
         horiz, mode = self.status_mode
         size = max(16, min(24, self.conf["icon_size"] // 2))
-        for item in grokbot_status.items():
+        items = grokbot_status.items()
+        live = {i["id"] for i in items}
+        for sid, (b, _i, _l) in self.status_widgets.items():
+            b.set_visible(sid in live)
+        for pos, item in enumerate(items):
             w = self.status_widgets.get(item["id"])
             if w is None:
                 btn = Gtk.Button()
@@ -330,6 +335,13 @@ class Dock:
                 btn.show_all()
                 w = self.status_widgets[item["id"]] = (btn, img, lab)
             btn, img, lab = w
+            btn.set_visible(True)
+            self.status_box.reorder_child(btn, pos)
+            ctx = btn.get_style_context()
+            if item.get("alert"):
+                ctx.add_class("alert")
+            else:
+                ctx.remove_class("alert")
             if item["icon"]:
                 img.set_from_icon_name(item["icon"], Gtk.IconSize.BUTTON)
                 img.set_pixel_size(size)

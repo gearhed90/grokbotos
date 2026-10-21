@@ -9,7 +9,7 @@ import struct
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import VERSION, audit, paths, policy
+from . import peer, VERSION, audit, paths, policy
 
 MAX_BODY = 64 * 1024
 
@@ -34,7 +34,7 @@ class UnixHandler(socketserver.StreamRequestHandler):
             audit.record(transport="unix", principal="local:uid=%d" % uid, decision="deny",
                          error="foreign_uid", pid=pid)
             return
-        principal = "local:uid=%d" % uid
+        principal, who = peer.identify(pid, uid)
         while True:
             line = self.rfile.readline(MAX_BODY + 1)
             if not line:
@@ -46,7 +46,7 @@ class UnixHandler(socketserver.StreamRequestHandler):
                     req = json.loads(line)
                 except ValueError:
                     req = None
-                resp = self.server.dispatcher.handle(req, principal, "unix")
+                resp = self.server.dispatcher.handle(req, principal, "unix", peer=who)
             self.wfile.write((json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8"))
             self.wfile.flush()
 
@@ -76,6 +76,12 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _guard(self):
+        uid = policy.tcp_peer_uid(self.client_address[1], self.server.server_address[1])
+        if uid != os.getuid():
+            audit.record(transport="http", principal="http:uid=%s" % uid, decision="deny",
+                         error="foreign_uid")
+            self._send(403, {"error": "forbidden"})
+            return None
         if not _host_ok(self.headers.get("Host"), self.server.server_address[1]):
             audit.record(transport="http", principal="http:bad-host", decision="deny",
                          error="bad_host", host=self.headers.get("Host"))

@@ -1,4 +1,19 @@
 {
-  "_comment": "grokbotd web-origin grants. Deny by default: an origin not listed here gets nothing. Users add grants in ~/.config/grokbot/api-permissions.json. Capabilities: see /usr/share/grokbot/api/os-api.schema.json x-capabilities. docs/OS_API.md.",
+  "_comment": "grokbotd system defaults, per caller and per OS function (scope). Modes: allow | ask | deny. No blanket grants: '*' and app-wide grants are ignored. camera, microphone and power always ask, whatever is written here. Origins not listed get nothing (deny). Users change grants with the Settings app, 'grokbot-os grant/revoke' or the consent prompt; those go to ~/.config/grokbot/api-grants.json and win over this file. 'local' is the session user's own processes on the unix socket (CLI, MCP, Grok Bot): reads are always allowed, writes use these modes (missing scope = ask). See docs/OS_API.md and SECURITY.md.",
+  "local": {
+    "display": "allow",
+    "audio": "allow",
+    "notifications": "allow",
+    "input": "allow",
+    "lock": "allow",
+    "network": "ask",
+    "screen": "ask",
+    "files": "ask",
+    "location": "ask",
+    "camera": "ask",
+    "microphone": "ask",
+    "power": "ask",
+    "permissions": "allow"
+  },
   "origins": {}
 }

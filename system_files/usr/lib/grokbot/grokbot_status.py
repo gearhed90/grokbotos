@@ -1,6 +1,7 @@
-"""Status items for the dock: clock, battery, Wi-Fi, volume.
+"""Status items for the dock: camera/microphone in use, Wi-Fi, volume,
+battery, clock.
 
-Data comes from grokbotd (power.status, network.status, audio.status)
+Data comes from grokbotd (privacy.status, power.status, network.status, audio.status)
 over the user's unix socket, so the dock is just another OS API client.
 No GTK here, so it can be unit-tested.
 """
@@ -96,6 +97,28 @@ def _volume(audio):
             "tooltip": "볼륨 / Volume %s. 클릭: 음소거, 스크롤: 조절 / Click: mute, scroll: adjust" % text}
 
 
+def _who(sess):
+    p = sess.get("principal") or "?"
+    name = p[7:] if p.startswith("origin:") else ("이 컴퓨터 / local" if p.startswith("local:") else p)
+    return name + (" (%s)" % sess["client"] if sess.get("client") else "")
+
+
+def _privacy(priv):
+    """Camera / microphone in-use indicators (privacy.status). Shown
+    first, highlighted, for as long as a use session is open."""
+    if not priv:
+        return []
+    out = []
+    for kind, icon, ko, en in (("camera", "camera-web-symbolic", "카메라 사용 중", "Camera in use"),
+                               ("microphone", "audio-input-microphone-symbolic", "마이크 사용 중",
+                                "Microphone in use")):
+        ss = [x for x in priv.get("sessions", []) if x.get("kind") == kind]
+        if ss:
+            out.append({"id": "inuse-" + kind, "icon": icon, "text": ko, "alert": True,
+                        "tooltip": "%s / %s: %s" % (ko, en, ", ".join(_who(x) for x in ss))})
+    return out
+
+
 def clock(now=None):
     t = time.localtime(now)
     return {"id": "clock", "icon": None, "text": time.strftime("%H:%M", t),
@@ -104,6 +127,7 @@ def clock(now=None):
 
 def items(call=rpc, now=None):
     """Status items in display order; missing data drops the item."""
-    out = [_network(call("network.status")), _volume(call("audio.status")),
-           _battery(call("power.status")), clock(now)]
+    out = _privacy(call("privacy.status")) + [
+        _network(call("network.status")), _volume(call("audio.status")),
+        _battery(call("power.status")), clock(now)]
     return [i for i in out if i]
