@@ -243,11 +243,24 @@ def privacy_status(params):
 
 # ---------------- permissions / audit ----------------
 
-def permissions_list(params):
+def permissions_list(params, ctx=None):
     return {"scopes": {k: {"ko": v[0], "en": v[1], "always_ask": k in perms.ALWAYS_ASK,
                            "access": sorted(perms.SCOPE_ACCESS.get(k, ()))}
                        for k, v in perms.SCOPES.items()},
-            "principals": perms.listing(params.get("principal"))}
+            "principals": perms.listing(params.get("principal"),
+                                        include=(ctx or {}).get("principal"))}
+
+
+def permissions_whoami(params, ctx):
+    """The caller's own principal, as the daemon identified it."""
+    from . import peer
+    p = ctx["principal"]
+    out = {"principal": p, "transport": ctx.get("transport"), "local": perms.is_local(p),
+           "storable": perms.storable(p), "client_label": ctx.get("client")}
+    if perms.is_local(p):
+        out["name"] = peer.describe(p)
+        out.update({k: v for k, v in (ctx.get("peer") or {}).items() if k in ("pid", "exe", "unit", "script")})
+    return out
 
 
 def permissions_set(params, ctx):
@@ -305,7 +318,6 @@ METHODS = {
     "input.set": input_set,
     "capture.screenshot": capture_screenshot,
     "privacy.status": privacy_status,
-    "permissions.list": permissions_list,
     "audit.list": audit_list,
 }
 CTX_METHODS = {
@@ -313,6 +325,8 @@ CTX_METHODS = {
     "microphone.session.start": _session_start("microphone"),
     "media.session.stop": session_stop,
     "permissions.set": permissions_set,
+    "permissions.list": permissions_list,
+    "permissions.whoami": permissions_whoami,
     "permissions.revoke": permissions_revoke,
 }
 

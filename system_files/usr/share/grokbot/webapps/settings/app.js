@@ -169,7 +169,13 @@
       h("span", { class: "grow" }, label(s.principal), h("div", { class: "dim" }, s.purpose || "")),
       h("button", { type: "button", onclick: () => act(() => rpc("media.session.stop", { id: s.id })).then(render) }, t("stop"))));
     function label(pr) {
-      if (pr.startsWith("local:")) return t("perm_local");
+      if (pr.startsWith("local:")) {
+        const rest = pr.split(":").slice(2).join(":");
+        let n = rest.startsWith("unit=") ? rest.slice(5) : (rest.match(/:script=(?:module:)?(.+)$/) || [])[1] || rest.replace(/^exe=/, "");
+        n = n.split("/").pop() || t("perm_unknown");
+        if (!rest || rest === "unknown") n = t("perm_unknown");
+        return t("perm_local") + ": " + n + (rest && rest !== "unknown" ? " — " + rest : "");
+      }
       if (pr === "origin:" + me) return t("perm_this") + " (" + me + ")";
       return pr.replace(/^origin:/, "");
     }

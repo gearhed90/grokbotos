@@ -790,6 +790,29 @@
         "type": "object"
       }
     },
+    "permissions.whoami": {
+      "description": "Who the daemon thinks the caller is: the principal grants are bound to. Unix socket callers are identified by the kernel (SO_PEERCRED pid -> systemd unit or executable/script), not by x-client.",
+      "capability": "permissions.read",
+      "scope": "permissions",
+      "access": "read",
+      "x-title": [
+        "내 신원 보기",
+        "Show my identity"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "principal",
+          "local",
+          "storable"
+        ]
+      }
+    },
     "permissions.set": {
       "description": "Store a mode for one caller and one scope. Always shows the consent prompt. camera, microphone and power cannot be set to allow.",
       "capability": "permissions.write",

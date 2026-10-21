@@ -8,6 +8,8 @@
   grokbot-os grants [principal]                     permissions per scope
   grokbot-os grant <principal> <scope> allow|ask|deny   (asks you to confirm)
   grokbot-os revoke <principal> [scope]
+  grokbot-os whoami                                 how the daemon identifies this caller
+     principal: https://site, origin:..., unit:NAME.service, exe:/path, or a full local:uid=N:...
   grokbot-os mcp                                    MCP server on stdio
 
 Exit codes: 0 ok, 2 usage / invalid params / permission denied,
@@ -222,6 +224,9 @@ def cmd_grants(args, as_json):
 def _norm_principal(p):
     if p.startswith(("origin:", "local:")):
         return p
+    if p.startswith(("unit:", "exe:")):
+        k, v = p.split(":", 1)
+        return "local:uid=%d:%s=%s" % (os.getuid(), k, v)
     if p.startswith(("http://", "https://")):
         return "origin:" + p
     return p
@@ -342,6 +347,8 @@ def main(argv):
         if len(rest) == 2:
             p["scope"] = rest[1]
         return run_call("permissions.revoke", p, as_json)
+    if cmd == "whoami":
+        return run_call("permissions.whoami", {}, as_json)
     if cmd == "methods":
         return run_call("api.methods", {}, as_json)
     if cmd == "call":

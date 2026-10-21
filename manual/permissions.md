@@ -33,6 +33,9 @@ It shows **who** (the web app's address, or "a program on this computer"), **wha
 터미널, Grok Bot, MCP 도구처럼 내 계정으로 실행된 프로그램은 정보를 읽을 수 있고, 소리·밝기·알림·한글 입력·잠금 시간은 바로 바꿀 수 있다. 네트워크, 화면 캡처, 전원, 카메라, 마이크는 묻는다. 기본값은 `/etc/grokbot/api-permissions.json`의 `local`에 있다.
 Programs running as you (terminal, Grok Bot, MCP tools) can read status and change sound, brightness, notifications, input and idle times directly. Network, screen capture, power, camera and microphone ask. Defaults: `local` in `/etc/grokbot/api-permissions.json`.
 
+"항상 허용"은 그 프로그램 하나에만 적용된다. grokbotd는 프로그램이 밝힌 이름이 아니라 커널이 알려 주는 프로세스로 신원을 정한다(systemd 유닛, 또는 실행 파일과 스크립트). 내 신원 보기: `grokbot-os whoami`.
+"Always allow" applies to that one program. grokbotd identifies it from the kernel (its systemd unit, or its executable and script), not from the name it gives. See yours with `grokbot-os whoami`. Grant a unit from the CLI with `grokbot-os grant unit:NAME.service audio ask`.
+
 ## 보기와 취소 / View and revoke
 
 ```
