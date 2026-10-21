@@ -228,6 +228,37 @@ class ConsentDaemonTests(tg.Base):
         self.assertEqual(code, 403)
         self.assertEqual(self.prompts(), [])
 
+    def test_always_ask_scope_reads_do_not_prompt_once_granted(self):
+        o = "http://pw.app.localhost:7311"
+        self.sys_grant({"origins": {o: {"power": "ask"}}})
+        r = self.origin_rpc(o, "power.status")[2]
+        self.assertIn("result", r, r)
+        self.assertEqual(self.prompts(), [])  # VM b3-06: read prompted on every poll
+        self.answer("once")
+        self.origin_rpc(o, "power.action", {"action": "suspend"})
+        self.assertEqual(len(self.prompts()), 1)  # actions still ask
+        self.sys_grant({"origins": {}})
+
+    def test_identical_concurrent_prompts_share_one_answer(self):
+        import threading
+        self.sys_grant({"origins": {"http://q.app.localhost:7311": {"network": "ask"}}})
+        self.answer("deny")
+        # slow fake prompt so the calls overlap
+        out = []
+        ts = [threading.Thread(target=lambda: out.append(self.origin_rpc("http://q.app.localhost:7311",
+                                                                          "network.status")[2]))
+              for _ in range(5)]
+        open(os.path.join(self.tmp.name, "consent-delay"), "w").close()
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join(30)
+        self.assertEqual(len(out), 5)
+        self.assertTrue(all(x["error"]["code"] == -32001 for x in out))
+        os.unlink(os.path.join(self.tmp.name, "consent-delay"))
+        self.assertLess(len(self.prompts()), 5)
+        self.sys_grant({"origins": {}})
+
     # ---- audit / CLI ----
 
     def test_audit_list_and_cli(self):
