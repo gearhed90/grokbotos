@@ -32,10 +32,6 @@ default_border none
 default_floating_border none
 hide_edge_borders both
 
-# Per-output scale / position / mode saved by Settings > Display (grokbotd
-# display.set). Missing file is fine.
-include ~/.config/grokbot/outputs.conf
-
 bar {
     mode invisible
 }
@@ -101,3 +97,8 @@ bindsym Mod1+Shift+Tab exec /usr/lib/grokbot/grokbot-alttab.py prev
 # Close the focused window. Grok Bot is restarted by grokbot-kiosk.
 bindsym Mod1+F4 kill
 bindsym Mod4+q kill
+
+# Per-output scale / position / mode saved by Settings > Display (grokbotd
+# display.set). Last, so a problem in it cannot skip anything above;
+# grokbot-session creates it empty.
+include ~/.config/grokbot/outputs.conf
