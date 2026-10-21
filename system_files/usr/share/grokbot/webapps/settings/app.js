@@ -157,10 +157,16 @@
     const out = [...head("display")];
     if (pendingRevert) {
       const left = Math.max(0, Math.ceil((pendingRevert.until - Date.now()) / 1000));
-      out.push(card(null, row(h("span", { class: "grow" }, h("b", {}, t("disp_keep_q")), h("div", { class: "dim" }, t("disp_revert_in", left))),
+      const cd = h("div", { class: "dim", id: "disp-countdown" }, t("disp_revert_in", left));
+      out.push(card(null, row(h("span", { class: "grow" }, h("b", {}, t("disp_keep_q")), cd),
         h("button", { type: "button", onclick: revertDisplay }, t("disp_revert")),
         h("button", { type: "button", class: "primary", onclick: keepDisplay }, t("disp_keep")))));
-      setTimeout(() => { if (location.hash === "#display" && pendingRevert) render(); }, 1000);
+      // Update only the countdown text: re-rendering every second would
+      // replace the Keep button under the pointer and eat the click.
+      const tick = setInterval(() => {
+        if (!pendingRevert || !document.body.contains(cd)) return clearInterval(tick);
+        cd.textContent = t("disp_revert_in", Math.max(0, Math.ceil((pendingRevert.until - Date.now()) / 1000)));
+      }, 1000);
     }
     if (l && l.outputs.length) {
       const outs = [...l.outputs].sort((a, b) => (a.x - b.x) || (a.y - b.y));
