@@ -178,6 +178,7 @@ def monitors():
 class Dock:
     def __init__(self):
         self.windows = {}
+        self.windows_monitors = []
         self.buttons = []  # (button, keys, info)
         self.status_box = None
         self.status_mode = None
@@ -211,7 +212,10 @@ class Dock:
         return True
 
     def _rebuild_once(self):
-        self.rebuild()
+        # Only when the set of outputs really changed (Wayland announces the
+        # existing outputs at startup too).
+        if len(monitors()) != len(getattr(self, "windows_monitors", [])):
+            self.rebuild()
         return False
 
     def rebuild(self):
@@ -222,7 +226,8 @@ class Dock:
         self.status_box = None
         self.status_widgets = {}
         apps = app_list(self.conf["hide"])
-        for i, mon in enumerate(monitors()):
+        self.windows_monitors = monitors()
+        for i, mon in enumerate(self.windows_monitors):
             for edge in EDGES:
                 mode = self.conf[edge]
                 if mode != "off":
@@ -236,7 +241,9 @@ class Dock:
         win.get_style_context().add_class("grokbot-dock")
         GtkLayerShell.init_for_window(win)
         GtkLayerShell.set_namespace(win, "grokbot-dock")
-        if mon is not None:
+        if mon is not None and len(self.windows_monitors) > 1:
+            # Pin to an output only with several; with one, let the
+            # compositor place it (unchanged single-screen behaviour).
             GtkLayerShell.set_monitor(win, mon)
         GtkLayerShell.set_layer(win, GtkLayerShell.Layer.TOP)
         e = {"top": GtkLayerShell.Edge.TOP, "bottom": GtkLayerShell.Edge.BOTTOM,
