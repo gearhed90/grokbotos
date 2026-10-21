@@ -3,6 +3,11 @@
 # usage: sudo -E tools/vm/mkdisk.sh [out.qcow2]
 # Optional local-only recovery user (never commit real values):
 #   GBVM_TEST_USER=name GBVM_TEST_PASS=secret sudo -E tools/vm/mkdisk.sh
+# Update tests (tools/vm/update-test.sh): install from a registry and take
+# updates from it. Test-only, never in the image:
+#   GBVM_SOURCE_IMGREF=docker://localhost:5000/grokbotos:a   install source
+#   GBVM_TARGET_IMGREF=10.0.2.2:5000/grokbotos:latest        where updates come from
+#   GBVM_INSECURE_REGISTRIES="localhost:5000 10.0.2.2:5000"   plain-http registries
 # For a real install test, prefer `bootc install to-disk` (agents/skills/install-testing.md).
 set -euo pipefail
 # shellcheck source=tools/vm/common.sh
@@ -23,13 +28,27 @@ l2=$(losetup -f --show -o $((s2 * 512)) --sizelimit $(((e2 - s2 + 1) * 512)) "$r
 mkfs.vfat -F32 -n EFI-SYSTEM "$l1"; mkfs.xfs -f -L root "$l2"
 u2=$(blkid -s UUID -o value "$l2")
 mkdir -p "$mnt"; mount "$l2" "$mnt"; mkdir -p "$mnt/boot/efi"; mount -t tmpfs tmpfs "$mnt/boot/efi"
+regconf=$GBVM_DIR/99-gbvm-insecure.conf
+: >"$regconf"
+for r in ${GBVM_INSECURE_REGISTRIES:-}; do printf '[[registry]]\nlocation = "%s"\ninsecure = true\n\n' "$r" >>"$regconf"; done
+extra=()
+[[ -n ${GBVM_SOURCE_IMGREF:-} ]] && extra+=(--source-imgref "$GBVM_SOURCE_IMGREF")
+[[ -n ${GBVM_TARGET_IMGREF:-} ]] && extra+=(--target-imgref "$GBVM_TARGET_IMGREF")
 podman run --rm --privileged --pid=host --net=host --security-opt label=type:unconfined_t \
     -v /var/lib/containers:/var/lib/containers -v /dev:/dev -v /run/udev:/run/udev -v "$mnt:/target" \
-    "$GBVM_IMAGE" bootc install to-filesystem --skip-fetch-check --disable-selinux --bootloader=none \
+    -v "$regconf:/etc/containers/registries.conf.d/99-gbvm-insecure.conf:ro" \
+    "$GBVM_IMAGE" bootc install to-filesystem "${extra[@]}" --skip-fetch-check --disable-selinux --bootloader=none \
     --root-mount-spec="UUID=$u2" --boot-mount-spec= --karg=console=tty0 --karg=console=ttyS0 \
     --karg=enforcing=0 --karg=video=Virtual-1:1280x800 /target
 mount -o remount,rw "$mnt" || true
 dep=$(ls -d "$mnt"/ostree/deploy/default/deploy/*.0)
+if [[ -s $regconf ]]; then
+    mkdir -p "$dep/etc/containers/registries.conf.d"
+    cp "$regconf" "$dep/etc/containers/registries.conf.d/99-gbvm-insecure.conf"
+fi
+if [[ -n ${GBVM_HEALTH_TIMEOUT:-} ]]; then
+    printf '[health]\ntimeout_s = %s\n' "$GBVM_HEALTH_TIMEOUT" >"$dep/etc/grokbot/health.conf"
+fi
 if [[ -n ${GBVM_TEST_USER:-} ]]; then
     [[ -n ${GBVM_TEST_PASS:-} ]] || { echo "GBVM_TEST_PASS is required with GBVM_TEST_USER" >&2; exit 2; }
     hash=$(openssl passwd -6 "$GBVM_TEST_PASS")
