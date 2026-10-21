@@ -24,6 +24,7 @@ button { cursor:pointer; }
 button:hover { background:#323238; }
 button.primary { background:var(--acc); border-color:var(--acc); }
 button.danger { background:#7f1d1d; border-color:#991b1b; }
+button:disabled, button:disabled:hover { opacity:.45; cursor:default; background:#27272a; border-color:#3f3f46; }
 input[type=range] { width:100%; accent-color:var(--acc); padding:0; background:none; border:none; }
 input[type=password], input[type=text] { width:240px; }
 .switch { position:relative; width:46px; height:26px; border-radius:13px; background:#3f3f46; border:none; padding:0; }
