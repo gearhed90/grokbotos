@@ -34,6 +34,9 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     grim \
     slurp \
     wl-clipboard \
+    fcitx5 \
+    fcitx5-hangul \
+    fcitx5-gtk \
     firefox \
     flatpak \
     fuzzel \

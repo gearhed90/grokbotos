@@ -31,6 +31,7 @@ The end of the dock shows Wi-Fi, volume, battery and the clock. Click Wi-Fi for 
 | `Super+Shift+N`, `Alt+Shift+N` | 방해 금지 켜기/끄기 / toggle Do Not Disturb |
 | `Print` | 전체 화면 스크린샷 / full screenshot |
 | `Shift+Print` | 영역 스크린샷 / region screenshot |
+| `한/영`, `Shift+Space`, 오른쪽 `Alt` / Right Alt | 한글·영어 전환 / switch Korean–English ([한글 입력 / Korean input](korean-input.md)) |
 | 볼륨 키 / volume keys, 음소거 / mute | 볼륨 조절, 화면에 막대 표시 / change volume with an on-screen bar |
 | 밝기 키 / brightness keys | 화면 밝기 / screen brightness |
 | 재생·다음·이전 / play, next, previous | 미디어 재생 제어 / media control (playerctl) |

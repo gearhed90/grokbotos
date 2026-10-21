@@ -48,4 +48,13 @@ fi
 # Seen in a QEMU boot 2026-10-20.
 export LANG="${LANG:-C.UTF-8}"
 
+# Korean input (fcitx5 + hangul, started by sway). Wayland-native apps
+# (Grok Bot with --enable-wayland-ime, Firefox, foot) use text-input-v3;
+# XMODIFIERS covers X11 apps under XWayland, QT/SDL their own modules.
+# GTK_IM_MODULE is left unset on purpose: on Wayland GTK uses
+# text-input-v3, and forcing the fcitx module breaks that.
+export XMODIFIERS=@im=fcitx
+export QT_IM_MODULE=fcitx
+export SDL_IM_MODULE=fcitx
+
 exec sway
