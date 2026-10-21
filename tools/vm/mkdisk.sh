@@ -40,7 +40,7 @@ podman run --rm --privileged --pid=host --net=host --security-opt label=type:unc
     "$GBVM_IMAGE" bootc install to-filesystem "${extra[@]}" --skip-fetch-check --disable-selinux --bootloader=none \
     --root-mount-spec="UUID=$u2" --boot-mount-spec= --karg=console=tty0 --karg=console=ttyS0 \
     --karg=enforcing=0 --karg=video=Virtual-1:1280x800 /target
-mount -o remount,rw "$mnt" || true
+mountpoint -q "$mnt" && mount -o remount,rw "$mnt" || mount "$l2" "$mnt"
 dep=$(ls -d "$mnt"/ostree/deploy/default/deploy/*.0)
 if [[ -s $regconf ]]; then
     mkdir -p "$dep/etc/containers/registries.conf.d"
