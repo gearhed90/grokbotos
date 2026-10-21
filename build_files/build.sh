@@ -22,6 +22,7 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     flatpak \
     fuzzel \
     python3 \
+    iproute \
     python3-gobject \
     gtk3 \
     gtk-layer-shell \
@@ -76,6 +77,11 @@ if ! grep -q '^HOME_URL=' /usr/lib/os-release; then
 fi
 
 systemctl enable podman.socket
+
+# Grok Bot OS API daemon (docs/OS_API.md). A systemd user service, so it
+# runs as the session user, never root. --global enables it for every user.
+systemctl --global enable grokbotd.service
+python3 -m py_compile /usr/lib/grokbot/grokbotd/*.py /usr/lib/grokbot/grokbot_os_cli.py
 
 # Default browser for anything that is not the kiosk window itself.
 # grokbot-open-browser forces a separate Firefox profile and --new-window.

@@ -69,4 +69,12 @@ for path in root.glob(".github/workflows/*.yml"):
 print("workflow yaml ok")
 PY
 
+# grokbotd (docs/OS_API.md): user service, enabled globally, loopback only.
+assert_contains build_files/build.sh "systemctl --global enable grokbotd.service"
+assert_contains system_files/usr/lib/systemd/user/grokbotd.service "ExecStart=/usr/local/bin/grokbotd"
+assert_contains system_files/usr/lib/grokbot/grokbotd/server.py '("127.0.0.1", paths.http_port())'
+if grep -n '"0.0.0.0"' system_files/usr/lib/grokbot/grokbotd/*.py; then
+    fail "grokbotd must not bind all interfaces"
+fi
+
 echo "PASS test-contracts.sh"

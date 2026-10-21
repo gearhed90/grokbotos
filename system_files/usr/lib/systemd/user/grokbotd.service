@@ -1,0 +1,22 @@
+[Unit]
+Description=Grok Bot OS API daemon (read-only, phase 1)
+Documentation=https://github.com/head77x/oais/blob/main/docs/OS_API.md
+# Starts with the user manager; sway may come later. grokbotd finds the
+# sway IPC socket in $XDG_RUNTIME_DIR at call time.
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/grokbotd
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -21,6 +21,9 @@
 # Wallpaper: grokbot-desktop runs swaybg from /etc/grokbot/desktop.conf
 # (user override via grokbot-wallpaper). No `output background` here, or
 # sway would start a second swaybg. Never any desktop icons.
+# grokbotd (systemd user service) gets the session environment so
+# system.info can report it. It finds the sway IPC socket on its own.
+exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_DATA_DIRS
 exec /usr/local/bin/grokbot-desktop >>"$HOME/.local/share/grokbot/desktop.log" 2>&1
 
 exec sh -c 'mkdir -p "$HOME/.local/share/grokbot" "$HOME/Apps" "$HOME/.local/share/applications" && exec /usr/local/bin/grokbot-kiosk >>"$HOME/.local/share/grokbot/shell.log" 2>&1'
