@@ -129,7 +129,7 @@
     try { await rpc("display.set", p.before); toast(t("disp_reverted")); } catch (e) { toast(explain(e), true); }
     render();
   };
-  const keepDisplay = () => { if (pendingRevert) clearTimeout(pendingRevert.timer); pendingRevert = null; render(); };
+  const keepDisplay = () => { if (!pendingRevert) return; if (pendingRevert) clearTimeout(pendingRevert.timer); pendingRevert = null; render(); };
   const arrangement = (o, ref) => {
     if (!ref || o.name === ref.name) return "primary";
     if (o.x >= ref.x + ref.width) return "right";
@@ -160,7 +160,7 @@
       const cd = h("div", { class: "dim", id: "disp-countdown" }, t("disp_revert_in", left));
       out.push(card(null, row(h("span", { class: "grow" }, h("b", {}, t("disp_keep_q")), cd),
         h("button", { type: "button", onclick: revertDisplay }, t("disp_revert")),
-        h("button", { type: "button", class: "primary", onclick: keepDisplay }, t("disp_keep")))));
+        h("button", { type: "button", class: "primary", onclick: keepDisplay, onpointerdown: keepDisplay }, t("disp_keep")))));
       // Update only the countdown text: re-rendering every second would
       // replace the Keep button under the pointer and eat the click.
       const tick = setInterval(() => {

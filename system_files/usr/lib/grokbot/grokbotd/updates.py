@@ -112,7 +112,7 @@ def _seen_path():
 
 def _notify(summary, body, urgency="normal"):
     try:
-        subprocess.run(["notify-send", "-a", "Grok Bot OS", "-u", urgency, "-i", "system-software-update",
+        subprocess.run(["notify-send", "-a", "Grok Bot OS", "-u", urgency, "-t", "60000", "-i", "system-software-update",
                         summary, body], timeout=5, capture_output=True)
     except (OSError, subprocess.SubprocessError):
         pass

@@ -22,6 +22,17 @@ fi
 if swaymsg -q '[app_id="grokbot-settings"] focus' 2>/dev/null; then
     exit 0
 fi
+# Single-instance lock held until the window maps. A second launch while the first window is still starting waits
+# for it to map and focuses it instead of starting another Firefox.
+lockdir="${XDG_RUNTIME_DIR:-/tmp}"
+exec 9>"$lockdir/grokbot-settings.lock"
+if ! flock -n 9; then
+    for _ in $(seq 1 40); do
+        swaymsg -q '[app_id="grokbot-settings"] focus' 2>/dev/null && exit 0
+        sleep 0.25
+    done
+    exit 0
+fi
 profile="${HOME}/.local/share/grokbot/settings-profile"
 mkdir -p "$profile"
 mkdir -p "$profile/chrome"
@@ -51,5 +62,15 @@ JS
 if command -v swaymsg >/dev/null && swaymsg -t get_tree 2>/dev/null | grep -q '"app_id": "grokbot-settings"'; then
     swaymsg '[app_id="grokbot-settings"] focus' >/dev/null 2>&1 && exit 0
 fi
-exec /usr/local/bin/grokbot-run firefox --new-instance --no-remote --profile "$profile" \
+# Firefox already running on this profile but its window not mapped yet.
+if pgrep -f -- "--profile $profile" >/dev/null 2>&1; then
+    exit 0
+fi
+# grokbot-run hands the command to sway and returns at once, so keep the
+# lock until the window maps (max 10 s) to cover a quick second launch.
+/usr/local/bin/grokbot-run firefox --new-instance --no-remote --profile "$profile" \
     --name grokbot-settings --class grokbot-settings "$url"
+for _ in $(seq 1 40); do
+    swaymsg -t get_tree 2>/dev/null | grep -q '"app_id": "grokbot-settings"' && exit 0
+    sleep 0.25
+done
