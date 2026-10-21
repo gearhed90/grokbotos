@@ -26,6 +26,7 @@ first, Chromium only, `.gbapp` bundles, polkit for privileged actions).
 | `lock.status` | `lock.read` | `pin_set` (never the PIN), `setup_skipped`, `locked`, `idle_running`, `screen_off_s`, `lock_s` |
 | `audio.status` | `audio.read` | `available`, `output` and `input`: `volume_percent`, `muted` |
 | `display.brightness` | `display.read` | Backlight `devices`: name, brightness, max_brightness, percent |
+| `notifications.list` | `notifications.read` | `daemon_running`, `dnd`, `notifications` (id, app, summary, urgency; never the body). Param `include_history` |
 
 Errors are JSON-RPC errors:
 

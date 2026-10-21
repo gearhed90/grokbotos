@@ -12,7 +12,7 @@ import platform
 import socket
 import subprocess
 
-from . import lock, media, paths, sway
+from . import lock, media, notify, paths, sway
 
 
 class BackendError(RuntimeError):
@@ -256,4 +256,5 @@ METHODS = {
     "lock.status": lock.lock_status,
     "audio.status": media.audio_status,
     "display.brightness": media.display_brightness,
+    "notifications.list": notify.notifications_list,
 }

@@ -13,7 +13,8 @@
     "network.read": "Network interfaces, addresses and default route",
     "lock.read": "Screen lock and idle state: whether a PIN is set, locked, idle timeouts",
     "audio.read": "Output and input volume and mute state",
-    "display.read": "Display backlight brightness"
+    "display.read": "Display backlight brightness",
+    "notifications.read": "Notification app names and summaries (never bodies) and Do Not Disturb state"
   },
   "methods": {
     "api.methods": {
@@ -87,6 +88,12 @@
       "capability": "display.read",
       "params": {"type": "object", "properties": {}, "additionalProperties": false},
       "result": {"type": "object", "required": ["available", "devices"]}
+    },
+    "notifications.list": {
+      "description": "Visible notifications (id, app, summary, urgency; never the body), whether mako runs and whether Do Not Disturb is on. include_history adds the dismissed ones.",
+      "capability": "notifications.read",
+      "params": {"type": "object", "properties": {"include_history": {"type": "boolean", "default": false}}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["daemon_running", "dnd", "notifications"]}
     }
   }
 }

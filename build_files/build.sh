@@ -30,6 +30,7 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     brightnessctl \
     playerctl \
     wob \
+    mako \
     firefox \
     flatpak \
     fuzzel \
