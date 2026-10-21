@@ -107,8 +107,7 @@ def _uids_running(name):
     return uids
 
 
-def _api_up(uid):
-    path = os.path.join(RUNUSER, str(uid), "grokbot", "api.sock")
+def _probe(path):
     s = socket.socket(socket.AF_UNIX)
     s.settimeout(3)
     try:
@@ -119,6 +118,25 @@ def _api_up(uid):
         return False
     finally:
         s.close()
+
+
+def _api_up(uid):
+    """grokbotd only answers its own uid (SO_PEERCRED), so probe as that uid."""
+    path = os.path.join(RUNUSER, str(uid), "grokbot", "api.sock")
+    if os.getuid() == uid or os.getuid() != 0:
+        return _probe(path)
+    pid = os.fork()
+    if pid == 0:
+        try:
+            import pwd
+            os.setgroups([])
+            os.setgid(pwd.getpwuid(uid).pw_gid)
+            os.setuid(uid)
+            os._exit(0 if _probe(path) else 1)
+        except BaseException:
+            os._exit(2)
+    _, status = os.waitpid(pid, 0)
+    return os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
 
 
 def healthy():
