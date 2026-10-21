@@ -60,6 +60,29 @@ class StatusTests(unittest.TestCase):
     def test_daemon_down(self):
         self.assertEqual([i["id"] for i in st.items(lambda m: None)], ["clock"])
 
+    def test_ac_power_does_not_mean_charging(self):
+        # power_supply status, not on_ac: Full and Not charging stay on AC.
+        def battery(status, cap, on_ac=True):
+            res = {"power.status": {"batteries": [{"capacity_percent": cap, "status": status}],
+                                    "on_ac": on_ac}}
+            return {i["id"]: i for i in st.items(fake(res))}["battery"]
+
+        full = battery("Full", 100)
+        self.assertEqual(full["icon"], "battery-level-100-symbolic")
+        self.assertNotIn("charging", full["tooltip"])
+
+        held = battery("Not charging", 80)
+        self.assertEqual(held["icon"], "battery-level-80-symbolic")
+        self.assertNotIn("충전", held["tooltip"])
+
+        discharging = battery("Discharging", 78, on_ac=True)
+        self.assertEqual(discharging["icon"], "battery-level-80-symbolic")
+        self.assertNotIn("충전", discharging["tooltip"])
+
+        charging = battery("Charging", 42, on_ac=False)
+        self.assertEqual(charging["icon"], "battery-level-40-charging-symbolic")
+        self.assertIn("charging", charging["tooltip"])
+
 
 if __name__ == "__main__":
     unittest.main()

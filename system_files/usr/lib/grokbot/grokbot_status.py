@@ -50,7 +50,9 @@ def _battery(power):
         return None
     b = power["batteries"][0]
     cap = b.get("capacity_percent")
-    charging = (b.get("status") or "").lower() == "charging" or bool(power.get("on_ac"))
+    # Kernel status is Charging, Discharging, Not charging, or Full.
+    # on_ac stays true when the pack is full or held at a charge limit.
+    charging = (b.get("status") or "").lower() == "charging"
     if cap is None:
         icon = "battery-missing-symbolic"
     else:

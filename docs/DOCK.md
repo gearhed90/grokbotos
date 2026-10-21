@@ -80,3 +80,4 @@ grokbot-dock-config reset               # 사용자 설정 삭제, 기본값으�
 - `status = auto`(기본): 아래 독, 없으면 켜진 첫 독. `off`이면 숨김. 특정 가장자리를 고르면 그 독이 꺼져 있을 때 표시하지 않는다(새 독을 만들지 않음).
 - 위·아래 독과 왼쪽·오른쪽 `icons` 독은 아이콘만(시계는 숫자). 왼쪽·오른쪽 `labels` 독은 아이콘+글자.
 - 클릭: Wi-Fi → `grokbot-wifi`, 볼륨 → 음소거, 볼륨 위에서 스크롤 → 조절. 마우스를 올리면 자세한 내용.
+- 배터리 충전 표시는 `power.status`의 `status`가 `Charging`일 때만 붙는다. AC에 연결되어 있어도 `Full`이나 `Not charging`이면 충전 중이 아니다.
