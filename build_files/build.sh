@@ -73,7 +73,7 @@ else
     echo 'VARIANT_ID=grok-bot-os' >>/usr/lib/os-release
 fi
 if ! grep -q '^HOME_URL=' /usr/lib/os-release; then
-    echo 'HOME_URL="https://github.com/head77x/oais"' >>/usr/lib/os-release
+    echo 'HOME_URL="https://github.com/head77x/grokbotos"' >>/usr/lib/os-release
 fi
 
 systemctl enable podman.socket

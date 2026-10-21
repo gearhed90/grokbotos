@@ -1,0 +1,65 @@
+name: 버그 신고 / Bug report
+description: 무언가 제대로 동작하지 않을 때 / Something does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        보안 취약점은 여기에 올리지 말고 Security → Report a vulnerability로 비공개 신고해 주세요.
+        Do not report security vulnerabilities here. Use Security → Report a vulnerability.
+  - type: textarea
+    id: what
+    attributes:
+      label: 무슨 일이 있었나요 / What happened?
+      description: 실제 동작과 기대한 동작 / Actual vs. expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 절차 / Steps to reproduce
+      placeholder: |
+        1. 부팅 / Boot ...
+        2. Alt+Space ...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: image
+    attributes:
+      label: 이미지와 버전 / Image and version
+      description: "`sudo bootc status` 출력의 이미지와 digest, 또는 커밋 / image + digest from `sudo bootc status`, or a commit"
+      placeholder: ghcr.io/head77x/oais:latest@sha256:...
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 플랫폼 / Platform
+      options:
+        - 실제 하드웨어 amd64 / Real hardware amd64
+        - 실제 하드웨어 arm64 / Real hardware arm64
+        - VM (QEMU/KVM)
+        - VM (UTM / Apple Silicon)
+        - 기타 / Other
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: 구성 요소 / Component
+      options:
+        - 부팅, 세션 / Boot, session (sway, kiosk)
+        - Grok Bot 앱 실행 / Grok Bot app launch
+        - 독, 런처, Alt+Tab / Dock, launcher, Alt+Tab
+        - 배경화면 / Wallpaper
+        - OS API (grokbotd, grokbot-os, MCP)
+        - 앱 설치 / App install (grokbot-install)
+        - 이미지 빌드 / Image build
+        - 기타 / Other
+  - type: textarea
+    id: logs
+    attributes:
+      label: 로그 / Logs
+      description: "`journalctl --user -u grokbotd`, `~/.local/share/grokbot/*.log` 등. 개인 정보는 지워 주세요 / remove personal data"
+      render: text

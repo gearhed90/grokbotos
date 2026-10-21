@@ -49,7 +49,7 @@ desktop/update UX anyway.
 ## Template source: inlined, not forked separately
 
 `ROADMAP.md` Phase 0 says to fork `ublue-os/image-template` to get the base
-template. Since the working repo (`head77x/oais`) already existed as the
+template. Since the working repo (`head77x/oais`, renamed to `head77x/grokbotos` on 2026-10-21) already existed as the
 designated target, the template's files were copied directly into it
 instead of maintaining a second forked repository — same result (a working
 Containerfile/Justfile/CI baseline), one fewer repo to keep in sync.
