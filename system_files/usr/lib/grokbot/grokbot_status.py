@@ -119,6 +119,22 @@ def _privacy(priv):
     return out
 
 
+def _update(up):
+    """OS update indicator: an update is available, or one is staged and
+    needs a restart. Nothing when up to date (or update.status missing)."""
+    if not up:
+        return None
+    if up.get("restart_needed"):
+        return {"id": "update", "icon": "system-reboot-symbolic", "text": "다시 시작 필요",
+                "tooltip": "업데이트가 준비됐습니다. 다시 시작하면 적용됩니다 / Update ready: restart to use it. "
+                           "클릭: 업데이트 / Click: Update"}
+    if up.get("available"):
+        v = up.get("available_version") or ""
+        return {"id": "update", "icon": "software-update-available-symbolic", "text": "업데이트", "alert": True,
+                "tooltip": "OS 업데이트가 있습니다 %s / OS update available %s. 클릭: 업데이트 / Click: Update" % (v, v)}
+    return None
+
+
 def clock(now=None):
     t = time.localtime(now)
     return {"id": "clock", "icon": None, "text": time.strftime("%H:%M", t),
@@ -129,5 +145,5 @@ def items(call=rpc, now=None):
     """Status items in display order; missing data drops the item."""
     out = _privacy(call("privacy.status")) + [
         _network(call("network.status")), _volume(call("audio.status")),
-        _battery(call("power.status")), clock(now)]
+        _battery(call("power.status")), _update(call("update.status")), clock(now)]
     return [i for i in out if i]

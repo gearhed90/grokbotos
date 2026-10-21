@@ -64,6 +64,7 @@ SCOPES = {
     "screen": ("화면 캡처", "Screen capture"),
     "files": ("홈 폴더 파일 보기", "See files in your home folder"),
     "files-write": ("홈 폴더 파일 바꾸기(저장, 이름 바꾸기, 휴지통)", "Change files in your home folder (save, rename, trash)"),
+    "updates": ("OS 업데이트(확인, 설치, 되돌리기)", "OS updates (check, install, roll back)"),
     "mediakeys": ("미디어 키(재생, 다음 곡)", "Media keys (play, next track)"),
     "camera": ("카메라", "Camera"),
     "microphone": ("마이크", "Microphone"),
@@ -77,7 +78,7 @@ SCOPES = {
 SCOPE_ACCESS = {}
 
 # These never become silent: each use session / action is confirmed.
-ALWAYS_ASK = frozenset({"camera", "microphone", "power"})
+ALWAYS_ASK = frozenset({"camera", "microphone", "power", "updates"})
 
 _lock = threading.Lock()
 
