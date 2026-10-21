@@ -40,13 +40,15 @@ def _env():
     return env
 
 
-def prompt(principal, client, scope, method, description, summary, allow_always):
+def prompt(principal, client, scope, method, description, summary, allow_always,
+           allow_session=False, allow_once=True, warning=None):
     """Returns (answer, detail). answer in once|always|deny.
 
     Identical requests that arrive while one is waiting for the user share
     its answer instead of queueing one prompt each (a polling page used to
     pile up dozens; VM b3)."""
-    key = json.dumps([principal, scope, method, summary, bool(allow_always)], sort_keys=True, default=str)
+    key = json.dumps([principal, scope, method, summary, bool(allow_always), bool(allow_session)],
+                     sort_keys=True, default=str)
     with _pending_lock:
         ev = _pending.get(key)
         if ev is None:
@@ -58,7 +60,8 @@ def prompt(principal, client, scope, method, description, summary, allow_always)
         ev["event"].wait(TIMEOUT + 10)
         return ev["answer"] or ("deny", "timeout")
     try:
-        ev["answer"] = _prompt(principal, client, scope, method, description, summary, allow_always)
+        ev["answer"] = _prompt(principal, client, scope, method, description, summary, allow_always,
+                               allow_session, allow_once, warning)
         return ev["answer"]
     finally:
         with _pending_lock:
@@ -66,11 +69,13 @@ def prompt(principal, client, scope, method, description, summary, allow_always)
         ev["event"].set()
 
 
-def _prompt(principal, client, scope, method, description, summary, allow_always):
+def _prompt(principal, client, scope, method, description, summary, allow_always,
+            allow_session=False, allow_once=True, warning=None):
     ko, en = perms.SCOPES.get(scope, (scope, scope))
     req = {"principal": principal, "client": client, "scope": scope, "scope_ko": ko, "scope_en": en,
            "method": method, "description": description, "summary": summary,
-           "allow_always": bool(allow_always), "timeout": TIMEOUT}
+           "allow_always": bool(allow_always), "allow_session": bool(allow_session),
+           "allow_once": bool(allow_once), "warning": warning, "timeout": TIMEOUT}
     with _prompt_lock:
         try:
             r = subprocess.run(_cmd(), input=json.dumps(req, ensure_ascii=False), capture_output=True,
@@ -81,10 +86,15 @@ def _prompt(principal, client, scope, method, description, summary, allow_always
             return "deny", "no_prompt"
     ans = (r.stdout or "").strip().splitlines()[-1:] or [""]
     ans = ans[0]
-    if r.returncode != 0 or ans not in ("once", "always", "deny"):
+    if r.returncode != 0 or ans not in ("once", "session", "always", "deny"):
         return "deny", "no_prompt" if r.returncode != 0 else "bad_answer"
+    # Never trust the prompt process to widen what was offered.
     if ans == "always" and not allow_always:
+        ans = "session" if allow_session else "once"
+    if ans == "session" and not allow_session:
         ans = "once"
+    if ans == "once" and not allow_once:
+        ans = "deny"
     return ans, "user"
 
 
