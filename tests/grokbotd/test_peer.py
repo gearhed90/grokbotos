@@ -36,6 +36,12 @@ class PeerParsing(unittest.TestCase):
         self.assertIsNone(peer.unit_of("0::/user.slice/user-1000.slice/user@1000.service\n"))
         self.assertIsNone(peer.unit_of("0::/\n"))
         self.assertIsNone(peer.unit_of(""))
+        # system units (CI agent, system services) do not name the program
+        self.assertIsNone(peer.unit_of("0::/system.slice/hosted-compute-agent.service\n"))
+        self.assertIsNone(peer.unit_of("0::/system.slice/app-x-1234.scope\n"))
+        # another user's manager is not the peer's
+        self.assertIsNone(peer.unit_of(u % "grokbot-mcp.service", 1001))
+        self.assertEqual(peer.unit_of(u % "grokbot-mcp.service", 1000), "grokbot-mcp.service")
 
     def test_script_of(self):
         self.assertEqual(peer.script_of(["python3", "-u", "x.py"], "/home/a"), "/home/a/x.py")

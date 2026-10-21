@@ -4,9 +4,11 @@ The kernel tells us the peer's pid and uid (SO_PEERCRED, taken at
 connect() time, cannot be forged by the peer). From the pid we derive a
 stable identity that grants are bound to:
 
-  local:uid=N:unit=<systemd unit>   the process runs in its own systemd
-                                    unit (a .service, or an app-*.scope
-                                    with the random suffix removed)
+  local:uid=N:unit=<systemd unit>   the process runs in its own unit of
+                                    the user's manager (user@N.service):
+                                    a .service, or an app-*.scope with
+                                    the random suffix removed; system
+                                    units fall through to exe/script
   local:uid=N:exe=<path>            otherwise: /proc/<pid>/exe, the
                                     binary the kernel actually runs;
   local:uid=N:exe=<interp>:script=<path>
@@ -45,15 +47,28 @@ def _start_time(pid):
     return stat[stat.rindex(")") + 2:].split()[19]
 
 
-def unit_of(cgroup_text):
-    """The systemd unit a process runs in, or None for a plain session."""
+def unit_of(cgroup_text, uid=None):
+    """The systemd unit a process runs in, or None for a plain session.
+
+    Only units of the peer's own per-user manager count (the cgroup path
+    goes through user@<uid>.service): those are the apps and services the
+    session starts one per program. A process in a system unit (an agent,
+    a CI runner, a system service that spawns arbitrary children) is
+    identified by its exe/script instead, which is the finer identity.
+    """
     path = None
     for line in cgroup_text.splitlines():
         if line.startswith("0::"):
             path = line[3:]
     if not path:
         return None
-    last = path.rstrip("/").rsplit("/", 1)[-1]
+    parts = path.strip("/").split("/")
+    mgr = [i for i, x in enumerate(parts) if re.fullmatch(r"user@(\d+)\.service", x)]
+    if not mgr:
+        return None
+    if uid is not None and parts[mgr[-1]] != "user@%d.service" % uid:
+        return None
+    last = parts[-1]
     if not last or _GENERIC_UNITS.fullmatch(last):
         return None
     if last.endswith(".scope"):
@@ -103,7 +118,7 @@ def identify(pid, uid):
     if exe.endswith(" (deleted)"):
         exe = exe[:-len(" (deleted)")]
     details = {"pid": pid, "uid": uid, "exe": exe}
-    unit = unit_of(cg)
+    unit = unit_of(cg, uid)
     if unit:
         details["unit"] = unit
         return "%s:unit=%s" % (base, unit), details
