@@ -207,6 +207,7 @@ class DaemonTests(Base):
     def test_dock_merges_user_conf(self):
         d = self.rpc_unix("dock.get")["result"]
         self.assertEqual((d["bottom"], d["left"], d["icon_size"]), ("icons", "labels", 40))
+        self.assertEqual(d["status"], "auto")
 
     def test_apps(self):
         r = self.rpc_unix("apps.list")["result"]

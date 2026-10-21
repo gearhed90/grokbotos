@@ -32,6 +32,11 @@ if "$cfg" set bottom labels 2>/dev/null; then fail "bottom labels accepted"; fi
 if "$cfg" set middle icons 2>/dev/null; then fail "bad edge accepted"; fi
 if "$cfg" icon-size 5 2>/dev/null; then fail "bad size accepted"; fi
 
+grep -qx 'status = auto' <<<"$("$cfg" show)" || fail "default status"
+"$cfg" status left
+grep -qx 'status = left' <<<"$("$cfg" show)" || fail "status left"
+if "$cfg" status middle 2>/dev/null; then fail "bad status accepted"; fi
+
 "$cfg" reset
 grep -qx 'top = off' <<<"$("$cfg" show)" || fail "reset"
 
