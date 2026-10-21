@@ -131,7 +131,7 @@ class AppTokenTests(tg.Base):
             # a token is bound to its origin
             other = self.app_token("http://notes.app.localhost:%d" % self.port)
             self.assertEqual(self.rpc({"Origin": o, "Cookie": "gbt=" + other})[0], 403)
-            ev = [e for e in self.audit() if e.get("error") == "app_token_missing"]
+            ev = [e for e in self.audit_rejects() if e.get("error") == "app_token_missing"]
             self.assertTrue(ev)
         finally:
             self.grant({})
@@ -172,7 +172,7 @@ class OriginPeerTests(tg.Base):
             code, h, _ = self.http("/v1/rpc", {"jsonrpc": "2.0", "id": 1, "method": "audio.status"}, {"Origin": o})
             self.assertEqual(code, 403)
             self.assertNotIn("Access-Control-Allow-Origin", h)
-            self.assertTrue([e for e in self.audit() if e.get("error") == "origin_untrusted_peer"])
+            self.assertTrue([e for e in self.audit_rejects() if e.get("error") == "origin_untrusted_peer"])
         finally:
             self.grant({})
 
