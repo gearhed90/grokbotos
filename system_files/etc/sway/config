@@ -53,6 +53,9 @@ bindsym Mod1+space exec /usr/local/bin/grokbot-switch
 bindsym Mod4+g exec /usr/local/bin/grokbot-focus
 bindsym Mod1+g exec /usr/local/bin/grokbot-focus
 # Alt+Tab cycles every window across workspaces.
+# Wi-Fi / network setup (nmtui in a terminal). Works before Grok Bot sign-in.
+bindsym Mod4+n exec /usr/local/bin/grokbot-wifi
+bindsym Mod1+n exec /usr/local/bin/grokbot-wifi
 bindsym Mod1+Tab exec /usr/lib/grokbot/grokbot-alttab.py next
 bindsym Mod1+Shift+Tab exec /usr/lib/grokbot/grokbot-alttab.py prev
 # Close the focused window. Grok Bot is restarted by grokbot-kiosk.
