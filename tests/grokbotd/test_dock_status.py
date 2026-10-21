@@ -1,4 +1,5 @@
 """Dock status area: edge choice and items built from OS API results."""
+import os
 import time
 import unittest
 
@@ -97,6 +98,70 @@ class StatusTests(unittest.TestCase):
         discharging_ac = battery("Discharging", 78, True)
         self.assertEqual(discharging_ac["icon"], "battery-level-80-symbolic")
         self.assertEqual(discharging_ac["text"], "78%")
+
+    def test_ac_unknown_is_plugged_not_discharging(self):
+        # ACPI and charge-threshold laptops often report Unknown or no status.
+        def battery(status, cap, on_ac):
+            res = {"power.status": {"batteries": [{"capacity_percent": cap, "status": status}],
+                                    "on_ac": on_ac}}
+            return {i["id"]: i for i in st.items(fake(res))}["battery"]
+
+        for status in ("Unknown", "", None):
+            item = battery(status, 55, True)
+            self.assertEqual(item["icon"], "ac-adapter-symbolic", status)
+            self.assertEqual(item["text"], "전원 연결됨")
+            self.assertIn("전원 연결됨", item["tooltip"])
+            self.assertNotIn("가득", item["text"])
+
+    def test_full_and_held_without_ac_stay_percent(self):
+        def battery(status, cap, on_ac):
+            res = {"power.status": {"batteries": [{"capacity_percent": cap, "status": status}],
+                                    "on_ac": on_ac}}
+            return {i["id"]: i for i in st.items(fake(res))}["battery"]
+
+        for on_ac in (False, None):
+            full = battery("Full", 100, on_ac)
+            self.assertEqual(full["icon"], "battery-level-100-symbolic")
+            self.assertEqual(full["text"], "100%")
+            held = battery("Not charging", 80, on_ac)
+            self.assertEqual(held["icon"], "battery-level-80-symbolic")
+            self.assertEqual(held["text"], "80%")
+
+    def test_missing_capacity_in_each_branch(self):
+        def battery(status, on_ac):
+            res = {"power.status": {"batteries": [{"capacity_percent": None, "status": status}],
+                                    "on_ac": on_ac}}
+            return {i["id"]: i for i in st.items(fake(res))}["battery"]
+
+        charging = battery("Charging", True)
+        self.assertEqual(charging["icon"], "battery-missing-symbolic")
+        self.assertEqual(charging["text"], "충전 중")
+
+        full = battery("Full", True)
+        self.assertEqual(full["icon"], "battery-level-100-charged-symbolic")
+        self.assertEqual(full["text"], "전원 연결됨 (가득 참)")
+
+        unknown = battery("Unknown", True)
+        self.assertEqual(unknown["icon"], "ac-adapter-symbolic")
+        self.assertEqual(unknown["text"], "전원 연결됨")
+        self.assertIn("?", unknown["tooltip"])
+
+        discharging = battery("Discharging", True)
+        self.assertEqual(discharging["icon"], "battery-missing-symbolic")
+        self.assertEqual(discharging["text"], "?")
+
+    def test_adwaita_icons_if_present(self):
+        root = "/usr/share/icons/Adwaita"
+        if not os.path.isdir(root):
+            self.skipTest("Adwaita is not installed")
+        for rel in (
+            "symbolic/devices/ac-adapter-symbolic.svg",
+            "symbolic/status/battery-level-100-charged-symbolic.svg",
+            "symbolic/status/battery-level-40-charging-symbolic.svg",
+            "symbolic/status/battery-level-80-symbolic.svg",
+            "symbolic/status/battery-missing-symbolic.svg",
+        ):
+            self.assertTrue(os.path.isfile(os.path.join(root, rel)), rel)
 
 
 if __name__ == "__main__":

@@ -52,10 +52,13 @@ def _battery(power):
     cap = b.get("capacity_percent")
     status = (b.get("status") or "").lower()
     on_ac = bool(power.get("on_ac"))
-    # Kernel status is Charging, Discharging, Not charging, or Full.
-    # on_ac stays true when the pack is full or held at a charge limit.
+    # Charging and Discharging come from the kernel status string.
+    # Anything else while on AC (Unknown, empty, None, Not charging, Full)
+    # still means the adapter is connected. Some ACPI and charge-threshold
+    # laptops never leave Unknown.
     charging = status == "charging"
-    plugged = on_ac and status in ("full", "not charging")
+    discharging = status == "discharging"
+    plugged = on_ac and not charging and not discharging
     if cap is None:
         level, pct = None, "?"
     else:
