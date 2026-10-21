@@ -320,7 +320,25 @@ METHODS = {
     "privacy.status": privacy_status,
     "audit.list": audit_list,
 }
+def _apps_install(params, ctx):
+    from . import webapps
+    return webapps.public(webapps.install(params, ctx))
+
+
+def _apps_uninstall(params, ctx):
+    from . import webapps
+    return webapps.uninstall(params, ctx)
+
+
+def _apps_launch(params, ctx):
+    from . import webapps
+    return webapps.launch(params, ctx)
+
+
 CTX_METHODS = {
+    "apps.install": _apps_install,
+    "apps.uninstall": _apps_uninstall,
+    "apps.launch": _apps_launch,
     "camera.session.start": _session_start("camera"),
     "microphone.session.start": _session_start("microphone"),
     "media.session.stop": session_stop,

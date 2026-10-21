@@ -61,8 +61,10 @@ class SettingsStaticTests(unittest.TestCase):
         with open(os.path.join(tg.SF, "etc", "grokbot", "api-permissions.json")) as f:
             d = json.load(f)
         g = d["origins"]["http://settings.app.localhost:7311"]
-        for s in ("camera", "microphone", "screen", "files", "location", "windows", "apps"):
+        for s in ("camera", "microphone", "screen", "files", "location", "windows"):
             self.assertNotIn(s, g)
+        # apps: list and open; install/uninstall always prompt (test_installer)
+        self.assertEqual(g["apps"], "allow")
         self.assertEqual(g["power"], "ask")
         self.assertEqual(list(d["origins"]), ["http://settings.app.localhost:7311"])
 

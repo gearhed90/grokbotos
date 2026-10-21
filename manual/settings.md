@@ -11,6 +11,7 @@ Open the Settings app from the **Settings** icon in a dock or the launcher (`Sup
 | 알림 / Notifications (`notifications`) | 방해 금지, 현재 알림 / Do Not Disturb, current notifications |
 | 잠금과 대기 / Lock & idle (`lock`) | 화면 끄기·잠금 시간, 지금 잠그기 / screen-off and lock timeouts, lock now |
 | 키보드와 한글 / Keyboard & Korean (`keyboard`) | 한글 입력 켜기·끄기, 입력기 상태 / Korean input on/off, input method status |
+| 앱 / Apps (`apps`) | 웹 앱 열기, 설치(URL 또는 번들), 제거 / open, install (URL or bundle) and remove web apps ([web-apps.md](web-apps.md)) |
 | 권한 / Permissions (`permissions`) | 호출자별·기능별 권한 보기, 바꾸기, 취소, 카메라·마이크 사용 현황 / view, change and revoke grants per caller and function; camera and microphone in use |
 | 감사 기록 / Audit log (`audit`) | 모든 OS API 호출(허용·거부·오류) / every OS API call |
 

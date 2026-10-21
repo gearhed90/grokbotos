@@ -8,6 +8,10 @@
   grokbot-os grants [principal]                     permissions per scope
   grokbot-os grant <principal> <scope> allow|ask|deny   (asks you to confirm)
   grokbot-os revoke <principal> [scope]
+  grokbot-os apps [list]                            web apps (system and installed)
+  grokbot-os apps install <url|path> [id]           install (asks you to confirm)
+  grokbot-os apps uninstall <id> [--keep-data]      remove (asks you to confirm)
+  grokbot-os apps launch <id>                       open in its own app window
   grokbot-os whoami                                 how the daemon identifies this caller
      principal: https://site, origin:..., unit:NAME.service, exe:/path, or a full local:uid=N:...
   grokbot-os mcp                                    MCP server on stdio
@@ -162,6 +166,38 @@ def run_call(method, params, as_json):
     else:
         print("\n".join(human(resp["result"])))
     return 0
+
+
+def cmd_apps(args, as_json):
+    sub = args[0] if args else "list"
+    rest = args[1:]
+    if sub == "list" and not rest:
+        if as_json:
+            return run_call("apps.list", {"include_launchers": False}, True)
+        try:
+            resp = Client().call("apps.list", {"include_launchers": False})
+        except Unreachable as e:
+            sys.stderr.write("grokbot-os: %s\n" % e)
+            return 1
+        if "error" in resp:
+            sys.stderr.write("grokbot-os: %s\n" % resp["error"].get("message"))
+            return 2
+        for a in resp["result"].get("webapps", []):
+            print("%-14s %-8s %-28s %s  [%s]" % (a["id"], "system" if a.get("system") else a.get("source"),
+                                               a.get("name_ko") or a.get("name"), a.get("origin"),
+                                               ",".join(a.get("scopes") or []) or "-"))
+        return 0
+    if sub == "install" and len(rest) in (1, 2):
+        src = rest[0]
+        p = {"url": src} if src.startswith(("http://", "https://")) else {"path": os.path.abspath(src)}
+        if len(rest) == 2:
+            p["id"] = rest[1]
+        return run_call("apps.install", p, as_json)
+    if sub == "uninstall" and rest and len(rest) <= 2 and (len(rest) == 1 or rest[1] == "--keep-data"):
+        return run_call("apps.uninstall", {"id": rest[0], "keep_data": len(rest) == 2}, as_json)
+    if sub == "launch" and len(rest) == 1:
+        return run_call("apps.launch", {"id": rest[0]}, as_json)
+    return _usage("usage: apps [list] | install <url|path> [id] | uninstall <id> [--keep-data] | launch <id>")
 
 
 def cmd_audit(args, as_json):
@@ -347,6 +383,8 @@ def main(argv):
         if len(rest) == 2:
             p["scope"] = rest[1]
         return run_call("permissions.revoke", p, as_json)
+    if cmd == "apps":
+        return cmd_apps(rest, as_json)
     if cmd == "whoami":
         return run_call("permissions.whoami", {}, as_json)
     if cmd == "methods":

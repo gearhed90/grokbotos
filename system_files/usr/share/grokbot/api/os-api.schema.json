@@ -2,13 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/head77x/grokbotos/os-api.schema.json",
   "title": "Grok Bot OS API",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Single source of truth for grokbotd. JSON-RPC 2.0 over the unix socket and POST /v1/rpc, the grokbot-os CLI and the MCP tools are all generated from this file. Every method has a scope (an OS function) and an access level (read or write); permissions are granted per caller per scope with mode allow, ask or deny (docs/OS_API.md, SECURITY.md).",
   "x-capabilities": {
     "system.read": "OS name, version, kernel, hostname, uptime, memory, bootc image",
     "windows.read": "Window titles and app ids of every open window and workspace",
     "desktop.read": "Dock and wallpaper configuration",
-    "apps.read": "Installed apps and launcher entries",
+    "apps.read": "Installed apps, web apps and launcher entries",
+    "apps.write": "Install, remove (always confirmed by the user) and open web apps",
     "power.read": "Battery and AC status",
     "network.read": "Network interfaces, addresses and default route",
     "lock.read": "Screen lock and idle state: whether a PIN is set, locked, idle timeouts",
@@ -74,6 +75,30 @@
       "x-title": [
         "시스템 정보 보기",
         "Read system information"
+      ]
+    },
+    "system.resources": {
+      "description": "CPU use (percent since the previous call), load average, memory, swap, disk space and network byte counters.",
+      "capability": "system.read",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "cpu",
+          "memory",
+          "disks",
+          "network"
+        ]
+      },
+      "scope": "system",
+      "access": "read",
+      "x-title": [
+        "시스템 자원 보기",
+        "Read system resources"
       ]
     },
     "windows.list": {
@@ -172,7 +197,7 @@
       ]
     },
     "apps.list": {
-      "description": "Apps installed with grokbot-install and the launcher entries visible to the user.",
+      "description": "Apps installed with grokbot-install, web apps (system and user-installed, with origin, requested scopes and icon) and the launcher entries visible to the user.",
       "capability": "apps.read",
       "params": {
         "type": "object",
@@ -196,6 +221,108 @@
         "앱 목록 보기",
         "List apps"
       ]
+    },
+    "apps.install": {
+      "description": "Install a web app from a local bundle (directory or .zip with manifest.json) or a URL. Always shows the consent prompt with the app's name, origin and requested scopes. Adds a launcher entry (launcher and dock, never the desktop). Grants nothing: the app asks per scope.",
+      "capability": "apps.write",
+      "scope": "apps",
+      "access": "write",
+      "x-title": [
+        "웹 앱 설치",
+        "Install a web app"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$",
+            "maxLength": 31
+          }
+        },
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "id",
+          "origin"
+        ]
+      }
+    },
+    "apps.uninstall": {
+      "description": "Remove a user-installed web app: launcher, files, and unless keep_data, its browser profile (storage) and grants. Always shows the consent prompt. System apps cannot be removed.",
+      "capability": "apps.write",
+      "scope": "apps",
+      "access": "write",
+      "x-title": [
+        "웹 앱 제거",
+        "Remove a web app"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$",
+            "maxLength": 31
+          },
+          "keep_data": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ]
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "id",
+          "removed"
+        ]
+      }
+    },
+    "apps.launch": {
+      "description": "Open a web app in its own app window (separate browser profile, no browser controls) on a new workspace.",
+      "capability": "apps.write",
+      "scope": "apps",
+      "access": "write",
+      "x-title": [
+        "앱 열기",
+        "Open an app"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$",
+            "maxLength": 31
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ]
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "id",
+          "launched"
+        ]
+      }
     },
     "power.status": {
       "description": "Batteries (capacity, status) and whether AC power is online.",
@@ -982,8 +1109,8 @@
       "always_ask": false
     },
     "apps": {
-      "ko": "앱 목록",
-      "en": "Apps",
+      "ko": "앱 목록, 설치와 실행",
+      "en": "Apps (list, install, open)",
       "always_ask": false
     },
     "display": {

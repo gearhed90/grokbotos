@@ -51,7 +51,7 @@ SCOPES = {
     "system": ("시스템 정보", "System information"),
     "windows": ("창과 작업 공간", "Windows and workspaces"),
     "desktop": ("독과 배경화면", "Docks and wallpaper"),
-    "apps": ("앱 목록", "Apps"),
+    "apps": ("앱 목록, 설치와 실행", "Apps (list, install, open)"),
     "display": ("화면 밝기", "Display"),
     "audio": ("소리", "Sound"),
     "network": ("네트워크와 Wi-Fi", "Network and Wi-Fi"),
@@ -172,7 +172,10 @@ def origin_known(origin):
     _, modes, caps = _system()
     if origin in modes or origin in caps:
         return True
-    return ("origin:" + origin) in _user()
+    if ("origin:" + origin) in _user():
+        return True
+    from . import webapps  # installed web apps may ask for scopes
+    return origin in webapps.known_origins()
 
 
 def _save(grants):

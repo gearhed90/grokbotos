@@ -203,6 +203,41 @@
       ...cards];
   };
 
+  let appsSrc = "";
+  pages.apps = async () => {
+    const a = await rpc("apps.list", { include_launchers: false });
+    const scopes = await rpc("permissions.list", {}).then((p) => p.scopes).catch(() => ({}));
+    const sname = (s) => scopes[s] ? (lang === "ko" ? scopes[s].ko : scopes[s].en) : s;
+    const list = card(t("apps_installed"));
+    for (const app of a.webapps || []) {
+      if (app.id === "settings") continue;
+      const icon = app.icon_data ? h("img", { src: app.icon_data, alt: "", width: "36", height: "36", class: "appicon" }) : h("span", { class: "appicon ph" }, "◻");
+      const btns = h("span", { class: "btns" },
+        h("button", { type: "button", class: "primary", onclick: () => act(() => rpc("apps.launch", { id: app.id }), t("apps_opening")) }, t("apps_open")),
+        h("button", { type: "button", onclick: () => { location.hash = "#permissions"; } }, t("apps_perms")),
+        app.system ? h("span", { class: "pill" }, t("apps_system")) :
+          h("button", { type: "button", class: "danger", onclick: () => act(() => rpc("apps.uninstall", { id: app.id }), t("apps_removed")).then(render, () => {}) }, t("apps_remove")));
+      list.append(row(icon, h("span", { class: "grow" },
+        h("b", {}, lang === "ko" ? (app.name_ko || app.name) : app.name),
+        h("div", { class: "dim mono" }, app.origin + (app.source === "url" ? "" : "  ·  " + t("apps_src_" + app.source))),
+        h("div", { class: "dim" }, t("apps_asks") + ": " + ((app.scopes || []).map(sname).join(", ") || t("apps_nothing")))), btns));
+    }
+    if (!(a.webapps || []).some((x) => x.id !== "settings")) list.append(h("p", { class: "dim" }, t("apps_none")));
+    const inp = h("input", { type: "text", placeholder: "https://… / /home/…/my-app.zip", value: appsSrc, "aria-label": t("apps_source"), style: null });
+    inp.classList.add("wide");
+    inp.addEventListener("input", () => (appsSrc = inp.value));
+    const idIn = h("input", { type: "text", placeholder: t("apps_id_ph"), "aria-label": "id" });
+    const go = h("button", { type: "button", class: "primary", onclick: async () => {
+      const v = inp.value.trim(); if (!v) return;
+      const p = /^https?:\/\//.test(v) ? { url: v } : { path: v };
+      if (idIn.value.trim()) p.id = idIn.value.trim();
+      go.disabled = true; toast(t("apps_installing"));
+      try { await act(() => rpc("apps.install", p), t("apps_installed_ok")); appsSrc = ""; render(); } catch (_) {} finally { go.disabled = false; }
+    } }, t("apps_install"));
+    const add = card(t("apps_add"), h("p", { class: "dim" }, t("apps_add_hint")), row(inp, idIn, go));
+    return [...head("apps"), list, add];
+  };
+
   let auditFilter = "", auditWrites = true;
   pages.audit = async () => {
     const params = { limit: 200 }; if (auditFilter) params.decision = auditFilter;

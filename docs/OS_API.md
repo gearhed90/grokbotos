@@ -18,11 +18,15 @@ prompt. See "Permission model" below and the threat model in
 |---|---|---|---|
 | `api.methods` | (none) | (none) | Methods, their capability and whether the caller is allowed |
 | `system.info` | `system` read | `system.read` | OS name and version, kernel, hostname, uptime, memory, CPUs, booted bootc image, session |
+| `system.resources` | `system` read | `system.read` | CPU percent (since the previous call, at most 60 s ago; `null` on the first), per-CPU, load average, memory and swap, disk space per mount, network byte counters |
 | `windows.list` | `windows` read | `windows.read` | Windows from the sway tree: id, app_id, title, pid, workspace, focused, fullscreen, floating, rect. Optional param `workspace` |
 | `workspaces.list` | `windows` read | `windows.read` | Workspaces: name, num, output, focused, visible, urgent |
 | `dock.get` | `desktop` read | `desktop.read` | Effective dock config (`/etc/grokbot/dock.conf` + `~/.config/grokbot/dock.conf`) |
 | `wallpaper.get` | `desktop` read | `desktop.read` | Effective wallpaper, mode and color, and whether the image exists |
-| `apps.list` | `apps` read | `apps.read` | `installed` (records written by `grokbot-install`) and `launchers` (visible .desktop entries). Param `include_launchers` (default true) |
+| `apps.list` | `apps` read | `apps.read` | `installed` (records written by `grokbot-install`), `webapps` (system and installed web apps: id, name, name_ko, origin, start_url, source, requested scopes, `icon_data`) and `launchers` (visible .desktop entries). Param `include_launchers` (default true) |
+| `apps.install` | `apps` write | `apps.write` | Install a web app from `path` (directory or .zip with `manifest.json`) or `url`. Always prompts, showing name, origin and requested scopes. Grants nothing. See [Web apps](#web-apps) |
+| `apps.uninstall` | `apps` write | `apps.write` | Remove an installed web app (`id`); with `keep_data` false (default) also its profile and grants. Always prompts. System apps cannot be removed |
+| `apps.launch` | `apps` write | `apps.write` | Open a web app (`id`) in its own app window |
 | `power.status` | `power` read | `power.read` | Batteries (capacity, status) and `on_ac` |
 | `network.status` | `network` read | `network.read` | Interfaces (state, MAC, wireless, addresses), default route, `online` |
 | `lock.status` | `lock` read | `lock.read` | `pin_set` (never the PIN), `setup_skipped`, `locked`, `idle_running`, `screen_off_s`, `lock_s` |
@@ -143,7 +147,19 @@ Revoke: `permissions.revoke {principal, scope?}`, `grokbot-os revoke <origin> [s
 
 grokbotd serves static web apps from the read-only image, `/usr/share/grokbot/webapps/<id>/`, on their own origin `http://<id>.app.localhost:7311` (only `GET`, only files under that directory, no dotfiles or traversal, fixed content types). Every response carries a strict CSP (`script-src 'self'`, `connect-src 'self'`, no inline script, `frame-ancestors 'none'`), `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`. The app reaches the OS only through `POST /v1/rpc` on the same origin, with that origin's grants; if a browser omits `Origin` on a same-origin request, `Sec-Fetch-Site: same-origin` plus a served `Host` identifies it.
 
-The only app today is **Settings** (`grokbot-settings`, `manual/settings.md`). Its system grant is in `/etc/grokbot/api-permissions.json`: `system`, `network`, `audio`, `display`, `notifications`, `lock`, `input`, `permissions`, `audit` allow, `power` ask; nothing else. It is shown in Firefox (already in the image; Chromium is not) with a dedicated profile, its tab strip and address bar hidden by userChrome.css, and app_id `grokbot-settings`, tiled by sway so the docks stay visible (`--kiosk` was tried and covers the docks).
+System apps: **System Monitor** (`sysmon`, see [Web apps](#web-apps)) and **Settings** (`grokbot-settings`, `manual/settings.md`). Its system grant is in `/etc/grokbot/api-permissions.json`: `system`, `network`, `audio`, `display`, `notifications`, `lock`, `input`, `permissions`, `audit` allow, `power` ask; nothing else. It is shown in Firefox (already in the image; Chromium is not) with a dedicated profile, its tab strip and address bar hidden by userChrome.css, and app_id `grokbot-settings`, tiled by sway so the docks stay visible (`--kiosk` was tried and covers the docks).
+
+## Web apps
+
+Installed web apps are first-class apps: they show in the launcher and the dock (never on the desktop, which has no icons), open in their own window, keep their data offline, and reach the OS only with per-scope grants.
+
+- **Sources.** `apps.install` takes a local bundle (`path`: a directory or `.zip` with a W3C `manifest.json`) or a `url` (`https://`, or `http://` on loopback). For a URL grokbotd reads the page's `<link rel="manifest">`, the manifest and one icon (size-limited, redirects re-checked); without a manifest it uses the page title. Bundles are checked before anything is copied: only web file types (html, js, css, images, fonts, json, wasm, txt), no dotfiles, no symlinks, no `..` in zips, at most 50 MB / 2000 files. A bundle's `start_url` must be a path inside it.
+- **Manifest extension.** An optional `"grokbot"` member: `id` (`[a-z][a-z0-9-]{0,30}`), `name_ko`, and `scopes` (the OS functions it will ask for; unknown scopes and `*` are refused). Scopes are informational: shown at install time and in Settings, never granted by installing.
+- **Origins.** A bundle is served by grokbotd on `http://<id>.app.localhost:7311` from `~/.local/share/grokbot/webapps/<id>/` (system apps in `/usr/share/grokbot/webapps/` win; their ids and `settings`, `api`, `www` are reserved). A URL app keeps the site's own origin. The origin is the principal for grants.
+- **Consent.** Install and uninstall always prompt (no "Always" button), naming the app, its origin, source and requested scopes. After install the origin is *known* (it gets CORS answers, so it can call `permissions.request`) but every scope is still `deny` until the user grants it through the prompt (`permissions.request`, or Settings > Permissions).
+- **Launcher.** Install writes `~/.local/share/applications/grokbot-webapp-<id>.desktop` (`Exec=grokbot-webapp <id>`, `StartupWMClass=grokbot-webapp-<id>`). `grokbot-webapp <id>` opens Firefox with app_id `grokbot-webapp-<id>`, a profile of its own in `~/.local/share/grokbot/webapp-profiles/<id>` and userChrome.css hiding the tab strip and address bar; sway tiles it on a new workspace (no fullscreen, the docks stay visible). One window per app.
+- **Offline storage.** Because each app has its own profile, its service worker, Cache Storage, IndexedDB and localStorage are separate from every other app and the normal browser and survive restarts. The profile keeps storage on shutdown, auto-grants `navigator.storage.persist()`, and lists the app host in `dom.securecontext.allowlist` so service workers run on `http://<id>.app.localhost`. Uninstall deletes the profile unless `keep_data` is true.
+- **Shipped app.** System Monitor (`sysmon`, `/usr/share/grokbot/webapps/sysmon`, Korean UI with an English toggle) shows CPU, memory, disk, battery, network and an audit summary. It ships with **no grants**: on first run it asks for `system`, `power`, `network` and `audit` one prompt at a time, and each card offers to ask again. It keeps an hour of CPU/memory history in IndexedDB and its shell works offline through a service worker.
 
 ## CLI: grokbot-os
 

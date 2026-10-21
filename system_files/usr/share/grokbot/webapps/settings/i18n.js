@@ -3,6 +3,12 @@
 window.I18N = {
   en: {
     app_title: "Settings", lang_other: "한국어",
+    nav_apps: "Apps", apps_title: "Apps", apps_sub: "Web apps open in their own window and keep their data offline. Each OS function they use asks you first.",
+    apps_installed: "Installed web apps", apps_open: "Open", apps_opening: "Opening…", apps_perms: "Permissions", apps_remove: "Remove",
+    apps_removed: "Removed", apps_system: "Built in", apps_asks: "Will ask for", apps_nothing: "nothing", apps_none: "No web apps installed.",
+    apps_src_bundle: "installed bundle", apps_src_system: "built in", apps_add: "Install a web app", apps_source: "URL or bundle path",
+    apps_add_hint: "A https:// address, or a folder / .zip on this computer that contains manifest.json. You will be asked to confirm. Apps go in the launcher and the dock, never on the desktop.",
+    apps_id_ph: "id (optional)", apps_install: "Install", apps_installing: "Answer the confirmation prompt…", apps_installed_ok: "Installed",
     nav_wifi: "Wi-Fi", nav_sound: "Sound", nav_display: "Display", nav_notifications: "Notifications",
     nav_lock: "Lock & idle", nav_keyboard: "Keyboard & Korean", nav_permissions: "Permissions", nav_audit: "Audit log",
     loading: "Loading…", unavailable: "Not available on this computer", denied: "Settings has no permission for this. Check Permissions.",
@@ -40,6 +46,12 @@ window.I18N = {
   },
   ko: {
     app_title: "설정", lang_other: "English",
+    nav_apps: "앱", apps_title: "앱", apps_sub: "웹 앱은 자기 창에서 열리고 데이터를 오프라인에도 보관합니다. OS 기능을 쓸 때마다 기능별로 먼저 묻습니다.",
+    apps_installed: "설치된 웹 앱", apps_open: "열기", apps_opening: "여는 중…", apps_perms: "권한", apps_remove: "제거",
+    apps_removed: "제거했습니다", apps_system: "기본 앱", apps_asks: "요청할 권한", apps_nothing: "없음", apps_none: "설치된 웹 앱이 없습니다.",
+    apps_src_bundle: "설치한 번들", apps_src_system: "기본 제공", apps_add: "웹 앱 설치", apps_source: "URL 또는 번들 경로",
+    apps_add_hint: "https:// 주소, 또는 manifest.json이 든 이 컴퓨터의 폴더나 .zip. 확인 창이 뜹니다. 앱은 실행기와 독에만 나타나고 바탕화면에는 두지 않습니다.",
+    apps_id_ph: "id (선택)", apps_install: "설치", apps_installing: "확인 창에서 선택해 주세요…", apps_installed_ok: "설치했습니다",
     nav_wifi: "Wi-Fi", nav_sound: "소리", nav_display: "디스플레이", nav_notifications: "알림",
     nav_lock: "잠금과 대기", nav_keyboard: "키보드와 한글", nav_permissions: "권한", nav_audit: "감사 기록",
     loading: "불러오는 중…", unavailable: "이 컴퓨터에서는 쓸 수 없습니다", denied: "설정 앱에 이 기능 권한이 없습니다. 권한 페이지를 확인하세요.",

@@ -2,10 +2,11 @@
 
 Only the JSON Schema subset the API file uses is implemented (object
 params with typed properties, enum, minimum/maximum,
-minLength/maxLength and additionalProperties). Keeping it in the
+minLength/maxLength, pattern and additionalProperties). Keeping it in the
 standard library means the daemon needs nothing beyond python3.
 """
 import json
+import re
 
 from . import paths
 
@@ -66,6 +67,8 @@ def validate_params(spec, params):
                     raise ParamError("%s is too short" % name)
                 if "maxLength" in p and len(v) > p["maxLength"]:
                     raise ParamError("%s is too long" % name)
+                if "pattern" in p and not re.search(p["pattern"], v):
+                    raise ParamError("%s has an invalid format" % name)
         elif "default" in p:
             out[name] = p["default"]
     for name in pschema.get("required", []):

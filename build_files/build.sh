@@ -128,6 +128,7 @@ visudo -cf /etc/sudoers.d/grokbot-lock
 # runs as the session user, never root. --global enables it for every user.
 systemctl --global enable grokbotd.service
 python3 -m py_compile /usr/lib/grokbot/grokbotd/*.py /usr/lib/grokbot/grokbot_os_cli.py /usr/lib/grokbot/grokbot_consent.py
+bash -n /usr/local/bin/grokbot-webapp
 
 # Default browser for anything that is not the kiosk window itself.
 # grokbot-open-browser forces a separate Firefox profile and --new-window.
