@@ -199,9 +199,15 @@ just build
 
 ## 문서 / Docs
 
+문서는 세 갈래다. / Docs live in three trees:
+
+- **[`manual/`](manual/)**: 사용자 설명서 / end-user manual ([시작하기 / getting started](manual/getting-started.md), [설치 / install](manual/install.md), [독과 단축키 / docks & hotkeys](manual/docks-and-hotkeys.md), [Wi-Fi](manual/wifi.md), [업데이트와 롤백 / updates & rollback](manual/updates-and-rollback.md))
+- **[`docs/`](docs/)**: 구조 참고 문서 / architecture reference (아래 표 / table below)
+- **[`agents/skills/`](agents/skills/)**: 작업 절차, 사람과 AI 에이전트용 / task procedures for contributors and AI agents ([OS API 메서드 / methods](agents/skills/os-api-methods.md), [VM 테스트 / testing](agents/skills/vm-testing.md), [화면 확인 / visual verification](agents/skills/visual-verification.md), [설치 테스트 / install testing](agents/skills/install-testing.md)). 규칙은 / Rules: [`AGENTS.md`](AGENTS.md)
+
 | 문서 | 내용 |
 |---|---|
-| [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md) | 로컬 VM 테스트 / local VM testing |
+| [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md) | 로컬 VM 테스트 / local VM testing (도구 / tools: [`tools/vm/`](tools/vm/)) |
 | [`docs/OS_API.md`](docs/OS_API.md) | OS API, 보안 모델, CLI, MCP |
 | [`docs/DOCK.md`](docs/DOCK.md) | 독과 창 배치 / docks & window layout |
 | [`docs/DESKTOP.md`](docs/DESKTOP.md) | 배경화면, 바탕화면 층 / wallpaper & desktop layer |
@@ -210,6 +216,8 @@ just build
 | [`docs/HARDWARE.md`](docs/HARDWARE.md) | 하드웨어와 드라이버 / hardware & drivers |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | 로드맵 / roadmap |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | 결정 기록 / decision log |
+
+기여 / Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md) · 보안 / Security: [`SECURITY.md`](SECURITY.md) · 제안·질문 / Ideas & Q&A: [Discussions](https://github.com/head77x/grokbotos/discussions)
 
 ## 공장 초기화 / Factory reset
 
@@ -238,7 +246,10 @@ disk_config/                          ISO / qcow2
 .github/workflows/build.yml           GHCR oais, oais-arm64
 .github/workflows/build-disk.yml      qcow2 / anaconda ISO
 .github/workflows/check.yml           셸 테스트. 이미지는 안 만듦
-docs/                                 문서 (OS_API.md, DOCK.md, DESKTOP.md ...)
+docs/                                 구조 참고 문서 (OS_API.md, DOCK.md, DESKTOP.md ...)
+manual/                               사용자 설명서 / end-user manual
+agents/skills/                        작업 절차 / task procedures (AGENTS.md)
+tools/vm/                             VM 테스트 도구 (vm.sh, mkdisk.sh, mon.py, qmp.py)
 tests/
 legacy/orchestrator/                  예전 OAIS(AI-OS) 오케스트레이터 코드. 이미지에 없음, 참고용
 ```
