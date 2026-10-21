@@ -59,7 +59,7 @@
     document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = t(e.dataset.t); });
     $("lang").textContent = t("lang");
     $("prev").title = t("prev"); $("next").title = t("next");
-    $("play").textContent = v.paused ? "▶" : "⏸"; $("play").title = v.paused ? t("play") : t("pause");
+    $("playi").src = v.paused ? "i-play.svg" : "i-pause.svg"; $("play").title = v.paused ? t("play") : t("pause");
     if (idx < 0) $("nowt").textContent = t("nothing");
     $("art").classList.toggle("spin", !v.paused);
     const ol = $("list"); ol.replaceChildren();
