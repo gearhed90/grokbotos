@@ -75,9 +75,19 @@ def system_info(params):
         "memory": {"total_bytes": mem.get("MemTotal"), "available_bytes": mem.get("MemAvailable")},
         "cpus": os.cpu_count(),
         "bootc_image": _bootc_image(),
-        "session": {"wayland_display": os.environ.get("WAYLAND_DISPLAY"),
+        "session": {"wayland_display": _wayland_display(),
                     "sway_running": _sway_ok()},
     }
+
+
+def _wayland_display():
+    # The user service may start before sway exports WAYLAND_DISPLAY.
+    d = os.environ.get("WAYLAND_DISPLAY")
+    if d:
+        return d
+    socks = sorted(os.path.basename(p) for p in glob.glob(os.path.join(paths.runtime_dir(), "wayland-*"))
+                   if not p.endswith(".lock"))
+    return socks[0] if socks else None
 
 
 def _sway_ok():
