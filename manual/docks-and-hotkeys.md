@@ -23,5 +23,8 @@ grokbot-dock-config reset
 | `Alt+Tab`, `Alt+Shift+Tab` | 창 전환 / switch windows |
 | `Alt+F4`, `Super+Q` | 창 닫기 / close window |
 | `Super+L`, `Alt+L` | 화면 잠금 / lock the screen ([잠금 / lock](lock-and-idle.md)) |
+| 볼륨 키 / volume keys, 음소거 / mute | 볼륨 조절, 화면에 막대 표시 / change volume with an on-screen bar |
+| 밝기 키 / brightness keys | 화면 밝기 / screen brightness |
+| 재생·다음·이전 / play, next, previous | 미디어 재생 제어 / media control (playerctl) |
 
 자세한 구현은 / Details: [`docs/DOCK.md`](../docs/DOCK.md)

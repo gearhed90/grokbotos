@@ -26,6 +26,10 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     swayidle \
     sudo \
     openssl \
+    wireplumber \
+    brightnessctl \
+    playerctl \
+    wob \
     firefox \
     flatpak \
     fuzzel \

@@ -1,0 +1,29 @@
+#!/bin/bash
+# Volume keys: grokbot-volume up|down|mute|mic-mute|get  (PipeWire, wpctl)
+set -euo pipefail
+step=${GROKBOT_VOLUME_STEP:-5}
+sink=@DEFAULT_AUDIO_SINK@
+source=@DEFAULT_AUDIO_SOURCE@
+
+percent() {
+    # "Volume: 0.40" or "Volume: 0.40 [MUTED]"
+    local out vol
+    out=$(wpctl get-volume "$1" 2>/dev/null) || { echo 0; return; }
+    if [[ $out == *MUTED* ]]; then
+        echo 0
+        return
+    fi
+    vol=${out#Volume: }
+    vol=${vol%% *}
+    awk -v v="$vol" 'BEGIN { printf "%d\n", v * 100 + 0.5 }'
+}
+
+case ${1:-} in
+    up) wpctl set-mute "$sink" 0; wpctl set-volume -l 1.0 "$sink" "${step}%+" ;;
+    down) wpctl set-volume "$sink" "${step}%-" ;;
+    mute) wpctl set-mute "$sink" toggle ;;
+    mic-mute) wpctl set-mute "$source" toggle; /usr/local/bin/grokbot-osd "$(percent "$source")"; exit 0 ;;
+    get) percent "$sink"; exit 0 ;;
+    *) echo "usage: grokbot-volume up|down|mute|mic-mute|get" >&2; exit 2 ;;
+esac
+/usr/local/bin/grokbot-osd "$(percent "$sink")"

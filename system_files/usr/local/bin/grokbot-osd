@@ -1,0 +1,29 @@
+#!/bin/bash
+# On-screen popup bar (wob) for volume and brightness.
+#   grokbot-osd --serve   started by sway: FIFO -> wob
+#   grokbot-osd <0-100>   show a value
+set -euo pipefail
+fifo="${XDG_RUNTIME_DIR:-/tmp}/grokbot/osd.fifo"
+
+if [[ ${1:-} == "--serve" ]]; then
+    mkdir -p "$(dirname "$fifo")"
+    while true; do
+        rm -f "$fifo"
+        mkfifo -m 0600 "$fifo"
+        # tail keeps the FIFO open so wob does not see EOF between writes.
+        tail -f "$fifo" | wob || true
+        sleep 1
+    done
+fi
+
+value=${1:?usage: grokbot-osd <0-100> | --serve}
+if [[ ! $value =~ ^[0-9]+$ ]]; then
+    echo "grokbot-osd: not a number: $value" >&2
+    exit 2
+fi
+(( value > 100 )) && value=100
+if [[ -p $fifo ]]; then
+    # Never block a key binding if wob is not reading.
+    # shellcheck disable=SC2016  # expanded by the inner bash
+    timeout 1 bash -c 'echo "$1" >"$2"' _ "$value" "$fifo" || true
+fi

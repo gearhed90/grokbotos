@@ -24,6 +24,8 @@ first, Chromium only, `.gbapp` bundles, polkit for privileged actions).
 | `power.status` | `power.read` | Batteries (capacity, status) and `on_ac` |
 | `network.status` | `network.read` | Interfaces (state, MAC, wireless, addresses), default route, `online` |
 | `lock.status` | `lock.read` | `pin_set` (never the PIN), `setup_skipped`, `locked`, `idle_running`, `screen_off_s`, `lock_s` |
+| `audio.status` | `audio.read` | `available`, `output` and `input`: `volume_percent`, `muted` |
+| `display.brightness` | `display.read` | Backlight `devices`: name, brightness, max_brightness, percent |
 
 Errors are JSON-RPC errors:
 
