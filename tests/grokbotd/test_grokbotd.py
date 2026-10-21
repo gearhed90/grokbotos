@@ -49,7 +49,7 @@ class FakeSway(socketserver.StreamRequestHandler):
 FAKE_TOOLS = {
     # Answer comes from $HOME/consent-answer (default deny); the request is logged.
     "fake-consent": 'cat >>"$HOME/consent.log"; echo >>"$HOME/consent.log"; '
-                    'cat "$HOME/consent-answer" 2>/dev/null || echo deny',
+                    '[[ -f $HOME/consent-delay ]] && sleep 1; cat "$HOME/consent-answer" 2>/dev/null || echo deny',
     "fake-capture": 'mkdir -p "$HOME/shots"; f="$HOME/shots/screenshot-test.png"; '
                     'printf PNG >"$f"; echo "$f"',
     "systemctl": "exit 0",

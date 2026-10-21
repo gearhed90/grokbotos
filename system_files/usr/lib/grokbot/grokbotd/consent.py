@@ -19,6 +19,8 @@ from . import paths, perms
 TIMEOUT = 60
 SESSION_MAX_S = 3600
 _prompt_lock = threading.Lock()
+_pending_lock = threading.Lock()
+_pending = {}
 _sessions = {}
 _sess_lock = threading.Lock()
 
@@ -39,7 +41,32 @@ def _env():
 
 
 def prompt(principal, client, scope, method, description, summary, allow_always):
-    """Returns (answer, detail). answer in once|always|deny."""
+    """Returns (answer, detail). answer in once|always|deny.
+
+    Identical requests that arrive while one is waiting for the user share
+    its answer instead of queueing one prompt each (a polling page used to
+    pile up dozens; VM b3)."""
+    key = json.dumps([principal, scope, method, summary, bool(allow_always)], sort_keys=True, default=str)
+    with _pending_lock:
+        ev = _pending.get(key)
+        if ev is None:
+            ev = _pending[key] = {"event": threading.Event(), "answer": None}
+            owner = True
+        else:
+            owner = False
+    if not owner:
+        ev["event"].wait(TIMEOUT + 10)
+        return ev["answer"] or ("deny", "timeout")
+    try:
+        ev["answer"] = _prompt(principal, client, scope, method, description, summary, allow_always)
+        return ev["answer"]
+    finally:
+        with _pending_lock:
+            _pending.pop(key, None)
+        ev["event"].set()
+
+
+def _prompt(principal, client, scope, method, description, summary, allow_always):
     ko, en = perms.SCOPES.get(scope, (scope, scope))
     req = {"principal": principal, "client": client, "scope": scope, "scope_ko": ko, "scope_en": en,
            "method": method, "description": description, "summary": summary,

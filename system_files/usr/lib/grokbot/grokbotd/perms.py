@@ -35,7 +35,8 @@ govern writes.
 There is no blanket grant: "*" and app-wide grants are not accepted.
 Some scopes can never be silently written (ALWAYS_ASK): camera,
 microphone and power prompt on every use session / action, whatever the
-file says. Their read methods (power.status) follow the normal modes.
+file says. Their read methods (power.status) are allowed once the scope
+is granted at all (ask), and denied otherwise.
 A missing or unreadable file grants nothing beyond the built-in default.
 """
 import json
@@ -160,6 +161,11 @@ def mode_for(principal, scope, access, capability=None):
         return "deny", "default"
     if mode == "allow" and scope in ALWAYS_ASK and access == "write":
         mode = "ask"
+    if mode == "ask" and scope in ALWAYS_ASK and access == "read":
+        # "ask" is the strongest grant these scopes can hold; their status
+        # reads (power.status) must not prompt on every poll (VM b3-06).
+        # Actions still prompt every time.
+        mode = "allow"
     return mode, source
 
 
