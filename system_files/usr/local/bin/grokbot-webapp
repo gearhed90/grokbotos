@@ -37,6 +37,19 @@ esac
 host=${url#*://}
 host=${host%%/*}
 host=${host%%:*}
+# System web apps must show the per-origin token once (grokbotd/apptoken.py):
+# the server turns it into an HttpOnly cookie and redirects to the clean URL.
+gb_token() {
+    PYTHONPATH=${GROKBOT_LIB:-/usr/lib/grokbot} python3 -m grokbotd.apptoken "$1"
+}
+if [[ $url =~ ^(http://[a-z0-9-]+\.app\.localhost:[0-9]+)(/[^?#]*)?(\?[^#]*)?(#.*)?$ ]]; then
+    q=${BASH_REMATCH[3]}
+    q=${q:+$q&}
+    q=${q:-?}
+    launch_url="${BASH_REMATCH[1]}${BASH_REMATCH[2]:-/}${q}gbt=$(gb_token "${BASH_REMATCH[1]}")${BASH_REMATCH[4]}"
+else
+    launch_url=$url
+fi
 if [[ ${GROKBOT_WEBAPP_PRINT:-} == 1 ]]; then
     echo "$url"
     exit 0
@@ -75,4 +88,4 @@ user_pref("dom.storageManager.prompt.testing.allow", true);
 user_pref("dom.securecontext.allowlist", "$host");
 JS
 exec /usr/local/bin/grokbot-run firefox --new-instance --no-remote --profile "$profile" \
-    --name "$app_id" --class "$app_id" "$url"
+    --name "$app_id" --class "$app_id" "$launch_url"

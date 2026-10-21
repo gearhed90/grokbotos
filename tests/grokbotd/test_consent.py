@@ -381,10 +381,11 @@ class UnitTests(unittest.TestCase):
             os.makedirs(os.path.join(d, "net"))
             with open(os.path.join(d, "net", "tcp"), "w") as f:
                 f.write("  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid\n"
-                        "   0: 0100007F:1C8F 0100007F:A000 01 00000000:00000000 00:00000000 00000000  1000\n"
-                        "   1: 0100007F:A000 0100007F:1C8F 01 00000000:00000000 00:00000000 00000000  1001\n")
+                        "   0: 0100007F:1C8F 0100007F:A000 01 00000000:00000000 00:00000000 00000000  1000 0 4242\n"
+                        "   1: 0100007F:A000 0100007F:1C8F 01 00000000:00000000 00:00000000 00000000  1001 0 4343\n")
             self.assertEqual(policy.tcp_peer_uid(0xA000, 7311, d), 1001)
             self.assertIsNone(policy.tcp_peer_uid(0xA001, 7311, d))
+            self.assertEqual(policy.tcp_peer(0xA000, 7311, d), (1001, 4343))
 
     def test_always_ask_scopes_cannot_be_allow(self):
         with tempfile.TemporaryDirectory() as d:
