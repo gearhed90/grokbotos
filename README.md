@@ -26,15 +26,15 @@
 
 </div>
 
-> **Disclaimer.** Grok Bot OS is an independent, community-driven open-source project. It is **not** an official product of SpaceXAI and is not endorsed by or affiliated with SpaceXAI. "Grok Bot" is used to describe the app this OS is built around. Its trademarks belong to their owners.
+> **Disclaimer.** Grok Bot OS is an independent, community-driven open-source project. It is **not** an official product of SpaceXSI and is not endorsed by or affiliated with SpaceXSI. "Grok Bot" is used to describe the app this OS is built around. Its trademarks belong to their owners.
 >
-> **고지.** Grok Bot OS는 독립적인 커뮤니티 오픈소스 프로젝트다. SpaceXAI의 공식 제품이 **아니며**, SpaceXAI가 보증하거나 관여하지 않는다. "Grok Bot"이라는 이름은 이 OS가 중심에 두는 앱을 가리키기 위해 쓴다. 상표권은 각 소유자에게 있다.
+> **고지.** Grok Bot OS는 독립적인 커뮤니티 오픈소스 프로젝트다. SpaceXSI의 공식 제품이 **아니며**, SpaceXSI가 보증하거나 관여하지 않는다. "Grok Bot"이라는 이름은 이 OS가 중심에 두는 앱을 가리키기 위해 쓴다. 상표권은 각 소유자에게 있다.
 
 ## 목적 / Mission
 
-**한국어.** Grok Bot OS는 **head77x**가 시작한 오픈소스 프로젝트다. SpaceXAI의 Grok Bot 제품에서 영감을 받았다. 목표는 **SI(Super Intelligence)를 위한 완전한 운영체제**를 만드는 것이다. 그 OS 안에는 Grok Bot이 내장되고, Grok Bot이 모든 하드웨어 기능을 직접 제어한다. 이 아이디어는 일론 머스크가 언급한 패러다임을 실제로 구현해 보려는 데서 출발했다.
+**한국어.** Grok Bot OS는 **head77x**가 시작한 오픈소스 프로젝트다. SpaceXSI의 Grok Bot 제품에서 영감을 받았다. 목표는 **SI(Super Intelligence)를 위한 완전한 운영체제**를 만드는 것이다. 그 OS 안에는 Grok Bot이 내장되고, Grok Bot이 모든 하드웨어 기능을 직접 제어한다. 이 아이디어는 일론 머스크가 언급한 패러다임을 실제로 구현해 보려는 데서 출발했다.
 
-**English.** Grok Bot OS is an open-source project started by **head77x**, inspired by SpaceXAI's Grok Bot product. The goal is to build **a complete operating system for SI (Super Intelligence)**: an OS with Grok Bot embedded, where Grok Bot directly controls every hardware function. The idea began as an attempt to realize the paradigm Elon Musk has mentioned.
+**English.** Grok Bot OS is an open-source project started by **head77x**, inspired by SpaceXSI's Grok Bot product. The goal is to build **a complete operating system for SI (Super Intelligence)**: an OS with Grok Bot embedded, where Grok Bot directly controls every hardware function. The idea began as an attempt to realize the paradigm Elon Musk has mentioned.
 
 ## 특징 / Features
 
