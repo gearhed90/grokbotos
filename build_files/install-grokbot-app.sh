@@ -229,13 +229,16 @@ install_official_grok_bot_rpm() {
     install -d -m 0755 "${root}/usr/bin"
     cat >"${root}/usr/bin/grok-bot" <<'EOF'
 #!/bin/bash
-# Wayland wrapper. Replaces the RPM's /usr/bin/grok-bot symlink, which
+# Wayland wrapper. --enable-wayland-ime lets fcitx5 (Korean input) reach
+# the app through text-input-v3. Replaces the RPM's /usr/bin/grok-bot symlink, which
 # would point at "/opt/Grok Bot/grok-bot".
 set -euo pipefail
 export ELECTRON_OZONE_PLATFORM_HINT="${ELECTRON_OZONE_PLATFORM_HINT:-wayland}"
 exec /usr/lib/grokbot/app/grok-bot \
     --ozone-platform=wayland \
     --enable-features=UseOzonePlatform \
+    --enable-wayland-ime \
+    --wayland-text-input-version=3 \
     "$@"
 EOF
     chmod 755 "${root}/usr/bin/grok-bot"

@@ -1,0 +1,109 @@
+"""Status items for the dock: clock, battery, Wi-Fi, volume.
+
+Data comes from grokbotd (power.status, network.status, audio.status)
+over the user's unix socket, so the dock is just another OS API client.
+No GTK here, so it can be unit-tested.
+"""
+import json
+import os
+import socket
+import time
+
+EDGES = ("top", "bottom", "left", "right")
+
+
+def socket_path():
+    return os.environ.get("GROKBOT_API_SOCK") or os.path.join(
+        os.environ.get("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid()), "grokbot", "api.sock")
+
+
+def rpc(method, timeout=1.0):
+    try:
+        s = socket.socket(socket.AF_UNIX)
+        s.settimeout(timeout)
+        s.connect(socket_path())
+        f = s.makefile("rwb")
+        f.write((json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": {}}) + "\n").encode())
+        f.flush()
+        r = json.loads(f.readline() or b"{}")
+        s.close()
+        return r.get("result")
+    except (OSError, ValueError):
+        return None
+
+
+def status_edge(conf):
+    """Which edge shows the status area, or None."""
+    want = conf.get("status", "auto")
+    if want == "off":
+        return None
+    if want in EDGES:
+        return want if conf.get(want, "off") != "off" else None
+    for e in ("bottom", "top", "right", "left"):
+        if conf.get(e, "off") != "off":
+            return e
+    return None
+
+
+def _battery(power):
+    if not power or not power.get("batteries"):
+        return None
+    b = power["batteries"][0]
+    cap = b.get("capacity_percent")
+    charging = (b.get("status") or "").lower() == "charging" or bool(power.get("on_ac"))
+    if cap is None:
+        icon = "battery-missing-symbolic"
+    else:
+        level = min(100, max(0, int(round(cap / 10.0)) * 10))
+        icon = "battery-level-%d%s-symbolic" % (level, "-charging" if charging else "")
+    text = "%s%%" % cap if cap is not None else "?"
+    tip = "배터리 / Battery %s%s" % (text, " (충전 중 / charging)" if charging else "")
+    return {"id": "battery", "icon": icon, "text": text, "tooltip": tip}
+
+
+def _network(net):
+    if net is None:
+        return None
+    ifs = [i for i in net.get("interfaces", []) if i.get("name") != "lo"]
+    route = net.get("default_route") or {}
+    up = [i for i in ifs if i.get("state") == "up" and i.get("addresses")]
+    dev = next((i for i in up if i.get("name") == route.get("interface")), up[0] if up else None)
+    if not net.get("online") or dev is None:
+        return {"id": "network", "icon": "network-offline-symbolic", "text": "오프라인",
+                "tooltip": "연결 안 됨 / Offline. 클릭: Wi-Fi 설정 / Click: Wi-Fi setup"}
+    if dev.get("wireless"):
+        return {"id": "network", "icon": "network-wireless-signal-good-symbolic", "text": "Wi-Fi",
+                "tooltip": "Wi-Fi: %s" % dev["name"]}
+    return {"id": "network", "icon": "network-wired-symbolic", "text": "유선",
+            "tooltip": "유선 / Wired: %s" % dev["name"]}
+
+
+def _volume(audio):
+    if not audio or not audio.get("available") or not audio.get("output"):
+        return None
+    o = audio["output"]
+    v = o.get("volume_percent") or 0
+    if o.get("muted") or v == 0:
+        icon = "audio-volume-muted-symbolic"
+    elif v < 34:
+        icon = "audio-volume-low-symbolic"
+    elif v < 67:
+        icon = "audio-volume-medium-symbolic"
+    else:
+        icon = "audio-volume-high-symbolic"
+    text = "음소거" if o.get("muted") else "%d%%" % v
+    return {"id": "volume", "icon": icon, "text": text,
+            "tooltip": "볼륨 / Volume %s. 클릭: 음소거, 스크롤: 조절 / Click: mute, scroll: adjust" % text}
+
+
+def clock(now=None):
+    t = time.localtime(now)
+    return {"id": "clock", "icon": None, "text": time.strftime("%H:%M", t),
+            "tooltip": time.strftime("%Y-%m-%d (%a) %H:%M", t)}
+
+
+def items(call=rpc, now=None):
+    """Status items in display order; missing data drops the item."""
+    out = [_network(call("network.status")), _volume(call("audio.status")),
+           _battery(call("power.status")), clock(now)]
+    return [i for i in out if i]

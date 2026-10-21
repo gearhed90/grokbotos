@@ -6,6 +6,9 @@
 | [설치 / Install](install.md) | USB, BIOS, 설치 / USB, firmware, install |
 | [독과 단축키 / Docks & hotkeys](docks-and-hotkeys.md) | 독 설정, 키 / dock settings, keys |
 | [화면 잠금과 절전 / Screen lock & idle](lock-and-idle.md) | PIN, 자동 잠금 / PIN, auto lock |
+| [알림 / Notifications](notifications.md) | 방해 금지 / Do Not Disturb |
+| [스크린샷 / Screenshots](screenshots.md) | `Print`, `Shift+Print` |
+| [한글 입력 / Korean input](korean-input.md) | 한/영 전환 / switching |
 | [Wi-Fi](wifi.md) | 무선 연결 / wireless |
 | [업데이트와 롤백 / Updates & rollback](updates-and-rollback.md) | `bootc upgrade`, `bootc rollback` |
 

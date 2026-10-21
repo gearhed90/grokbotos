@@ -23,7 +23,7 @@
 # sway would start a second swaybg. Never any desktop icons.
 # grokbotd (systemd user service) gets the session environment so
 # system.info can report it. It finds the sway IPC socket on its own.
-exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_DATA_DIRS
+exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_DATA_DIRS XMODIFIERS QT_IM_MODULE SDL_IM_MODULE
 exec /usr/local/bin/grokbot-desktop >>"$HOME/.local/share/grokbot/desktop.log" 2>&1
 
 exec sh -c 'mkdir -p "$HOME/.local/share/grokbot" "$HOME/Apps" "$HOME/.local/share/applications" && exec /usr/local/bin/grokbot-kiosk >>"$HOME/.local/share/grokbot/shell.log" 2>&1'
@@ -64,6 +64,29 @@ for_window [app_id="grokbot-lock-setup"] floating enable, resize set 720 360, mo
 for_window [app_id=".*"] inhibit_idle fullscreen
 bindsym Mod4+l exec /usr/local/bin/grokbot-lock
 bindsym Mod1+l exec /usr/local/bin/grokbot-lock
+# Volume, brightness and media keys, also on the lock screen (--locked).
+# grokbot-osd shows a wob bar.
+exec /usr/local/bin/grokbot-osd --serve >>"$HOME/.local/share/grokbot/osd.log" 2>&1
+bindsym --locked XF86AudioRaiseVolume exec /usr/local/bin/grokbot-volume up
+bindsym --locked XF86AudioLowerVolume exec /usr/local/bin/grokbot-volume down
+bindsym --locked XF86AudioMute exec /usr/local/bin/grokbot-volume mute
+bindsym --locked XF86AudioMicMute exec /usr/local/bin/grokbot-volume mic-mute
+bindsym --locked XF86MonBrightnessUp exec /usr/local/bin/grokbot-brightness up
+bindsym --locked XF86MonBrightnessDown exec /usr/local/bin/grokbot-brightness down
+bindsym --locked XF86AudioPlay exec playerctl play-pause
+bindsym --locked XF86AudioPause exec playerctl play-pause
+bindsym --locked XF86AudioNext exec playerctl next
+bindsym --locked XF86AudioPrev exec playerctl previous
+# Notifications (mako, top right). Super+Shift+N / Alt+Shift+N: Do Not Disturb.
+exec /usr/local/bin/grokbot-notify --serve >>"$HOME/.local/share/grokbot/notify.log" 2>&1
+bindsym Mod4+Shift+n exec /usr/local/bin/grokbot-notify-dnd toggle
+bindsym Mod1+Shift+n exec /usr/local/bin/grokbot-notify-dnd toggle
+# Screenshots: Print = whole screen, Shift+Print = region. Saved to
+# ~/Pictures/Screenshots and copied to the clipboard.
+bindsym Print exec /usr/local/bin/grokbot-capture full
+bindsym Shift+Print exec /usr/local/bin/grokbot-capture region
+# Korean input: fcitx5 (한/영, Shift+Space, Right Alt). Config /etc/xdg/fcitx5.
+exec fcitx5 -d --replace >>"$HOME/.local/share/grokbot/fcitx5.log" 2>&1
 bindsym Mod1+Tab exec /usr/lib/grokbot/grokbot-alttab.py next
 bindsym Mod1+Shift+Tab exec /usr/lib/grokbot/grokbot-alttab.py prev
 # Close the focused window. Grok Bot is restarted by grokbot-kiosk.

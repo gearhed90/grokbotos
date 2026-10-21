@@ -44,6 +44,9 @@ assert_contains build_files/install-grokbot-app.sh "grok-bot-0.71.2-1.x86_64.rpm
 assert_contains build_files/install-grokbot-app.sh "grok-bot-0.71.2-1.aarch64.rpm"
 assert_contains build_files/install-grokbot-app.sh "--ozone-platform=wayland"
 assert_contains build_files/install-grokbot-app.sh "--enable-features=UseOzonePlatform"
+# Korean input reaches Grok Bot (Electron, Wayland) only with the IME flag.
+assert_contains build_files/install-grokbot-app.sh "--enable-wayland-ime"
+assert_contains system_files/etc/xdg/fcitx5/profile "Name=hangul"
 assert_contains build_files/install-grokbot-app.sh "tsflags=noscripts"
 assert_contains build_files/install-grokbot-app.sh "x-scheme-handler/grokbot=grok-bot.desktop"
 assert_contains build_files/install-grokbot-app.sh "x-scheme-handler/sand=grok-bot.desktop"

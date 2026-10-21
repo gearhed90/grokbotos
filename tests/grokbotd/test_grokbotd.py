@@ -179,7 +179,8 @@ class SchemaTests(unittest.TestCase):
         from grokbotd import schema
         for name in schema.load(SCHEMA)["methods"]:
             verb = name.split(".")[1]
-            self.assertIn(verb, ("methods", "info", "list", "get", "status"), name)
+            # "brightness" is a read (display.brightness), not a setter.
+            self.assertIn(verb, ("methods", "info", "list", "get", "status", "brightness"), name)
 
 
 class DaemonTests(Base):
@@ -206,6 +207,7 @@ class DaemonTests(Base):
     def test_dock_merges_user_conf(self):
         d = self.rpc_unix("dock.get")["result"]
         self.assertEqual((d["bottom"], d["left"], d["icon_size"]), ("icons", "labels", 40))
+        self.assertEqual(d["status"], "auto")
 
     def test_apps(self):
         r = self.rpc_unix("apps.list")["result"]
