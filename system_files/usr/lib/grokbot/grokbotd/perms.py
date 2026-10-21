@@ -17,8 +17,9 @@ write (os-api.schema.json "scope"/"access").
 
 Each principal has, per scope, a mode:
   allow  calls go through silently
-  ask    every call shows the native consent prompt (allow once /
-         always / deny); "always" stores allow
+  ask    every call shows the native consent prompt: deny / allow once
+         (this call only) / allow for this session (until grokbotd stops:
+         logout or reboot; kept in memory) / always (stored allow)
   deny   calls fail with -32001
 
 Where modes come from, first match wins:
@@ -130,10 +131,31 @@ def _user():
     return g if isinstance(g, dict) else {}
 
 
+# "Allow for this session": in memory only, gone when grokbotd restarts
+# (logout, reboot). Never for ALWAYS_ASK scopes.
+_session = {}
+
+
+def session_allow(principal, scope):
+    if scope in ALWAYS_ASK:
+        raise ValueError("%s always asks" % scope)
+    with _lock:
+        _session.setdefault(principal, set()).add(scope)
+
+
+def session_scopes(principal):
+    with _lock:
+        return sorted(_session.get(principal, ()))
+
+
 def mode_for(principal, scope, access, capability=None):
     """Effective mode and where it came from: (mode, source)."""
     if scope not in SCOPES:
         return "deny", "unknown_scope"
+    with _lock:
+        in_session = scope in _session.get(principal, ())
+    if in_session and scope not in ALWAYS_ASK:
+        return "allow", "session"
     if is_local(principal) and access == "read":
         # The user's own processes always read (the dock polls status);
         # a stored mode only governs writes.
@@ -204,8 +226,13 @@ def set_mode(principal, scope, mode, by):
 
 
 def revoke(principal, scope=None):
-    """Remove stored grants. Returns the scopes removed."""
+    """Remove stored grants (and session grants). Returns the scopes removed."""
     with _lock:
+        ses = _session.get(principal, set())
+        gone = set(ses) if scope is None else ({scope} & ses)
+        ses -= gone
+        if not ses:
+            _session.pop(principal, None)
         g = _user()
         cur = g.get(principal, {})
         if not isinstance(cur, dict):
@@ -219,6 +246,7 @@ def revoke(principal, scope=None):
             g.pop(principal, None)
         if removed:
             _save(g)
+        removed = sorted(set(removed) | gone)
         return removed
 
 
@@ -240,6 +268,7 @@ def listing(principal=None, include=None):
             w = mode_for(p, s, "write")
             stored = (user.get(p) or {}).get(s)
             scopes[s] = {"read": r[0], "write": w[0], "source": w[1] if w[1] != "builtin" else r[1],
+                         "session": s in _session.get(p, ()),
                          "stored": stored if isinstance(stored, dict) else None}
         out.append({"principal": p, "local": is_local(p), "scopes": scopes})
     return out

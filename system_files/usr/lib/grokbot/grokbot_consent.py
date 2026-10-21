@@ -13,6 +13,9 @@ The text building is pure (lines()) so it can be unit-tested without GTK.
 """
 import json
 import sys
+import time
+
+ARM_S = 0.6
 
 
 def who(req):
@@ -58,6 +61,9 @@ def lines(req):
         "action": (ak, ae),
         "call": call,
         "always": bool(req.get("allow_always")),
+        "session": bool(req.get("allow_session")),
+        "once": req.get("allow_once", True) is not False,
+        "warning": req.get("warning"),
         "sensitive": req.get("scope") in ("camera", "microphone", "power", "permissions"),
     }
 
@@ -76,6 +82,9 @@ button.deny { background: #3f3f46; color: #fff; }
 button.allow { background: #2563eb; color: #fff; }
 button.always { background: #1d4ed8; color: #fff; }
 .timer { color: #a1a1aa; font-size: 12px; }
+button.session { background: #1e40af; color: #fff; }
+.warn { color: #fbbf24; font-size: 14px; font-weight: bold; }
+.warn-en { color: #fbbf24; font-size: 12px; }
 """
 
 
@@ -125,34 +134,53 @@ def main():
         if pair[1] != pair[0]:
             lab(pair[1], "en")
     lab(t["call"], "call")
+    if t["warning"]:
+        w = t["warning"] if isinstance(t["warning"], list) else [t["warning"], t["warning"]]
+        lab(w[0], "warn")
+        if w[1] != w[0]:
+            lab(w[1], "warn-en")
     timer = lab("", "timer")
 
     row = Gtk.Box(spacing=8)
     row.set_halign(Gtk.Align.END)
 
+    shown = {"t": None}
+
+    def armed():
+        # Ignore input for a moment after the prompt appears, so a click or
+        # key meant for the window underneath cannot answer it.
+        return shown["t"] is not None and time.monotonic() - shown["t"] >= ARM_S
+
     def done(v):
         answer["v"] = v
         Gtk.main_quit()
 
-    deny = Gtk.Button(label="거부 / Deny")
-    deny.get_style_context().add_class("deny")
-    deny.connect("clicked", lambda *_: done("deny"))
-    row.pack_start(deny, False, False, 0)
-    once = Gtk.Button(label="한 번 허용 / Allow once")
-    once.get_style_context().add_class("allow")
-    once.connect("clicked", lambda *_: done("once"))
-    row.pack_start(once, False, False, 0)
+    def button(label, cls, value):
+        b = Gtk.Button(label=label)
+        b.get_style_context().add_class(cls)
+        b.connect("clicked", lambda *_: armed() and done(value))
+        # Answer on press as well: on some setups (sway + absolute pointers,
+        # seen in the VM) the release that completes "clicked" was lost.
+        b.connect("button-press-event", lambda _w, ev: (armed() and ev.button == 1 and done(value)) or False)
+        row.pack_start(b, False, False, 0)
+        return b
+
+    deny = button("거부 / Deny", "deny", "deny")
+    if t["once"]:
+        button("이번 한 번만 / Allow once", "allow", "once")
+    if t["session"]:
+        button("이번 세션 동안 / This session", "session", "session")
     if t["always"]:
-        alw = Gtk.Button(label="항상 허용 / Always allow")
-        alw.get_style_context().add_class("always")
-        alw.connect("clicked", lambda *_: done("always"))
-        row.pack_start(alw, False, False, 0)
+        button("항상 허용 / Always allow", "always", "always")
     card.pack_start(row, False, False, 6)
     win.add(card)
 
     def key(_w, ev):
         if ev.keyval == Gdk.KEY_Escape:
             done("deny")
+            return True
+        if not armed():
+            return True  # swallow keys typed for the window underneath
         return False
     win.connect("key-press-event", key)
     win.connect("destroy", lambda *_: done("deny"))
@@ -168,6 +196,18 @@ def main():
         return True
     tick()
     GLib.timeout_add_seconds(1, tick)
+    def reassert():
+        # Keep the exclusive keyboard grab: sway hands focus to a window that
+        # maps after us unless the layer surface re-commits its mode.
+        GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.NONE)
+        GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.EXCLUSIVE)
+        win.present()
+        return True
+    GLib.timeout_add(700, reassert)
+
+    def on_map(*_):
+        shown["t"] = time.monotonic()
+    win.connect("map-event", on_map)
     win.show_all()
     deny.grab_focus()
     Gtk.main()

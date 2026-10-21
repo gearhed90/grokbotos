@@ -259,6 +259,54 @@ class ConsentDaemonTests(tg.Base):
         self.assertLess(len(self.prompts()), 5)
         self.sys_grant({"origins": {}})
 
+    def test_once_is_one_call_and_session_is_remembered_in_memory(self):
+        o = "http://sess.app.localhost:7311"
+        self.sys_grant({"origins": {o: {"network": "ask"}}})
+        self.answer("once")
+        self.assertIn("result", self.origin_rpc(o, "network.status")[2])
+        self.assertIn("result", self.origin_rpc(o, "network.status")[2])
+        self.assertEqual(len(self.prompts()), 2)  # once = this call only
+        p = self.prompts()[-1]
+        self.assertTrue(p["allow_session"] and p["allow_once"] and p["allow_always"])
+        self.answer("session")
+        self.assertIn("result", self.origin_rpc(o, "network.status")[2])
+        self.answer("deny")
+        self.assertIn("result", self.origin_rpc(o, "network.status")[2])
+        self.assertEqual(len(self.prompts()), 3)  # remembered for the session
+        g = self.rpc_unix("permissions.list", {"principal": "origin:" + o})["result"]["principals"][0]
+        self.assertTrue(g["scopes"]["network"]["session"])
+        self.assertIsNone(g["scopes"]["network"]["stored"])  # nothing on disk
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "cfg", "grokbot", "api-grants.json")))
+        self.assertEqual(self.rpc_unix("permissions.revoke", {"principal": "origin:" + o})["result"]["revoked"],
+                         ["network"])
+        self.assertEqual(self.origin_rpc(o, "network.status")[2]["error"]["code"], -32001)
+        self.sys_grant({"origins": {}})
+
+    def test_request_offers_session_and_always_not_once(self):
+        o = "http://req2.app.localhost:7311"
+        self.sys_grant({"origins": {o: {"lock": "deny"}}})
+        self.answer("session")
+        r = self.origin_rpc(o, "permissions.request", {"scope": "audio"})[2]["result"]
+        self.assertEqual((r["mode"], r["until"]), ("allow", "session"))
+        p = self.prompts()[-1]
+        self.assertEqual((p["allow_once"], p["allow_session"]), (False, True))
+        self.answer("once")  # not offered: counts as deny
+        r = self.origin_rpc(o, "permissions.request", {"scope": "display"})[2]["result"]
+        self.assertEqual(r["mode"], "deny")
+        self.answer("session")  # sensitive scopes: no session, once = may ask
+        r = self.origin_rpc(o, "permissions.request", {"scope": "camera"})[2]["result"]
+        self.assertEqual(r["mode"], "ask")
+        self.assertEqual((self.prompts()[-1]["allow_session"], self.prompts()[-1]["allow_always"]), (False, False))
+        self.sys_grant({"origins": {}})
+
+    def test_camera_prompt_has_no_always_or_session(self):
+        self.answer("session")
+        r = self.rpc_unix("camera.session.start", {"purpose": "t"})
+        p = self.prompts()[-1]
+        self.assertFalse(p["allow_always"] or p["allow_session"])
+        self.assertIn("result", r)  # clamped to once
+        self.rpc_unix("media.session.stop", {"id": r["result"]["id"]})
+
     # ---- audit / CLI ----
 
     def test_audit_list_and_cli(self):
@@ -313,6 +361,8 @@ class UnitTests(unittest.TestCase):
         self.assertTrue(t["sensitive"])
         self.assertFalse(t["always"])
         self.assertIn('purpose="call"', t["call"])
+        self.assertFalse(t["session"])
+        self.assertTrue(t["once"])
 
     def test_indicator_items(self):
         def call(m):
