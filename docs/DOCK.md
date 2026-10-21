@@ -67,9 +67,8 @@ grokbot-dock-config reset               # 사용자 설정 삭제, 기본값으�
 
 ## Grok Bot 창 안의 최소화/최대화/닫기 버튼
 
-OS 쪽에서 없앨 수 없다 (2026-10-21, Grok Bot 0.71.2 `resources/app.asar` 확인).
+이 버튼들은 Grok Bot 앱이 자기 창 안에 직접 그린다. 창 관리자(sway)가 붙이는 장식이 아니라서 OS 설정으로는 없앨 수 없다.
 
-- 메인 프로세스: Linux에서 창 옵션이 `{frame:false, titleBarStyle:"default"}`이다 (macOS는 `hiddenInset`, Windows는 `titleBarOverlay`). 창 테두리가 없는 frameless 창이라 sway의 서버 측 장식이나 Chromium 플래그(`--enable-features=WaylandWindowDecorations` 등)로는 바뀌지 않는다.
-- 렌더러: 버튼은 앱의 React 컴포넌트(`sand-window-controls`, 라벨 "Minimize window")가 그리는 HTML이다. `platform==="darwin"`이면 그리지 않고, `win32`이면 보이지 않는 자리만 두고, 그 밖(Linux)에서는 **창이 전체화면이 아닐 때** 그린다.
-- 그래서 버튼을 숨기는 유일한 OS 쪽 방법은 Grok Bot을 전체화면으로 두는 것인데, 그러면 독을 덮는다. 독과 함께 쓰는 지금 배치에서는 버튼이 남는다. app.asar를 고치는 것은 서명·업데이트 문제 때문에 하지 않았다. 앱 쪽에 Linux 키오스크용 옵션을 요청할 일이다.
-- sway에서 최소화·최대화 버튼은 효과가 거의 없고, 닫기는 앱을 끝낸다(grokbot-kiosk가 1초 뒤 다시 띄운다).
+- 앱을 전체화면으로 두면 버튼이 사라지지만, 그러면 독이 가려진다. 독과 함께 쓰는 지금 배치에서는 버튼이 남는다.
+- sway에서 최소화와 최대화 버튼은 효과가 거의 없다. 닫기를 누르면 앱이 끝나고, grokbot-kiosk가 1초 뒤에 다시 띄운다.
+- 근본 해결은 앱 쪽에 Linux 키오스크 옵션을 요청하는 것이다.
