@@ -205,6 +205,12 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(set(rpc.METHODS) | set(rpc.CTX_METHODS) | rpc.SPECIAL, set(doc["methods"]))
         self.assertEqual(set(backends.METHODS) & set(rpc.CTX_METHODS), set())
 
+    def test_http_connections_time_out(self):
+        # An idle or half-sent request must not hold a server thread forever.
+        from grokbotd import server
+        self.assertIsNotNone(server.HttpHandler.timeout)
+        self.assertLessEqual(server.HttpHandler.timeout, 30)
+
     def test_validate_params(self):
         from grokbotd import schema
         spec = schema.load(SCHEMA)["methods"]["apps.list"]
