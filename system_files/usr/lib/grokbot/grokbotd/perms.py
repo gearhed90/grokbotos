@@ -1,7 +1,12 @@
 """Consent-based permissions, per OS function (scope), per caller.
 
 A *principal* is who calls (policy.py):
-  local:uid=N     same-user process on the unix socket (CLI, MCP, Grok Bot)
+  local:uid=N:...  same-user process on the unix socket, identified by
+                   the kernel (SO_PEERCRED pid -> systemd unit, or the
+                   executable and script; peer.py). Grants are bound to
+                   that identity, not to what the caller says it is.
+                   A bare "local:uid=N" grant (before 0.2.1) is no
+                   longer applied; it is listed so it can be revoked.
   origin:<o>      a web page, by its HTTP Origin
   http:no-origin  an HTTP client without Origin (never granted anything)
 
@@ -75,7 +80,15 @@ def grants_path():
 
 
 def is_local(principal):
-    return principal == "local:uid=%d" % os.getuid()
+    base = "local:uid=%d" % os.getuid()
+    return principal == base or principal.startswith(base + ":")
+
+
+def storable(principal):
+    """Grants can be stored for a web origin or an identified local program."""
+    if principal.startswith("origin:"):
+        return len(principal) > len("origin:")
+    return is_local(principal) and principal.count(":") >= 2 and not principal.endswith(":unknown")
 
 
 def _load_json(path):
@@ -175,6 +188,8 @@ def set_mode(principal, scope, mode, by):
         raise ValueError("mode must be allow, ask or deny")
     if mode == "allow" and scope in ALWAYS_ASK:
         raise ValueError("%s always asks; it cannot be set to allow" % scope)
+    if not storable(principal):
+        raise ValueError("cannot store a grant for %s (unidentified caller)" % principal)
     with _lock:
         g = _user()
         g.setdefault(principal, {})[scope] = {"mode": mode, "by": by,
@@ -201,13 +216,14 @@ def revoke(principal, scope=None):
         return removed
 
 
-def listing(principal=None):
+def listing(principal=None, include=None):
     """Every principal that has a stored or system grant, with the
     effective mode per scope (read and write)."""
     local, modes, caps = _system()
     user = _user()
     names = set(user) | {"origin:" + o for o in set(modes) | set(caps)}
-    names.add("local:uid=%d" % os.getuid())
+    if include:
+        names.add(include)
     if principal is not None:
         names = {principal}
     out = []

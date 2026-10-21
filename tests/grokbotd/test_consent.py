@@ -27,6 +27,9 @@ class ConsentDaemonTests(tg.Base):
             except FileNotFoundError:
                 pass
 
+    def me(self):
+        return self.rpc_unix("permissions.whoami")["result"]["principal"]
+
     def answer(self, a):
         with open(os.path.join(self.tmp.name, "consent-answer"), "w") as f:
             f.write(a + "\n")
@@ -70,7 +73,7 @@ class ConsentDaemonTests(tg.Base):
         self.assertEqual(r["error"]["data"]["consent"], "user")
         p = self.prompts()[-1]
         self.assertEqual((p["scope"], p["method"], p["principal"]), ("network", "network.wifi.disconnect",
-                                                                    "local:uid=%d" % os.getuid()))
+                                                                    self.me()))
         self.assertTrue(p["allow_always"])
         self.assertNotIn("nmcli device disconnect", self.tools())
         self.assertEqual([x for x in self.audit() if x.get("method") == "network.wifi.disconnect"][-1]
@@ -85,12 +88,12 @@ class ConsentDaemonTests(tg.Base):
         r = self.rpc_unix("network.wifi.disconnect")  # stored allow: no prompt
         self.assertIn("result", r)
         self.assertEqual(len(self.prompts()), 3)
-        g = self.rpc_unix("permissions.list", {"principal": "local:uid=%d" % os.getuid()})["result"]
+        g = self.rpc_unix("permissions.list", {"principal": self.me()})["result"]
         self.assertEqual(g["principals"][0]["scopes"]["network"]["stored"]["mode"], "allow")
 
     def test_local_reads_ignore_stored_ask(self):
         self.answer("once")
-        me = "local:uid=%d" % os.getuid()
+        me = self.me()
         self.assertIn("result", self.rpc_unix("permissions.set", {"principal": me, "scope": "audio", "mode": "deny"}))
         n = len(self.prompts())
         self.assertIn("result", self.rpc_unix("audio.status"))
@@ -125,9 +128,9 @@ class ConsentDaemonTests(tg.Base):
         self.assertIn("systemctl suspend", self.tools())
         self.rpc_unix("power.action", {"action": "reboot"})
         self.assertEqual(len(self.prompts()), 2)  # asked again
-        self.assertIsNone(self.rpc_unix("permissions.list")["result"]["principals"][0]["scopes"]["power"]["stored"])
+        self.assertIsNone(self.rpc_unix("permissions.list", {"principal": self.me()})["result"]["principals"][0]["scopes"]["power"]["stored"])
         self.answer("once")
-        r = self.rpc_unix("permissions.set", {"principal": "local:uid=%d" % os.getuid(), "scope": "power",
+        r = self.rpc_unix("permissions.set", {"principal": self.me(), "scope": "power",
                                               "mode": "allow"})
         self.assertEqual(r["error"]["code"], -32000)
 

@@ -218,7 +218,7 @@ class SchemaTests(unittest.TestCase):
             verb = name.split(".")[-1]
             if spec["access"] == "read":
                 # "brightness" is a read (display.brightness), not a setter.
-                self.assertIn(verb, ("methods", "info", "list", "get", "status", "brightness"), name)
+                self.assertIn(verb, ("methods", "info", "list", "get", "status", "brightness", "whoami"), name)
             else:
                 self.assertNotIn(verb, ("list", "get", "status", "info"), name)
 

@@ -20,7 +20,16 @@ def who(req):
     if p.startswith("origin:"):
         ko, en = "웹 앱 %s" % p[7:], "Web app %s" % p[7:]
     elif p.startswith("local:"):
-        ko, en = "이 컴퓨터의 프로그램(Grok Bot, 터미널, MCP 등)", "A program on this computer (Grok Bot, terminal, MCP, ...)"
+        from grokbotd import peer
+        n = peer.describe(p)
+        if p.endswith(":unknown") or p.count(":") < 2:
+            ko, en = "이 컴퓨터의 알 수 없는 프로그램", "An unidentified program on this computer"
+        else:
+            ko, en = "이 컴퓨터의 프로그램: %s" % n, "Program on this computer: %s" % n
+        detail = p.split(":", 2)[2] if p.count(":") >= 2 else ""
+        if detail and detail != n:
+            ko += " (%s)" % detail
+            en += " (%s)" % detail
     else:
         ko = en = p
     c = req.get("client")

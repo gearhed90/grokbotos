@@ -3,4 +3,4 @@
 See docs/OS_API.md. The API is defined by
 /usr/share/grokbot/api/os-api.schema.json.
 """
-VERSION = "0.2.0"
+VERSION = "0.2.1"

@@ -71,7 +71,7 @@ class Dispatcher:
                         "title": s.get("x-title"), "params": s.get("params")})
         return {"version": self.schema.get("version"), "methods": out}
 
-    def handle(self, req, principal, transport):
+    def handle(self, req, principal, transport, peer=None):
         """req: parsed JSON (or None on parse failure). Returns a response dict."""
         if req is None:
             return _err(None, PARSE_ERROR, "parse error")
@@ -83,6 +83,8 @@ class Dispatcher:
         base = {"transport": transport, "principal": principal, "method": method[:64]}
         if client:
             base["client"] = client
+        if peer and peer.get("pid"):
+            base["pid"] = peer["pid"]
         if spec is None:
             audit.record(decision="error", error="method_not_found", **base)
             return _err(rid, METHOD_NOT_FOUND, "method not found: %s" % method[:64])
@@ -95,7 +97,7 @@ class Dispatcher:
             return _err(rid, INVALID_PARAMS, str(e))
         if access == "write":
             base["params"] = redact(spec, params)
-        ctx = {"principal": principal, "client": client, "transport": transport}
+        ctx = {"principal": principal, "client": client, "transport": transport, "peer": peer or {}}
 
         if method == "permissions.request":
             return self._request(rid, params, ctx, base)
@@ -113,7 +115,8 @@ class Dispatcher:
                             % (method, scope, access), {"capability": cap, "scope": scope,
                                                         "access": access, "mode": mode})
             if mode == "ask":
-                allow_always = scope not in perms.ALWAYS_ASK and spec.get("consent") != "always"
+                allow_always = (scope not in perms.ALWAYS_ASK and spec.get("consent") != "always"
+                                and perms.storable(principal))
                 ans, detail = consent.prompt(principal, client, scope, method,
                                              spec.get("x-title") or [method, method],
                                              base.get("params", {}), allow_always)
@@ -164,11 +167,11 @@ class Dispatcher:
             self._last_request[key] = time.time()
         title = ["이 기능 사용 권한 요청: %s" % params.get("reason", ""),
                  "Permission request: %s" % params.get("reason", "")]
-        allow_always = scope not in perms.ALWAYS_ASK
+        allow_always = scope not in perms.ALWAYS_ASK and perms.storable(principal)
         ans, detail = consent.prompt(principal, ctx["client"], scope, "permissions.request",
                                      title, {"scope": scope}, allow_always)
         new = {"always": "allow", "once": "ask", "deny": "deny"}[ans]
-        if detail in ("timeout", "no_prompt", "bad_answer"):
+        if detail in ("timeout", "no_prompt", "bad_answer") or not perms.storable(principal):
             new = None  # no answer: store nothing
         if new is not None:
             perms.set_mode(principal, scope, new, by="prompt")
