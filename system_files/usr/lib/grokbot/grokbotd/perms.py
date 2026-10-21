@@ -24,6 +24,8 @@ Where modes come from, first match wins:
                    "origins"; the legacy list-of-capabilities form still
                    grants *read* access for those capabilities)
   3. built-in      local: read=allow, write=ask; everyone else: deny
+The local user's reads are always allowed; stored modes for local only
+govern writes.
 
 There is no blanket grant: "*" and app-wide grants are not accepted.
 Some scopes can never be silently written (ALWAYS_ASK): camera,
@@ -122,6 +124,10 @@ def mode_for(principal, scope, access, capability=None):
     """Effective mode and where it came from: (mode, source)."""
     if scope not in SCOPES:
         return "deny", "unknown_scope"
+    if is_local(principal) and access == "read":
+        # The user's own processes always read (the dock polls status);
+        # a stored mode only governs writes.
+        return "allow", "builtin"
     mode, source = None, None
     ug = _user().get(principal, {})
     if isinstance(ug, dict) and isinstance(ug.get(scope), dict) and ug[scope].get("mode") in MODES:

@@ -286,6 +286,8 @@ def audit_list(params):
             continue
         if params.get("method") and e.get("method") != params["method"]:
             continue
+        if params.get("access") and e.get("access") != params["access"]:
+            continue
         out.append(e)
     limit = params.get("limit", 100)
     return {"entries": out[-limit:], "total": len(out), "path": path}

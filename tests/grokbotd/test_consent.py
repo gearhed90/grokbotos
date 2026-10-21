@@ -88,6 +88,17 @@ class ConsentDaemonTests(tg.Base):
         g = self.rpc_unix("permissions.list", {"principal": "local:uid=%d" % os.getuid()})["result"]
         self.assertEqual(g["principals"][0]["scopes"]["network"]["stored"]["mode"], "allow")
 
+    def test_local_reads_ignore_stored_ask(self):
+        self.answer("once")
+        me = "local:uid=%d" % os.getuid()
+        self.assertIn("result", self.rpc_unix("permissions.set", {"principal": me, "scope": "audio", "mode": "deny"}))
+        n = len(self.prompts())
+        self.assertIn("result", self.rpc_unix("audio.status"))
+        self.assertEqual(len(self.prompts()), n)
+        self.assertEqual(self.rpc_unix("audio.set", {"muted": True})["error"]["code"], -32001)
+        w = self.rpc_unix("audit.list", {"access": "write", "limit": 1000})["result"]["entries"]
+        self.assertTrue(w and all(e["access"] == "write" for e in w))
+
     def test_wifi_password_never_logged_or_on_argv(self):
         self.answer("once")
         r = self.rpc_unix("network.wifi.connect", {"ssid": "Home:Net", "password": "hunter2hunter2"})
