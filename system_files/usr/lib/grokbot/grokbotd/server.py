@@ -58,6 +58,10 @@ class UnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
 class HttpHandler(BaseHTTPRequestHandler):
     server_version = "grokbotd/" + VERSION
     sys_version = ""
+    # Every connection holds a thread. Without a socket timeout, a web page
+    # or local process that opens connections and never finishes a request
+    # keeps those threads forever. A timed-out request is just closed.
+    timeout = 10
 
     def log_message(self, fmt, *args):
         pass  # the audit log records RPC calls; access logs would leak titles

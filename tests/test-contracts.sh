@@ -80,4 +80,7 @@ if grep -n '"0.0.0.0"' system_files/usr/lib/grokbot/grokbotd/*.py; then
     fail "grokbotd must not bind all interfaces"
 fi
 
+# The kiosk password is the short screen-lock PIN: never an SSH login.
+assert_contains system_files/etc/ssh/sshd_config.d/10-grokbot-kiosk.conf "DenyUsers grokbot"
+
 echo "PASS test-contracts.sh"
