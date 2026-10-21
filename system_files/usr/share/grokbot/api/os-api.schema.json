@@ -36,7 +36,9 @@
     "files.read": "List and read files in the home folder (not hidden ones)",
     "files.write": "Create, change, move and trash files in the home folder (not hidden ones)",
     "mediakeys.read": "Receive Play/Pause/Next/Previous media key presses",
-    "mediakeys.write": "Send media key presses to apps"
+    "mediakeys.write": "Send media key presses to apps",
+    "updates.read": "Booted, staged and rollback OS images, update availability, health-check record",
+    "updates.write": "Check for, install (stage) or roll back an OS update (always confirmed)"
   },
   "methods": {
     "api.methods": {
@@ -1364,6 +1366,81 @@
         "미디어 키 보내기",
         "Send a media key"
       ]
+    },
+    "update.status": {
+      "description": "Booted / staged / rollback images (image, version, digest, timestamp), whether an update is available (from the last check), restart_needed, running actions, the last action's result and the post-update health record (last_good, last_check, rolled_back).",
+      "capability": "updates.read",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "updates",
+      "access": "read",
+      "x-title": [
+        "OS 업데이트 상태 보기",
+        "Read OS update status"
+      ]
+    },
+    "update.check": {
+      "description": "Start `bootc upgrade --check` (download the manifest only). Returns at once; poll update.status. Always prompts.",
+      "capability": "updates.write",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "updates",
+      "access": "write",
+      "x-title": [
+        "OS 업데이트 확인",
+        "Check for an OS update"
+      ],
+      "consent": "always"
+    },
+    "update.apply": {
+      "description": "Start `bootc upgrade`: download and stage the new image. It boots at the next restart; the current image stays as rollback. Never reboots. Always prompts.",
+      "capability": "updates.write",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "updates",
+      "access": "write",
+      "x-title": [
+        "OS 업데이트 설치(다음 시작 때 적용)",
+        "Install an OS update (used at next restart)"
+      ],
+      "consent": "always"
+    },
+    "update.rollback": {
+      "description": "Start `bootc rollback`: the previous image boots at the next restart. Never reboots. Always prompts.",
+      "capability": "updates.write",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "updates",
+      "access": "write",
+      "x-title": [
+        "이전 OS로 되돌리기(다음 시작 때 적용)",
+        "Roll back to the previous OS image (at next restart)"
+      ],
+      "consent": "always"
     }
   },
   "x-scopes": {
@@ -1467,6 +1544,11 @@
       "ko": "홈 폴더 파일 바꾸기(저장, 이름 바꾸기, 휴지통)",
       "en": "Change files in your home folder (save, rename, trash)",
       "always_ask": false
+    },
+    "updates": {
+      "ko": "OS 업데이트(확인, 설치, 되돌리기)",
+      "en": "OS updates (check, install, roll back)",
+      "always_ask": true
     }
   }
 }

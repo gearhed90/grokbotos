@@ -58,6 +58,7 @@ FAKE_TOOLS = {
     "makoctl": "exit 0",
     "fcitx5-remote": "exit 0",
     "pkill": "exit 0",
+    "notify-send": "exit 0",
     "nmcli": 'case "$*" in *"wifi list"*) printf "*:Home\\:Net:80:WPA2:wlan0\\n:Cafe:40::wlan0\\n:Cafe:60::wlan0\\n";; '
              '*"passwd-file"*) for a; do [[ -f $a ]] && cat "$a" >>"$HOME/pwfile.seen"; done;; '
              '*"-f DEVICE,TYPE,STATE"*) printf "wlan0:wifi:connected\\neth0:ethernet:unavailable\\n";; esac',
@@ -91,6 +92,8 @@ class Base(unittest.TestCase):
             "GROKBOT_DESKTOP_SYS_CONF": os.path.join(SF, "etc", "grokbot", "desktop.conf"),
             "GROKBOT_API_PORT": str(cls.port),
             "GROKBOT_WEBAPPS_DIR": os.path.join(SF, "usr", "share", "grokbot", "webapps"),
+            "GROKBOT_UPDATE_RUN": os.path.join(t, "run-update"),
+            "GROKBOT_HEALTH_DIR": os.path.join(t, "health"),
         })
         # Fake tools: the daemon must never touch the real machine in tests
         # (systemctl suspend, nmcli, wpctl ...). Each logs its argv.
