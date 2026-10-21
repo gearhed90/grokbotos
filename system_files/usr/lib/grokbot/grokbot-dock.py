@@ -252,7 +252,12 @@ class Dock:
             # GTK keeps a tooltip up after a click while the pointer stays
             # still, and the window it belonged to has moved on. Drop it on
             # click and allow it again once the pointer leaves.
-            btn.connect("leave-notify-event", self.on_leave)
+            # Tooltips start off and come back only on real pointer motion,
+            # so a dock rebuilt (config reload) under a still pointer does
+            # not pop one up either.
+            btn.set_has_tooltip(False)
+            btn.add_events(Gdk.EventMask.POINTER_MOTION_MASK)
+            btn.connect("motion-notify-event", self.on_motion)
             box.pack_start(btn, False, False, 0)
             self.buttons.append((btn, app_keys(info), info))
         scroller = Gtk.ScrolledWindow()
@@ -271,9 +276,14 @@ class Dock:
         except ValueError:
             return []
 
-    def on_leave(self, btn, _event):
-        btn.set_has_tooltip(True)
+    def on_motion(self, btn, _event):
+        if not btn.get_has_tooltip():
+            btn.set_has_tooltip(True)
         return False
+
+    def hide_tooltips(self):
+        for btn, _keys, _info in self.buttons:
+            btn.set_has_tooltip(False)
 
     def on_click(self, btn, info):
         btn.set_has_tooltip(False)
@@ -288,6 +298,11 @@ class Dock:
         vs = self.current_views()
         running = {window_key(v) for v in vs}
         focused = {window_key(v) for v in vs if v.get("focused")}
+        # The focused window changed (click, Alt+Tab, Alt+G): drop any
+        # tooltip left over from before.
+        if focused != getattr(self, "_last_focused", None):
+            self._last_focused = focused
+            self.hide_tooltips()
         for btn, keys, _info in self.buttons:
             ctx = btn.get_style_context()
             for cls, on in (("running", bool(keys & running)),
