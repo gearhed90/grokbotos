@@ -1,4 +1,4 @@
-set dotenv-filename := "oais.env"
+set dotenv-filename := "grokbotos.env"
 set dotenv-load
 
 export image_name := env_var("IMAGE_NAME")

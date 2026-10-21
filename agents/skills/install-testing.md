@@ -8,9 +8,9 @@ Boot a helper VM (`vm-testing.md`) with a second blank disk (30 GB), load the im
 
 ```bash
 sudo podman run --rm --privileged --pid=host -v /dev:/dev -v /var/lib/containers:/var/lib/containers \
-  --security-opt label=type:unconfined_t localhost/oais:latest \
+  --security-opt label=type:unconfined_t localhost/grokbotos:latest \
   bootc install to-disk --wipe --generic-image --filesystem xfs \
-  --target-imgref ghcr.io/head77x/oais:latest /dev/vdb
+  --target-imgref ghcr.io/head77x/grokbotos:latest /dev/vdb
 ```
 
 - `--generic-image` installs both the UEFI and BIOS bootloaders. Without it, an install from a UEFI-booted host does **not** boot on BIOS: SeaBIOS hangs at "Booting from Hard Disk..." (verified 2026-10-21).

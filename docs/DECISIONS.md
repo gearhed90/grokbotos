@@ -1027,3 +1027,13 @@ Grok Bot Linux 빌드는 이 저장소에 없고, 공개 URL도 확인하지 못
 Arch로 바꾸지 않는다. 이미지 빌드, GHCR 이름, 디스크 설치, 실패 시 이전 배포로 돌아가는 경로가 bootc에 있다. Grok Bot이 하드웨어를 고치려고 로컬 이미지를 만드는 설계도 지금 부팅 중인 bootc 이미지를 `FROM`으로 삼는다. 그 흐름은 구현하지 않았다. 설계만 `docs/HARDWARE.md`와 로드맵 Phase G에 있다.
 
 같은 이유로 공장 초기화의 첫 버전도 `/usr`와 bootc 배포를 지우지 않는다. `grokbot-factory-reset`은 `--confirm RESET`일 때만 `/var/home/grokbot`의 내용을 지운다. 전체 `/var` 초기화, 첫 부팅 재실행, 새 주인 설치 모드는 아직 없다.
+
+## 2026-10-21: image, GHCR, and S3 names renamed `oais` → `grokbotos`
+
+The earlier "names kept on purpose" decision is reversed. `IMAGE_NAME=grokbotos`
+(file renamed `oais.env` → `grokbotos.env`), GHCR `ghcr.io/head77x/grokbotos` and
+`ghcr.io/head77x/grokbotos-arm64`, the ISO kickstart needle in `disk_config/iso.toml`
+/ `build-disk.yml`, the S3 prefix `grokbotos/`, and artifacts `grokbotos-<type>-<arch>`.
+Only `ID=fedora` in os-release stays (bootc and package tooling read it).
+Mentions of `oais` above are history and were left as written. Existing installs
+migrate with `sudo bootc switch ghcr.io/head77x/grokbotos:latest` (arm64: `-arm64`).

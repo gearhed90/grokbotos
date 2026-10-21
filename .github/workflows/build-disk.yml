@@ -83,7 +83,7 @@ jobs:
           # Concatenate the types with a hyphen
           DISK_TYPE=$(echo "${{ matrix.disk-type }}" | tr ' ' '-')
           # build.yml pushes amd64/arm64 as distinctly-named images
-          # (oais / oais-arm64), not one multi-arch manifest -- select
+          # (grokbotos / grokbotos-arm64), not one multi-arch manifest -- select
           # the one matching this matrix leg's platform.
           IMAGE_NAME="${IMAGE_NAME}"
           if [ "${{ matrix.platform }}" = "arm64" ]; then
@@ -128,14 +128,14 @@ jobs:
 
       # iso.toml's kickstart has a hardcoded `bootc switch` target so the
       # installed system tracks the right image post-install -- point it
-      # at whichever image (oais vs oais-arm64) this run actually built
+      # at whichever image (grokbotos vs grokbotos-arm64) this run actually built
       # the ISO from. The sed needle is the literal string
-      # ghcr.io/head77x/oais:latest; do not "rebrand" that string.
-      # Product name is Grok Bot OS; the registry image name stays oais.
+      # ghcr.io/head77x/grokbotos:latest; do not "rebrand" that string.
+      # Product name is Grok Bot OS; the registry image name is grokbotos (renamed from oais on 2026-10-21).
       - name: Point ISO kickstart at this run's image
         if: matrix.disk-type == 'anaconda-iso'
         run: |
-          sed -i "s#ghcr.io/head77x/oais:latest#${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}#" disk_config/iso.toml
+          sed -i "s#ghcr.io/head77x/grokbotos:latest#${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}#" disk_config/iso.toml
 
       - name: Build disk images
         id: build
@@ -179,7 +179,7 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
         run: |
           command -v aws >/dev/null 2>&1 || pip install --quiet awscli
-          S3_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/oais/${{ env.DISK_TYPE }}-${{ matrix.platform }}/"
+          S3_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/grokbotos/${{ env.DISK_TYPE }}-${{ matrix.platform }}/"
           aws s3 cp --recursive --no-progress "${{ steps.build.outputs.output-directory }}" "$S3_PREFIX"
           echo "### Uploaded to S3" >> "$GITHUB_STEP_SUMMARY"
           echo "\`$S3_PREFIX\`" >> "$GITHUB_STEP_SUMMARY"
@@ -192,7 +192,7 @@ jobs:
           # not set explicitly -- with overwrite: true below that means
           # whichever leg (qcow2 vs anaconda-iso) finishes last silently
           # replaces the other's upload instead of both being kept.
-          name: oais-${{ env.DISK_TYPE }}-${{ matrix.platform }}
+          name: grokbotos-${{ env.DISK_TYPE }}-${{ matrix.platform }}
           path: ${{ steps.build.outputs.output-directory }}
           if-no-files-found: error
           retention-days: 0

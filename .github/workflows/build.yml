@@ -25,12 +25,12 @@ jobs:
     name: Build and push image
     # quay.io/fedora/fedora-bootc is multi-arch (x86_64 + aarch64), so we
     # build both natively rather than emulate. amd64 and arm64 are pushed
-    # as distinctly-named images (oais / oais-arm64) rather than merged
+    # as distinctly-named images (grokbotos / grokbotos-arm64) rather than merged
     # into one multi-arch manifest list -- simpler and easier to debug for
-    # now; revisit if a single `oais:latest` that resolves per-client-arch
+    # now; revisit if a single `grokbotos:latest` that resolves per-client-arch
     # is worth the added complexity later.
-    # The product name is Grok Bot OS. The GHCR image names stay oais and
-    # oais-arm64 so existing pulls, kickstart sed, and S3 prefixes keep working.
+    # The product name is Grok Bot OS. The GHCR image names are grokbotos and
+    # grokbotos-arm64 (renamed from oais on 2026-10-21); kickstart sed and S3 prefixes match.
     runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false

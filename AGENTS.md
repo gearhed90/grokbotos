@@ -13,7 +13,7 @@ These are the rules for AI agents, Grok Bot included, that work on this reposito
 
 ## Product rules
 
-- Names: the product is **Grok Bot OS** and the company is **SpaceXSI**. The image names `oais` and `oais-arm64`, `IMAGE_NAME=oais` and the S3 prefix `oais/` **stay unchanged** (see README "Names kept on purpose").
+- Names: the product is **Grok Bot OS** and the company is **SpaceXSI**. The image names `grokbotos` and `grokbotos-arm64`, `IMAGE_NAME=grokbotos` and the S3 prefix `grokbotos/` (renamed from `oais` on 2026-10-21) **stay unchanged** (see README "Names kept on purpose").
 - Commands start with `grokbot-` (e.g. `grokbot-install`, `grokbot-dock-config`).
 - **Never put icons on the desktop.** The desktop holds widgets only.
 - Docks: top/bottom docks show icons only. Left/right docks show icons, or icons plus labels.

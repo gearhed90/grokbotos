@@ -133,7 +133,7 @@ curl -s 127.0.0.1:7311/v1/health
 
 ## 설치와 테스트 / Install & try it
 
-- **설치된 머신을 이 이미지로 바꾸기 / Switch an installed machine:** `sudo bootc switch ghcr.io/head77x/oais:latest` (amd64) 또는 `ghcr.io/head77x/oais-arm64:latest` (arm64)
+- **설치된 머신을 이 이미지로 바꾸기 / Switch an installed machine:** `sudo bootc switch ghcr.io/head77x/grokbotos:latest` (amd64) 또는 `ghcr.io/head77x/grokbotos-arm64:latest` (arm64)
 - **VM에서 써 보기 / Try it in a VM:** [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md)
 - **테스트 / Tests:** `bash tests/run-tests.sh` (셸 테스트, grokbotd 단위 테스트, shellcheck. CI의 `check.yml`도 같은 테스트를 돌린다)
 
@@ -153,7 +153,7 @@ curl -s 127.0.0.1:7311/v1/health
 
 ### 2. 다운로드 / Download
 - ⚠️ 설치 ISO는 아직 공개 배포되지 않았다 / no public installer ISO yet. `iso.toml` + bootc-image-builder(`--type anaconda-iso`)로 만들 수 있지만 검증되지 않았다.
-- ⚠️ `ghcr.io/head77x/oais` 이미지는 현재 익명 pull이 안 된다(403) / not anonymously pullable yet.
+- ⚠️ `ghcr.io/head77x/grokbotos` 이미지는 현재 익명 pull이 안 된다(403) / not anonymously pullable yet.
 
 ### 3. USB 만들기 / Write the USB stick (⚠️ ISO 미검증)
 - **Fedora Media Writer**: "Select .iso file" → USB 선택 → Write.
@@ -170,9 +170,9 @@ curl -s 127.0.0.1:7311/v1/health
 - **다른 리눅스에서 디스크로 직접 / from a live Linux to a disk** ✅ (VM에서 검증):
   ```sh
   sudo podman run --rm --privileged --pid=host -v /dev:/dev -v /var/lib/containers:/var/lib/containers \
-    --security-opt label=type:unconfined_t ghcr.io/head77x/oais:latest \
+    --security-opt label=type:unconfined_t ghcr.io/head77x/grokbotos:latest \
     bootc install to-disk --wipe --generic-image --filesystem xfs \
-    --target-imgref ghcr.io/head77x/oais:latest /dev/sdX
+    --target-imgref ghcr.io/head77x/grokbotos:latest /dev/sdX
   ```
   - `--generic-image`: UEFI와 BIOS 부트로더를 모두 설치. 없으면 UEFI로 부팅한 호스트에서는 BIOS 부팅이 안 된다 (✅ 확인).
   - `--target-imgref`: 업데이트 받을 이미지 주소 / where `bootc upgrade` pulls from (⚠️ 미검증).
@@ -290,7 +290,7 @@ sudo grokbot-factory-reset --confirm RESET  # /var/home/grokbot 안의 내용만
 ```text
 Containerfile                         fedora-bootc 이미지
 Justfile                              just build, 디스크 이미지
-oais.env                              IMAGE_NAME=oais (유지)
+grokbotos.env                         IMAGE_NAME=grokbotos (유지)
 build_files/build.sh                  패키지, os-release, grokbot 계정
 build_files/install-grokbot-app.sh    페이로드 또는 플레이스홀더
 grokbot-app/                          로컬 페이로드 자리. 기본은 비어 있음
@@ -300,7 +300,7 @@ system_files/usr/local/bin/grokbot-*  세션, 실행, 설치, 로그아웃, 공�
 system_files/usr/lib/grokbot/grokbotd 로컬 OS API 데몬 (docs/OS_API.md)
 system_files/usr/share/grokbot/api/   OS API JSON Schema (단일 원천)
 disk_config/                          ISO / qcow2
-.github/workflows/build.yml           GHCR oais, oais-arm64
+.github/workflows/build.yml           GHCR grokbotos, grokbotos-arm64
 .github/workflows/build-disk.yml      qcow2 / anaconda ISO
 .github/workflows/check.yml           셸 테스트. 이미지는 안 만듦
 docs/                                 구조 참고 문서 (OS_API.md, DOCK.md, DESKTOP.md ...)
@@ -315,14 +315,13 @@ legacy/orchestrator/                  예전 OAIS(AI-OS) 오케스트레이터 �
 
 | 그대로 | 이유 |
 |---|---|
-| (참고) GitHub 저장소는 `head77x/oais`에서 `head77x/grokbotos`로 이름이 바뀌었다 | 이미지·GHCR·S3 이름은 아래처럼 `oais` 그대로 둔다 |
-| `ghcr.io/head77x/oais`, `ghcr.io/head77x/oais-arm64` | 기존 pull, 서명, 디스크 빌드 |
-| `oais.env`의 `IMAGE_NAME=oais` | 워크플로가 이 값으로 이미지 이름을 만든다 |
-| `disk_config/iso.toml`의 `ghcr.io/head77x/oais:latest` | `build-disk.yml`이 이 문자열을 바꿔 넣는다 |
-| S3 접두사 `oais/`, 아티팩트 `oais-<타입>-<아키텍처>` | 받아 가던 경로 |
 | `/etc/os-release`의 `ID=fedora` | bootc와 패키지 도구가 ID를 본다 |
 
 `NAME` / `PRETTY_NAME` / `VARIANT`는 Grok Bot OS다.
+
+2026-10-21에 저장소(`head77x/oais` → `head77x/grokbotos`)에 이어 이미지·GHCR·S3 이름도 `oais`에서 `grokbotos`로 바꿨다: `ghcr.io/head77x/grokbotos`, `ghcr.io/head77x/grokbotos-arm64`, `grokbotos.env`의 `IMAGE_NAME=grokbotos`, S3 접두사 `grokbotos/`, 아티팩트 `grokbotos-<타입>-<아키텍처>`. / On 2026-10-21 the image, GHCR, and S3 names were renamed from `oais` to `grokbotos`.
+
+**이전 설치 마이그레이션 / Migrating existing installs:** `ghcr.io/head77x/oais`를 따라가던 머신은 한 번 `sudo bootc switch ghcr.io/head77x/grokbotos:latest`를 실행한다(arm64는 `ghcr.io/head77x/grokbotos-arm64:latest`). 옛 `oais` 패키지는 더 이상 갱신되지 않는다. / Machines tracking `ghcr.io/head77x/oais` should run `sudo bootc switch ghcr.io/head77x/grokbotos:latest` once (arm64: `grokbotos-arm64`); the old `oais` packages no longer receive updates.
 
 ## 라이선스와 출처 / License & credits
 

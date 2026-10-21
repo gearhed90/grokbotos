@@ -33,10 +33,10 @@ assert_contains system_files/usr/lib/tmpfiles.d/grokbot-home.conf "/var/home/gro
 assert_contains build_files/build.sh "install-grokbot-app.sh"
 assert_contains build_files/build.sh 'NAME="Grok Bot OS"'
 assert_contains build_files/build.sh "grokbot-open-browser"
-assert_contains oais.env "IMAGE_NAME=oais"
-assert_contains disk_config/iso.toml "ghcr.io/head77x/oais:latest"
-assert_contains .github/workflows/build-disk.yml 's#ghcr.io/head77x/oais:latest#'
-assert_contains .github/workflows/build.yml "oais-arm64"
+assert_contains grokbotos.env "IMAGE_NAME=grokbotos"
+assert_contains disk_config/iso.toml "ghcr.io/head77x/grokbotos:latest"
+assert_contains .github/workflows/build-disk.yml 's#ghcr.io/head77x/grokbotos:latest#'
+assert_contains .github/workflows/build.yml "grokbotos-arm64"
 assert_contains system_files/usr/local/bin/grokbot-kiosk "while true"
 assert_contains build_files/install-grokbot-app.sh "ba68a9332675238deb3102dfcdab6d6e7978fa2aa281df5bbf11cbb61a19418a"
 assert_contains build_files/install-grokbot-app.sh "9ff82fb7468ce08509e9a67945e96bc72fa2fb35283dc6132060e90ddd5da0be"

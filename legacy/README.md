@@ -21,3 +21,5 @@
 실기에서 잡은 버그(검은 화면, `claude login` 서브커맨드, Firefox 키오스크가 로그인 창을 같은 창으로 흡수한 문제)의 원인 코드가 이 트리에 있다. 기록은 `docs/DECISIONS.md`에 남아 있고, 동작하던 수정(홈 디렉터리 tmpfiles, 기본 브라우저 래퍼, Alt+Tab / Alt+F4)은 새 세션 쪽으로 옮겨 두었다. 오케스트레이터 자체는 Grok Bot이 그 역할을 대신하므로 부팅에 연결하지 않는다.
 
 복구가 필요하면 git 히스토리와 이 디렉터리를 본다. 다시 이미지에 넣지 않는다.
+
+> 2026-10-21: the image/GHCR/S3 names were renamed from `oais` to `grokbotos` (see README and docs/DECISIONS.md). `oais` names in this directory are historical and left as-is.

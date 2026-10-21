@@ -46,7 +46,7 @@ Then boot it in a VM ([`agents/skills/vm-testing.md`](agents/skills/vm-testing.m
 ## 규칙 / Ground rules
 
 - `.github/workflows/`는 메인테이너와 먼저 이야기하지 않고 바꾸지 않는다. / Do not change `.github/workflows/` without discussing it first.
-- 이미지 이름 `oais` / `oais-arm64`, `IMAGE_NAME=oais`, S3 접두사 `oais/`는 바꾸지 않는다(README의 "이름을 바꾸지 않은 것"). / Keep the image names and S3 prefix as they are (see README).
+- 이미지 이름 `grokbotos` / `grokbotos-arm64`, `IMAGE_NAME=grokbotos`, S3 접두사 `grokbotos/`는 바꾸지 않는다(README의 "이름을 바꾸지 않은 것"). / Keep the image names and S3 prefix as they are (see README).
 - 비밀값, 토큰, 개인 테스트 계정을 커밋하지 않는다. / Never commit secrets, tokens or personal test accounts.
 - OS API 메서드를 추가할 때는 `os-api.schema.json`, 백엔드, 테스트, `docs/OS_API.md`를 함께 고친다. / A new OS API method needs the schema, a backend, tests and `docs/OS_API.md` in the same PR.
 
@@ -69,7 +69,7 @@ Then boot it in a VM ([`agents/skills/vm-testing.md`](agents/skills/vm-testing.m
 
 - `main`에 병합되면 CI가 이미지를 빌드해 GHCR에 올린다: `latest`와 날짜 태그(`YYYYMMDD`, `latest-YYYYMMDD`, `YYYYMMDD-<sha>`). / Each merge to `main` builds and pushes the image to GHCR with `latest` and dated tags (`YYYYMMDD`, `latest-YYYYMMDD`, `YYYYMMDD-<sha>`).
 - 사용자에게 보이는 변경은 GitHub Releases의 **릴리스 노트**에 적는다. 보안 수정과 신고자 크레딧도 포함한다. / User-visible changes are written up in **release notes** on GitHub Releases, including security fixes and reporter credits.
-- 설치된 시스템은 `sudo bootc upgrade`로 받는다. 문제가 생기면 `sudo bootc rollback`으로 이전 이미지로 돌아가거나, 날짜 태그로 고정할 수 있다(`sudo bootc switch ghcr.io/head77x/oais:YYYYMMDD`). / Installed systems update with `sudo bootc upgrade`. If something breaks, `sudo bootc rollback` returns to the previous image, or you can pin a dated tag (`sudo bootc switch ghcr.io/head77x/oais:YYYYMMDD`).
+- 설치된 시스템은 `sudo bootc upgrade`로 받는다. 문제가 생기면 `sudo bootc rollback`으로 이전 이미지로 돌아가거나, 날짜 태그로 고정할 수 있다(`sudo bootc switch ghcr.io/head77x/grokbotos:YYYYMMDD`). / Installed systems update with `sudo bootc upgrade`. If something breaks, `sudo bootc rollback` returns to the previous image, or you can pin a dated tag (`sudo bootc switch ghcr.io/head77x/grokbotos:YYYYMMDD`).
 
 ## 라이선스 / License
 
