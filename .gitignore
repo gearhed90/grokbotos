@@ -8,3 +8,4 @@ grokbot-app/SHA256SUMS
 # Python bytecode (never commit; the image build compiles it)
 __pycache__/
 *.pyc
+/.vm/
