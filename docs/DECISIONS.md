@@ -1045,7 +1045,7 @@ migrate with `sudo bootc switch ghcr.io/head77x/grokbotos:latest` (arm64: `-arm6
 - `/etc/containers/policy.json`: 두 저장소만 `sigstoreSigned`(`keyPath=/etc/pki/containers/grokbotos.pub`, `matchRepository`). 그 밖(Flatpak 런타임이 아닌 일반 컨테이너 등)은 기존 기본값 `insecureAcceptAnything` 그대로.
 - `/etc/pki/containers/grokbotos.pub` = 저장소의 `cosign.pub`(테스트가 같은지 확인).
 - `/etc/containers/registries.d/grokbotos.yaml`: `use-sigstore-attachments: true`(CI의 `cosign sign`이 올리는 OCI 첨부 서명).
-- ISO kickstart: `bootc switch --enforce-container-sigpolicy`.
+- ISO kickstart: `--enforce-container-sigpolicy`는 넣지 않았다. VM에서 이 옵션은 정책의 default가 `insecureAcceptAnything`이면 "refusing usage"로 모든 switch를 거부했다. default를 `reject`로 바꾸면 다른 컨테이너 사용이 막히므로, 저장소별 `sigstoreSigned`만 둔다(containers/image가 pull마다 적용).
 
 확인: 실제 GHCR `:latest`(amd64·arm64)를 이 정책으로 `skopeo copy`하면 통과, 다른 키로 바꾸면 "Source image rejected: cryptographic signature verification failed". 주의:
 - 서명은 기본 브랜치 빌드에만 붙는다(PR 빌드 이미지는 서명이 없어 이 정책으로는 받을 수 없다).
