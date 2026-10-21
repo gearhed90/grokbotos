@@ -413,8 +413,9 @@ def write_desktop(rec):
 
 # ---------------- API ----------------
 
-def _prompt(ctx, method, title, summary):
-    ans, detail = consent.prompt(ctx["principal"], ctx.get("client"), "apps", method, title, summary, False)
+def _prompt(ctx, method, title, summary, warning=None):
+    ans, detail = consent.prompt(ctx["principal"], ctx.get("client"), "apps", method, title, summary, False,
+                                 warning=warning)
     if ans != "once":
         raise Denied(detail)
 
@@ -450,7 +451,14 @@ def install(params, ctx):
                    "note": "권한은 기능별로 따로 묻습니다 / each OS function is asked for separately"}
         if existing:
             summary["replaces"] = existing.get("version") or "installed version"
-        _prompt(ctx, "apps.install", title, summary)
+        warning = None
+        if source == "url":
+            title = ["웹 앱 설치: %s (%s)" % (man["name_ko"], origin), "Install web app: %s (%s)" % (man["name"], origin)]
+            warning = ["%s 사이트의 코드가 이 앱에 허용하는 권한을 그대로 받습니다. 사이트는 언제든 코드를 바꿀 수 있습니다."
+                       % origin,
+                       "Code served by %s receives every permission you grant this app, and the site can change "
+                       "that code at any time." % origin]
+        _prompt(ctx, "apps.install", title, summary, warning)
         dest_root = os.path.join(user_dir(), app_id)
         icon = None
         if source == "bundle":

@@ -132,6 +132,7 @@ class InstallerTests(tg.Base):
         self.assertEqual((p["scope"], p["method"], p["allow_always"]), ("apps", "apps.install", False))
         self.assertEqual(p["summary"]["origin"], origin)
         self.assertEqual(p["summary"]["requests_scopes"], "audio")
+        self.assertIsNone(p["warning"])
         # files are copied, served on the app's own origin with the CSP
         code, h, body = self.get("notes.app.localhost:%d" % self.port, "/")
         self.assertEqual(code, 200)
@@ -236,6 +237,10 @@ class InstallerTests(tg.Base):
         self.assertEqual(a["start_url"], url + "?pwa=1")
         self.assertEqual(a["scopes"], ["location"])
         self.assertTrue(a["icon_data"])
+        p = self.prompts()[-1]
+        self.assertIn(a["origin"], p["description"][0])
+        self.assertIn(a["origin"], p["warning"][0])
+        self.assertIn("receives every permission", p["warning"][1])
         # the remote origin is now known for CORS, with no grants
         st, hd, body = self.origin_rpc(a["origin"], "system.info")
         self.assertEqual(body["error"]["code"], -32001)
