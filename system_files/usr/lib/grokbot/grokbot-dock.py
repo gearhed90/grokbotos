@@ -358,6 +358,8 @@ class Dock:
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "permissions"])
         elif sid == "volume":
             subprocess.Popen(["/usr/local/bin/grokbot-volume", "mute"])
+        elif sid == "update":
+            subprocess.Popen(["/usr/local/bin/grokbot-settings", "update"])
         GLib.timeout_add(400, self.refresh_status_once)
 
     def on_status_scroll(self, _btn, event, sid):

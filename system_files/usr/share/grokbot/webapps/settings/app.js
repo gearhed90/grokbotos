@@ -4,7 +4,7 @@
 // audit text are untrusted and always go in as text nodes.
 (function () {
   let lang = localStorage.getItem("lang") === "en" ? "en" : "ko";
-  const t = (k) => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
+  const t = (k, ...a) => { let s = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
   let rid = 0;
   const main = document.getElementById("main");
 
@@ -204,6 +204,46 @@
   };
 
   let appsSrc = "";
+  // OS updates (bootc). Every action shows the consent prompt (power class).
+  const shortDigest = (d) => (d ? d.replace(/^sha256:/, "").slice(0, 12) : "—");
+  const when = (s) => (s ? new Date(typeof s === "number" ? s * 1000 : s).toLocaleString(lang === "ko" ? "ko-KR" : "en-US") : "—");
+  pages.update = async () => {
+    const u = await rpc("update.status");
+    const dep = (key, e) => card(t("upd_" + key),
+      e ? [row(h("span", { class: "grow mono" }, e.image || "—"), h("span", { class: "pill" + (key === "booted" ? " allow" : "") }, e.version || "—")),
+        h("div", { class: "dim mono" }, shortDigest(e.digest) + "  ·  " + when(e.timestamp))]
+        : h("p", { class: "dim" }, t("upd_none_" + key)));
+    const busy = u.running.filter((a) => a !== "status");
+    const refreshSoon = () => { clearTimeout(pages.update.t); pages.update.t = setTimeout(() => { if (location.hash === "#update") render(); }, 4000); };
+    if (busy.length) refreshSoon();
+    const start = (method) => act(() => rpc(method), t("upd_started")).then(() => setTimeout(render, 800), () => {});
+    const btn = (label, method, primary, disabled) => h("button", { type: "button", class: primary ? "primary" : "", disabled: disabled || busy.length > 0,
+      onclick: () => start(method) }, t(label));
+    const state = busy.length ? t("upd_running_" + busy[0])
+      : u.restart_needed ? (u.rollback_queued ? t("upd_restart_rollback") : t("upd_restart_staged"))
+      : u.available ? t("upd_available", u.available_version || shortDigest(u.available_digest))
+      : u.checked_at ? t("upd_uptodate") : t("upd_never");
+    const last = u.last ? h("div", { class: u.last.ok ? "dim" : "err" },
+      t("upd_last", t("upd_act_" + u.last.action), when(u.last.finished), u.last.ok ? "OK" : t("failed")) + (u.last.message ? " — " + u.last.message : "")) : null;
+    const rb = u.health && u.health.rolled_back;
+    const out = [...head("upd")];
+    if (rb) out.push(card(null, h("p", { class: "err" }, t("upd_auto_rb", rb.from_version || shortDigest(rb.from), when(rb.at))), h("div", { class: "dim" }, rb.why || "")));
+    out.push(card(null,
+      row(h("span", { class: "grow" }, h("b", {}, state), h("div", { class: "dim" }, t("upd_checked", when(u.checked_at))), last)),
+      row(h("span", { class: "grow" }),
+        btn("upd_check", "update.check", !u.available),
+        btn("upd_apply", "update.apply", u.available, !u.available),
+        u.restart_needed ? h("button", { type: "button", class: "primary", onclick: () => act(() => rpc("power.action", { action: "reboot" })).catch(() => {}) }, t("upd_restart")) : null)));
+    out.push(dep("booted", u.booted), dep("staged", u.staged));
+    out.push(card(t("upd_rollback"), u.rollback
+      ? [row(h("span", { class: "grow mono" }, u.rollback.image || "—"), h("span", { class: "pill" }, u.rollback.version || "—")),
+        h("div", { class: "dim mono" }, shortDigest(u.rollback.digest) + "  ·  " + when(u.rollback.timestamp)),
+        row(h("span", { class: "grow dim" }, t("upd_rollback_hint")), btn("upd_do_rollback", "update.rollback", false, u.rollback_queued))]
+      : h("p", { class: "dim" }, t("upd_none_rollback"))));
+    out.push(card(null, h("p", { class: "dim" }, t("upd_health", u.health && u.health.last_good_version || shortDigest(u.health && u.health.last_good)))));
+    return out;
+  };
+
   pages.apps = async () => {
     const a = await rpc("apps.list", { include_launchers: false });
     const scopes = await rpc("permissions.list", {}).then((p) => p.scopes).catch(() => ({}));
