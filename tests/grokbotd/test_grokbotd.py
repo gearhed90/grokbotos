@@ -219,7 +219,8 @@ class SchemaTests(unittest.TestCase):
             verb = name.split(".")[-1]
             if spec["access"] == "read":
                 # "brightness" is a read (display.brightness), not a setter.
-                self.assertIn(verb, ("methods", "info", "list", "get", "status", "brightness", "whoami", "resources"), name)
+                self.assertIn(verb, ("methods", "info", "list", "get", "status", "brightness", "whoami", "resources",
+                                     "stat", "read", "wait"), name)
             else:
                 self.assertNotIn(verb, ("list", "get", "status", "info"), name)
 
@@ -240,9 +241,10 @@ class SchemaTests(unittest.TestCase):
 class DaemonTests(Base):
     def test_unix_all_methods(self):
         with open(SCHEMA) as f:
-            names = [n for n, s in json.load(f)["methods"].items() if s.get("access") == "read"]
+            names = [n for n, s in json.load(f)["methods"].items()
+                     if s.get("access") == "read" and not s["params"].get("required")]
         for m in names:
-            r = self.rpc_unix(m)
+            r = self.rpc_unix(m, {"timeout": 0} if m == "media.keys.wait" else None)
             self.assertIn("result", r, (m, r))
 
     def test_socket_permissions(self):

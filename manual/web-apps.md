@@ -35,6 +35,12 @@ When an app wants a function, the prompt asks: **Always allow**, **Allow once**,
 기본으로 설치되어 있다. CPU, 메모리, 디스크, 배터리, 네트워크, OS API 기록 요약을 보여 준다. 처음 열면 시스템 정보, 전원, 네트워크, 감사 기록 권한을 하나씩 묻는다. 최근 1시간 CPU·메모리 기록은 앱 저장소에 남아 오프라인에서도 보인다.
 Installed by default: CPU, memory, disk, battery, network and an OS API audit summary. On first open it asks for system information, power, network and the audit log, one at a time. The last hour of CPU/memory history stays in the app's storage and shows offline too.
 
+## 기본 앱: 파일, 메모, 미디어 플레이어 / Built-in apps: Files, Notes, Media Player
+
+- **파일 / Files** — 홈 폴더(~)만 보입니다. 숨김 파일(.config, .ssh 등)은 권한이 있어도 보이지 않습니다. 처음에 "홈 폴더 파일 보기"를 묻고, 저장·이름 바꾸기·휴지통은 따로 "홈 폴더 파일 바꾸기"를 묻습니다. 지운 파일은 휴지통(~/.local/share/Trash)으로 갑니다. Only your home folder, never hidden files; seeing and changing are separate permissions; deleting moves to the trash.
+- **메모 / Notes** — OS 권한이 필요 없습니다. 메모는 이 앱 전용 저장소에만 있고 인터넷 없이도 됩니다. Needs no permission; notes stay in the app's own storage and work offline.
+- **미디어 플레이어 / Media Player** — 고르거나 끌어다 놓은 음악·동영상을 재생합니다(파일은 컴퓨터 밖으로 나가지 않습니다). "미디어 키" 권한을 주면 키보드의 재생/다음/이전 키로 조작할 수 있습니다. Plays files you pick; with the "Media keys" permission it takes the keyboard media keys.
+
 ## 앱 만들기 / Making an app
 
 `manifest.json`(W3C 웹 앱 매니페스트)에 선택 항목 `"grokbot": {"id": "my-app", "name_ko": "내 앱", "scopes": ["audio"]}`를 넣는다. 앱은 같은 origin의 `POST /v1/rpc`로 OS API를 부른다(`docs/OS_API.md`). 인라인 스크립트와 인라인 style 속성은 CSP로 막혀 있다.

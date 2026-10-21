@@ -32,7 +32,11 @@
     "permissions.read": "View permission grants of every caller",
     "permissions.write": "Change or revoke permission grants (granting always asks the user)",
     "permissions.request": "Ask the user for a scope (shows the consent prompt)",
-    "audit.read": "Read the API audit log"
+    "audit.read": "Read the API audit log",
+    "files.read": "List and read files in the home folder (not hidden ones)",
+    "files.write": "Create, change, move and trash files in the home folder (not hidden ones)",
+    "mediakeys.read": "Receive Play/Pause/Next/Previous media key presses",
+    "mediakeys.write": "Send media key presses to apps"
   },
   "methods": {
     "api.methods": {
@@ -1090,6 +1094,276 @@
       "result": {
         "type": "object"
       }
+    },
+    "files.list": {
+      "description": "List a folder in the home folder (hidden entries are left out and counted).",
+      "capability": "files.read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "files",
+      "access": "read",
+      "x-title": [
+        "홈 폴더의 파일 목록 보기",
+        "List files in your home folder"
+      ]
+    },
+    "files.stat": {
+      "description": "Type, size, mtime and MIME type of one file or folder.",
+      "capability": "files.read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "files",
+      "access": "read",
+      "x-title": [
+        "파일 정보 보기",
+        "Read file details"
+      ]
+    },
+    "files.read": {
+      "description": "Read a file (max 16 MB) as UTF-8 text or base64.",
+      "capability": "files.read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          },
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ]
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "files",
+      "access": "read",
+      "x-title": [
+        "파일 내용 읽기",
+        "Read a file"
+      ]
+    },
+    "files.write": {
+      "description": "Create or (with overwrite) replace a file, atomically. Max 16 MB.",
+      "capability": "files.write",
+      "params": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          },
+          "data": {
+            "type": "string",
+            "maxLength": 23000000
+          },
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ]
+          },
+          "overwrite": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "files-write",
+      "access": "write",
+      "x-title": [
+        "파일 저장",
+        "Save a file"
+      ]
+    },
+    "files.mkdir": {
+      "description": "Create a folder.",
+      "capability": "files.write",
+      "params": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "files-write",
+      "access": "write",
+      "x-title": [
+        "폴더 만들기",
+        "Create a folder"
+      ]
+    },
+    "files.move": {
+      "description": "Rename or move a file or folder inside the home folder.",
+      "capability": "files.write",
+      "params": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          },
+          "to": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          }
+        },
+        "required": [
+          "path",
+          "to"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "files-write",
+      "access": "write",
+      "x-title": [
+        "파일 이름 바꾸기 / 옮기기",
+        "Rename or move a file"
+      ]
+    },
+    "files.trash": {
+      "description": "Move a file or folder to the trash (~/.local/share/Trash).",
+      "capability": "files.write",
+      "params": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "files-write",
+      "access": "write",
+      "x-title": [
+        "파일을 휴지통으로",
+        "Move a file to the trash"
+      ]
+    },
+    "media.keys.wait": {
+      "description": "Wait up to timeout seconds (max 55) for a media key; returns {key} or {key:null}. The newest waiter receives the key.",
+      "capability": "mediakeys.read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "timeout": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 55
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "mediakeys",
+      "access": "read",
+      "x-title": [
+        "미디어 키 받기",
+        "Receive media keys"
+      ]
+    },
+    "media.keys.press": {
+      "description": "Deliver a media key to the app waiting for it (used by the sway key bindings). Returns delivered=false when no app is waiting.",
+      "capability": "mediakeys.write",
+      "params": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "enum": [
+              "play-pause",
+              "play",
+              "pause",
+              "next",
+              "previous",
+              "stop"
+            ]
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "scope": "mediakeys",
+      "access": "write",
+      "x-title": [
+        "미디어 키 보내기",
+        "Send a media key"
+      ]
     }
   },
   "x-scopes": {
@@ -1154,10 +1428,9 @@
       "always_ask": false
     },
     "files": {
-      "ko": "파일",
-      "en": "Files",
-      "always_ask": false,
-      "reserved": true
+      "ko": "홈 폴더 파일 보기",
+      "en": "See files in your home folder",
+      "always_ask": false
     },
     "camera": {
       "ko": "카메라",
@@ -1183,6 +1456,16 @@
     "audit": {
       "ko": "감사 기록",
       "en": "Audit log",
+      "always_ask": false
+    },
+    "mediakeys": {
+      "ko": "미디어 키(재생, 다음 곡)",
+      "en": "Media keys (play, next track)",
+      "always_ask": false
+    },
+    "files-write": {
+      "ko": "홈 폴더 파일 바꾸기(저장, 이름 바꾸기, 휴지통)",
+      "en": "Change files in your home folder (save, rename, trash)",
       "always_ask": false
     }
   }

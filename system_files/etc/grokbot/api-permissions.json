@@ -9,12 +9,14 @@
     "network": "ask",
     "screen": "ask",
     "files": "ask",
+    "files-write": "ask",
     "location": "ask",
     "camera": "ask",
     "microphone": "ask",
     "power": "ask",
     "permissions": "allow",
-    "apps": "allow"
+    "apps": "allow",
+    "mediakeys": "allow"
   },
   "origins": {
     "http://settings.app.localhost:7311": {

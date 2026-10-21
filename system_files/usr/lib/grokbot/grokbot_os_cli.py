@@ -216,6 +216,26 @@ def cmd_apps(args, as_json):
     return _usage("usage: apps [list] | install <url|path> [id] | uninstall <id> [--keep-data] | launch <id>")
 
 
+MEDIA_KEYS = ("play-pause", "play", "pause", "next", "previous", "stop")
+
+
+def cmd_media_key(args, as_json):
+    """sway media-key binding: give the key to the web app waiting for it
+    (media.keys.wait); when none is, or grokbotd is down, use playerctl."""
+    if len(args) != 1 or args[0] not in MEDIA_KEYS:
+        return _usage("usage: media-key " + "|".join(MEDIA_KEYS))
+    try:
+        resp = Client().call("media.keys.press", {"key": args[0]})
+        if resp.get("result", {}).get("delivered"):
+            return 0
+    except Unreachable:
+        pass
+    try:
+        os.execvp("playerctl", ["playerctl", args[0]])
+    except OSError:
+        return 1
+
+
 def cmd_audit(args, as_json):
     params = {"limit": 20}
     rest = list(args)
@@ -401,6 +421,8 @@ def main(argv):
         return run_call("permissions.revoke", p, as_json)
     if cmd == "apps":
         return cmd_apps(rest, as_json)
+    if cmd == "media-key":
+        return cmd_media_key(rest, as_json)
     if cmd == "whoami":
         return run_call("permissions.whoami", {}, as_json)
     if cmd == "methods":

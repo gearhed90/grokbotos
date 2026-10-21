@@ -7,7 +7,7 @@ mode is "ask" -> backend. Every outcome is written to the audit log.
 import threading
 import time
 
-from . import audit, backends, consent, perms, schema, webapps, writes
+from . import audit, backends, consent, files, mediakeys, perms, schema, webapps, writes
 
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
@@ -18,6 +18,8 @@ PERMISSION_DENIED = -32001
 
 METHODS = dict(backends.METHODS)
 METHODS.update(writes.METHODS)
+METHODS.update(files.METHODS)
+METHODS.update(mediakeys.METHODS)
 CTX_METHODS = dict(writes.CTX_METHODS)
 SPECIAL = {"api.methods", "permissions.request"}
 REQUEST_COOLDOWN_S = 600
@@ -134,11 +136,18 @@ class Dispatcher:
                     perms.set_mode(principal, scope, "allow", by="prompt")
                 elif ans == "session":
                     perms.session_allow(principal, scope)
+        quiet = False
         try:
             if method == "api.methods":
                 result = self._api_methods(principal)
             elif method in CTX_METHODS:
                 result = CTX_METHODS[method](params, ctx)
+            elif method == "media.keys.wait":
+                quiet = not mediakeys.begin(principal)
+                try:
+                    result = METHODS[method](params)
+                finally:
+                    mediakeys.end(principal)
             else:
                 result = METHODS[method](params)
         except webapps.Denied as e:
@@ -155,7 +164,8 @@ class Dispatcher:
         except Exception as e:  # never kill the daemon over one call
             audit.record(decision="allow", error="internal", detail=type(e).__name__, **base)
             return _err(rid, BACKEND_ERROR, "internal error: %s" % type(e).__name__)
-        audit.record(decision="allow", **base)
+        if not quiet:
+            audit.record(decision="allow", **base)
         return {"jsonrpc": "2.0", "id": rid, "result": result}
 
     def _request(self, rid, params, ctx, base):

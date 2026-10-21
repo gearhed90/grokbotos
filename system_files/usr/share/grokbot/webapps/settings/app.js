@@ -190,10 +190,10 @@
         choose.addEventListener("change", () => { if (choose.value) act(() => rpc("permissions.set", { principal: pr.principal, scope: s, mode: choose.value }), t("saved")).then(render, render); });
         tbl.append(h("tr", {}, h("td", {}, lang === "ko" ? meta.ko : meta.en, meta.always_ask ? h("div", { class: "dim" }, t("always_ask")) : null),
           h("td", {}, modePill(m.read, meta.access.includes("read"))), h("td", {}, modePill(m.write, meta.access.includes("write"))),
-          h("td", { class: "dim" }, t("src_" + (m.stored ? "user" : m.source))),
-          h("td", {}, choose, " ", m.stored ? h("button", { type: "button", onclick: () => act(() => rpc("permissions.revoke", { principal: pr.principal, scope: s }), t("saved")).then(render) }, t("revoke")) : null)));
+          h("td", { class: "dim" }, t("src_" + (m.session ? "session" : m.stored ? "user" : m.source))),
+          h("td", {}, choose, " ", m.stored || m.session ? h("button", { type: "button", onclick: () => act(() => rpc("permissions.revoke", { principal: pr.principal, scope: s }), t("saved")).then(render) }, t("revoke")) : null)));
       }
-      const anyStored = Object.values(pr.scopes).some((m) => m.stored);
+      const anyStored = Object.values(pr.scopes).some((m) => m.stored || m.session);
       return card(null, h("div", { class: "row" }, h("h3", { class: "grow" }, label(pr.principal)),
         h("span", { class: "dim mono" }, pr.principal),
         anyStored ? h("button", { class: "danger", type: "button", onclick: () => act(() => rpc("permissions.revoke", { principal: pr.principal }), t("saved")).then(render) }, t("revoke_all")) : null), tbl);

@@ -20,7 +20,7 @@ WEBAPP_BIN = os.path.join(tg.SF, "usr", "local", "bin", "grokbot-webapp")
 ICON = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8"/></svg>')
 
 
-def bundle(root, name="Notes", gid=None, scopes=("audio",), extra=None):
+def bundle(root, name="Jotter", gid=None, scopes=("audio",), extra=None):
     os.makedirs(root, exist_ok=True)
     man = {"name": name, "start_url": "/index.html", "icons": [{"src": "icon.svg", "sizes": "any"}],
            "grokbot": {"name_ko": "메모", "scopes": list(scopes)}}
@@ -29,7 +29,7 @@ def bundle(root, name="Notes", gid=None, scopes=("audio",), extra=None):
     with open(os.path.join(root, "manifest.json"), "w") as f:
         json.dump(man, f)
     with open(os.path.join(root, "index.html"), "w") as f:
-        f.write("<!doctype html><title>notes</title><script src=app.js></script>")
+        f.write("<!doctype html><title>jotter</title><script src=app.js></script>")
     with open(os.path.join(root, "app.js"), "w") as f:
         f.write("console.log(1)")
     with open(os.path.join(root, "icon.svg"), "w") as f:
@@ -121,12 +121,12 @@ class InstallerTests(tg.Base):
     # ---- install a bundle ----
 
     def test_bundle_install_serve_launcher_and_no_grants(self):
-        src = bundle(os.path.join(self.side.name, "notes-src"))
+        src = bundle(os.path.join(self.side.name, "jotter-src"))
         r = self.install(path=src)
         self.assertIn("result", r, r)
         a = r["result"]
-        origin = "http://notes.app.localhost:%d" % self.port
-        self.assertEqual((a["id"], a["origin"], a["source"], a["scopes"]), ("notes", origin, "bundle", ["audio"]))
+        origin = "http://jotter.app.localhost:%d" % self.port
+        self.assertEqual((a["id"], a["origin"], a["source"], a["scopes"]), ("jotter", origin, "bundle", ["audio"]))
         self.assertTrue(a["icon_data"].startswith("data:image/svg+xml;base64,"))
         p = self.prompts()[-1]
         self.assertEqual((p["scope"], p["method"], p["allow_always"]), ("apps", "apps.install", False))
@@ -134,17 +134,17 @@ class InstallerTests(tg.Base):
         self.assertEqual(p["summary"]["requests_scopes"], "audio")
         self.assertIsNone(p["warning"])
         # files are copied, served on the app's own origin with the CSP
-        code, h, body = self.get("notes.app.localhost:%d" % self.port, "/")
+        code, h, body = self.get("jotter.app.localhost:%d" % self.port, "/")
         self.assertEqual(code, 200)
-        self.assertIn(b"notes", body)
+        self.assertIn(b"jotter", body)
         self.assertIn("worker-src 'self'", h["Content-Security-Policy"])
         self.assertIn("manifest-src 'self'", h["Content-Security-Policy"])
-        self.assertTrue(os.path.isfile(self.data("grokbot", "webapps", "notes", "app.js")))
+        self.assertTrue(os.path.isfile(self.data("grokbot", "webapps", "jotter", "app.js")))
         # launcher entry (launcher + dock), never the desktop
-        with open(self.data("applications", "grokbot-webapp-notes.desktop")) as f:
+        with open(self.data("applications", "grokbot-webapp-jotter.desktop")) as f:
             d = f.read()
-        self.assertIn("Exec=/usr/local/bin/grokbot-webapp notes\n", d)
-        self.assertIn("StartupWMClass=grokbot-webapp-notes\n", d)
+        self.assertIn("Exec=/usr/local/bin/grokbot-webapp jotter\n", d)
+        self.assertIn("StartupWMClass=grokbot-webapp-jotter\n", d)
         self.assertIn("Name=메모\n", d)
         self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "Desktop")))
         # nothing granted: the app is known for CORS but its calls are denied
@@ -163,17 +163,17 @@ class InstallerTests(tg.Base):
         self.assertEqual(self.origin_rpc(origin, "network.status")[2]["error"]["code"], -32001)
         # listed
         lst = self.rpc_unix("apps.list", {"include_launchers": False})["result"]["webapps"]
-        self.assertIn("notes", [x["id"] for x in lst])
+        self.assertIn("jotter", [x["id"] for x in lst])
         # uninstall removes files, launcher, profile and grants
-        prof = self.data("grokbot", "webapp-profiles", "notes")
+        prof = self.data("grokbot", "webapp-profiles", "jotter")
         os.makedirs(prof)
         self.answer("once")
-        r = self.rpc_unix("apps.uninstall", {"id": "notes"})["result"]
+        r = self.rpc_unix("apps.uninstall", {"id": "jotter"})["result"]
         self.assertEqual(r["revoked"], ["audio"])
-        for p in (self.data("applications", "grokbot-webapp-notes.desktop"), prof,
-                  self.data("grokbot", "webapps", "notes"), self.data("grokbot", "installed", "webapp.notes.json")):
+        for p in (self.data("applications", "grokbot-webapp-jotter.desktop"), prof,
+                  self.data("grokbot", "webapps", "jotter"), self.data("grokbot", "installed", "webapp.jotter.json")):
             self.assertFalse(os.path.exists(p), p)
-        self.assertEqual(self.get("notes.app.localhost:%d" % self.port, "/")[0], 404)
+        self.assertEqual(self.get("jotter.app.localhost:%d" % self.port, "/")[0], 404)
         self.assertEqual(self.http("/v1/rpc", None, {"Origin": origin, "Access-Control-Request-Method": "POST"},
                                    "OPTIONS")[0], 403)
 
@@ -276,6 +276,23 @@ class InstallerTests(tg.Base):
         self.assertEqual(code, 200)
         with open(os.path.join(tg.SF, "usr", "share", "applications", "grokbot-webapp-sysmon.desktop")) as f:
             self.assertIn("Exec=/usr/local/bin/grokbot-webapp sysmon", f.read())
+
+    def test_example_apps_are_system_apps(self):
+        lst = {a["id"]: a for a in self.rpc_unix("apps.list", {"include_launchers": False})["result"]["webapps"]}
+        want = {"files": ("파일", ["files", "files-write"]), "notes": ("메모", []),
+                "player": ("미디어 플레이어", ["mediakeys"])}
+        for gid, (ko, scopes) in want.items():
+            a = lst[gid]
+            self.assertTrue(a["system"], gid)
+            self.assertEqual((a["name_ko"], sorted(a["scopes"])), (ko, scopes))
+            host = "%s.app.localhost:%d" % (gid, self.port)
+            for f in ("/", "/app.js", "/sw.js", "/style.css", "/%s.css" % gid, "/icon.svg"):
+                self.assertEqual(self.get(host, f)[0], 200, (gid, f))
+            with open(os.path.join(tg.SF, "usr", "share", "applications", "grokbot-webapp-%s.desktop" % gid)) as f:
+                self.assertIn("Exec=/usr/local/bin/grokbot-webapp %s" % gid, f.read())
+            # shipped with no grants
+            body = self.origin_rpc(a["origin"], "files.list")[2]
+            self.assertEqual(body["error"]["code"], -32001)
 
     def test_launch(self):
         log = os.path.join(self.side.name, "launch.log")
