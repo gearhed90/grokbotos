@@ -60,28 +60,38 @@ class StatusTests(unittest.TestCase):
     def test_daemon_down(self):
         self.assertEqual([i["id"] for i in st.items(lambda m: None)], ["clock"])
 
-    def test_ac_power_does_not_mean_charging(self):
-        # power_supply status, not on_ac: Full and Not charging stay on AC.
-        def battery(status, cap, on_ac=True):
+    def test_battery_power_states(self):
+        def battery(status, cap, on_ac):
             res = {"power.status": {"batteries": [{"capacity_percent": cap, "status": status}],
                                     "on_ac": on_ac}}
             return {i["id"]: i for i in st.items(fake(res))}["battery"]
 
-        full = battery("Full", 100)
-        self.assertEqual(full["icon"], "battery-level-100-symbolic")
-        self.assertNotIn("charging", full["tooltip"])
-
-        held = battery("Not charging", 80)
-        self.assertEqual(held["icon"], "battery-level-80-symbolic")
-        self.assertNotIn("충전", held["tooltip"])
-
-        discharging = battery("Discharging", 78, on_ac=True)
-        self.assertEqual(discharging["icon"], "battery-level-80-symbolic")
-        self.assertNotIn("충전", discharging["tooltip"])
-
-        charging = battery("Charging", 42, on_ac=False)
+        charging = battery("Charging", 42, True)
         self.assertEqual(charging["icon"], "battery-level-40-charging-symbolic")
-        self.assertIn("charging", charging["tooltip"])
+        self.assertEqual(charging["text"], "충전 중")
+        self.assertNotIn("전원 연결됨", charging["text"])
+
+        charging_off_ac = battery("Charging", 42, False)
+        self.assertEqual(charging_off_ac["icon"], "battery-level-40-charging-symbolic")
+        self.assertEqual(charging_off_ac["text"], "충전 중")
+
+        full = battery("Full", 100, True)
+        self.assertEqual(full["icon"], "ac-adapter-symbolic")
+        self.assertEqual(full["text"], "전원 연결됨 (가득 참)")
+
+        held = battery("Not charging", 80, True)
+        self.assertEqual(held["icon"], "ac-adapter-symbolic")
+        self.assertEqual(held["text"], "전원 연결됨")
+
+        discharging = battery("Discharging", 78, False)
+        self.assertEqual(discharging["icon"], "battery-level-80-symbolic")
+        self.assertEqual(discharging["text"], "78%")
+        self.assertEqual(discharging["tooltip"], "배터리 / Battery 78%")
+
+        # AC alone does not mean plugged-in or charging when the pack is discharging.
+        discharging_ac = battery("Discharging", 78, True)
+        self.assertEqual(discharging_ac["icon"], "battery-level-80-symbolic")
+        self.assertEqual(discharging_ac["text"], "78%")
 
 
 if __name__ == "__main__":

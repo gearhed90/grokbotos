@@ -50,16 +50,32 @@ def _battery(power):
         return None
     b = power["batteries"][0]
     cap = b.get("capacity_percent")
+    status = (b.get("status") or "").lower()
+    on_ac = bool(power.get("on_ac"))
     # Kernel status is Charging, Discharging, Not charging, or Full.
     # on_ac stays true when the pack is full or held at a charge limit.
-    charging = (b.get("status") or "").lower() == "charging"
+    charging = status == "charging"
+    plugged = on_ac and status in ("full", "not charging")
     if cap is None:
-        icon = "battery-missing-symbolic"
+        level, pct = None, "?"
     else:
         level = min(100, max(0, int(round(cap / 10.0)) * 10))
-        icon = "battery-level-%d%s-symbolic" % (level, "-charging" if charging else "")
-    text = "%s%%" % cap if cap is not None else "?"
-    tip = "배터리 / Battery %s%s" % (text, " (충전 중 / charging)" if charging else "")
+        pct = "%s%%" % cap
+    if charging:
+        icon = "battery-missing-symbolic" if level is None else "battery-level-%d-charging-symbolic" % level
+        text = "충전 중"
+        tip = "충전 중 / Charging %s" % pct
+    elif plugged:
+        # ac-adapter-symbolic is Adwaita's plug icon.
+        icon = "ac-adapter-symbolic"
+        if status == "full":
+            text, tip = "전원 연결됨 (가득 참)", "전원 연결됨 (가득 참) / Plugged in (full)"
+        else:
+            text, tip = "전원 연결됨", "전원 연결됨 / Plugged in %s" % pct
+    else:
+        icon = "battery-missing-symbolic" if level is None else "battery-level-%d-symbolic" % level
+        text = pct
+        tip = "배터리 / Battery %s" % pct
     return {"id": "battery", "icon": icon, "text": text, "tooltip": tip}
 
 
