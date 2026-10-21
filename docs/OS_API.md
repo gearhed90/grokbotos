@@ -52,8 +52,17 @@ prompt. See "Permission model" below and the threat model in
 | `permissions.list` | `permissions` read | `permissions.read` | Effective mode (allow/ask/deny) per scope for every known caller, with stored grants. |
 | `permissions.set` | `permissions` write | `permissions.write` | Store a mode for one caller and one scope. Always shows the consent prompt. camera, microphone and power cannot be set to allow. |
 | `permissions.revoke` | `permissions` write | `permissions.write` | Remove stored grants of a caller (one scope, or all). The caller falls back to the system default. |
-| `permissions.request` | (none) write | (none) | Ask the user to grant the calling origin one scope. Shows the consent prompt; the answer is stored (always: allow, once: ask, deny: deny). Rate-limited. |
+| `permissions.request` | (none) write | (none) | Ask the user to grant the calling origin one scope. Shows the consent prompt. Answers: Always (stored allow), This session (allow in memory until grokbotd stops), Deny (stored deny). For camera, microphone and power: Allow (stored ask, so each use still prompts) or Deny. Result `{mode, until}` (`until`: `always` or `session`). Rate-limited. |
+| `files.list` | `files` read | `files.read` | Entries of a home-folder directory (`path`, default `/` = `~`): name, path, type, size, mtime, mime, writable. Hidden entries are left out and counted |
+| `files.stat` | `files` read | `files.read` | One entry |
+| `files.read` | `files` read | `files.read` | File content (max 16 MB), `encoding` `utf-8` (default) or `base64` |
+| `files.write` | `files-write` write | `files.write` | Create a file, or replace it with `overwrite: true` (atomic rename). Max 16 MB |
+| `files.mkdir` / `files.move` / `files.trash` | `files-write` write | `files.write` | New folder; rename or move (`path`, `to`); move to the freedesktop trash (`~/.local/share/Trash`) |
+| `media.keys.wait` | `mediakeys` read | `mediakeys.read` | Long poll (`timeout` ≤ 55 s) for a media key: `{key}` (`play-pause`, `play`, `pause`, `next`, `previous`, `stop`) or `{key: null}`. The newest waiter gets the key |
+| `media.keys.press` | `mediakeys` write | `mediakeys.write` | Deliver a media key (sway's XF86Audio* bindings run `grokbot-os media-key KEY`; with no waiter it falls back to playerctl) |
 | `audit.list` | `audit` read | `audit.read` | Recent audit log entries, newest last. Filters: principal, decision, method. |
+
+**Files scope rules.** Paths are relative to the home folder (`/Documents/a.txt`, `~/Documents/a.txt` and `Documents/a.txt` are the same). Refused: `..`, any path that resolves outside `~` (symlinks included), and every hidden component (`.config`, `.local`, `.ssh`, ...), so a `files` grant can never read or rewrite grants, keys or other apps' data. Seeing (`files`) and changing (`files-write`) are separate scopes with separate grants.
 
 Errors are JSON-RPC errors:
 
@@ -159,7 +168,8 @@ Installed web apps are first-class apps: they show in the launcher and the dock 
 - **Consent.** Install and uninstall always prompt (no "Always" button), naming the app, its origin, source and requested scopes. After install the origin is *known* (it gets CORS answers, so it can call `permissions.request`) but every scope is still `deny` until the user grants it through the prompt (`permissions.request`, or Settings > Permissions).
 - **Launcher.** Install writes `~/.local/share/applications/grokbot-webapp-<id>.desktop` (`Exec=grokbot-webapp <id>`, `StartupWMClass=grokbot-webapp-<id>`). `grokbot-webapp <id>` opens Firefox with app_id `grokbot-webapp-<id>`, a profile of its own in `~/.local/share/grokbot/webapp-profiles/<id>` and userChrome.css hiding the tab strip and address bar; sway tiles it on a new workspace (no fullscreen, the docks stay visible). One window per app.
 - **Offline storage.** Because each app has its own profile, its service worker, Cache Storage, IndexedDB and localStorage are separate from every other app and the normal browser and survive restarts. The profile keeps storage on shutdown, auto-grants `navigator.storage.persist()`, and lists the app host in `dom.securecontext.allowlist` so service workers run on `http://<id>.app.localhost`. Uninstall deletes the profile unless `keep_data` is true.
-- **Shipped app.** System Monitor (`sysmon`, `/usr/share/grokbot/webapps/sysmon`, Korean UI with an English toggle) shows CPU, memory, disk, battery, network and an audit summary. It ships with **no grants**: on first run it asks for `system`, `power`, `network` and `audit` one prompt at a time, and each card offers to ask again. It keeps an hour of CPU/memory history in IndexedDB and its shell works offline through a service worker.
+- **Shipped apps.** Files (`files`: browse `~`, open text and images, edit and save text, new folder, rename, trash; asks for `files`, then `files-write` only if you want to change things), Notes (`notes`: no OS scope at all; notes stay in the app's IndexedDB and work offline), Media Player (`player`: plays files you pick or drop, which never leave the computer; asks for `mediakeys` to take the keyboard Play/Next/Previous keys through `media.keys.wait`). All ship with no grants and a Korean UI with an English toggle.
+- System Monitor (`sysmon`, `/usr/share/grokbot/webapps/sysmon`, Korean UI with an English toggle) shows CPU, memory, disk, battery, network and an audit summary. It ships with **no grants**: on first run it asks for `system`, `power`, `network` and `audit` one prompt at a time, and each card offers to ask again. It keeps an hour of CPU/memory history in IndexedDB and its shell works offline through a service worker.
 
 ## CLI: grokbot-os
 

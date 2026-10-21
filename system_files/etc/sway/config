@@ -76,10 +76,12 @@ bindsym --locked XF86AudioMute exec /usr/local/bin/grokbot-volume mute
 bindsym --locked XF86AudioMicMute exec /usr/local/bin/grokbot-volume mic-mute
 bindsym --locked XF86MonBrightnessUp exec /usr/local/bin/grokbot-brightness up
 bindsym --locked XF86MonBrightnessDown exec /usr/local/bin/grokbot-brightness down
-bindsym --locked XF86AudioPlay exec playerctl play-pause
-bindsym --locked XF86AudioPause exec playerctl play-pause
-bindsym --locked XF86AudioNext exec playerctl next
-bindsym --locked XF86AudioPrev exec playerctl previous
+# Media keys go to the web app waiting on media.keys.wait (Media player), else playerctl.
+bindsym --locked XF86AudioPlay exec /usr/local/bin/grokbot-os media-key play-pause
+bindsym --locked XF86AudioPause exec /usr/local/bin/grokbot-os media-key play-pause
+bindsym --locked XF86AudioNext exec /usr/local/bin/grokbot-os media-key next
+bindsym --locked XF86AudioPrev exec /usr/local/bin/grokbot-os media-key previous
+bindsym --locked XF86AudioStop exec /usr/local/bin/grokbot-os media-key stop
 # Notifications (mako, top right). Super+Shift+N / Alt+Shift+N: Do Not Disturb.
 exec /usr/local/bin/grokbot-notify --serve >>"$HOME/.local/share/grokbot/notify.log" 2>&1
 bindsym Mod4+Shift+n exec /usr/local/bin/grokbot-notify-dnd toggle
