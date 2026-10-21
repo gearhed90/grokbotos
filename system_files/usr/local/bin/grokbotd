@@ -1,0 +1,4 @@
+#!/bin/bash
+# Grok Bot OS API daemon. Normally started by systemd --user (grokbotd.service).
+export PYTHONPATH="${GROKBOT_LIB:-/usr/lib/grokbot}${PYTHONPATH:+:$PYTHONPATH}"
+exec /usr/bin/python3 -m grokbotd "$@"

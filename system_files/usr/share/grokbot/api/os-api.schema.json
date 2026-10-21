@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/head77x/oais/os-api.schema.json",
+  "title": "Grok Bot OS API",
+  "version": "1.0.0",
+  "description": "Single source of truth for grokbotd. JSON-RPC 2.0 over the unix socket and POST /v1/rpc, the grokbot-os CLI and the MCP tools are all generated from this file. Phase 1 is read-only.",
+  "x-capabilities": {
+    "system.read": "OS name, version, kernel, hostname, uptime, memory, bootc image",
+    "windows.read": "Window titles and app ids of every open window and workspace",
+    "desktop.read": "Dock and wallpaper configuration",
+    "apps.read": "Installed apps and launcher entries",
+    "power.read": "Battery and AC status",
+    "network.read": "Network interfaces, addresses and default route"
+  },
+  "methods": {
+    "api.methods": {
+      "description": "List the methods of this API with their capability.",
+      "capability": null,
+      "params": {"type": "object", "properties": {}, "additionalProperties": false},
+      "result": {"type": "object"}
+    },
+    "system.info": {
+      "description": "OS name and version, kernel, hostname, uptime, memory and the booted bootc image.",
+      "capability": "system.read",
+      "params": {"type": "object", "properties": {}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["os", "kernel", "hostname", "uptime_s"]}
+    },
+    "windows.list": {
+      "description": "Open windows from the sway tree: id, app_id, title, workspace, focused, fullscreen.",
+      "capability": "windows.read",
+      "params": {"type": "object", "properties": {"workspace": {"type": "string", "description": "Only windows on this workspace name."}}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["windows"]}
+    },
+    "workspaces.list": {
+      "description": "Workspaces: name, number, output, focused, visible.",
+      "capability": "windows.read",
+      "params": {"type": "object", "properties": {}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["workspaces"]}
+    },
+    "dock.get": {
+      "description": "Effective dock configuration (system defaults merged with the user's dock.conf).",
+      "capability": "desktop.read",
+      "params": {"type": "object", "properties": {}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["top", "bottom", "left", "right", "icon_size"]}
+    },
+    "wallpaper.get": {
+      "description": "Effective wallpaper configuration: image path, mode and color.",
+      "capability": "desktop.read",
+      "params": {"type": "object", "properties": {}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["wallpaper", "mode", "color"]}
+    },
+    "apps.list": {
+      "description": "Apps installed with grokbot-install and the launcher entries visible to the user.",
+      "capability": "apps.read",
+      "params": {"type": "object", "properties": {"include_launchers": {"type": "boolean", "default": true}}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["installed"]}
+    },
+    "power.status": {
+      "description": "Batteries (capacity, status) and whether AC power is online.",
+      "capability": "power.read",
+      "params": {"type": "object", "properties": {}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["batteries", "on_ac"]}
+    },
+    "network.status": {
+      "description": "Network interfaces (state, MAC, addresses) and the default route.",
+      "capability": "network.read",
+      "params": {"type": "object", "properties": {}, "additionalProperties": false},
+      "result": {"type": "object", "required": ["interfaces"]}
+    }
+  }
+}
