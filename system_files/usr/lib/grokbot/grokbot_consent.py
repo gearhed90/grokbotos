@@ -205,10 +205,16 @@ def main():
         return True
     GLib.timeout_add(700, reassert)
 
+    # Arm from when the window is shown. "map-event" is not delivered for
+    # layer-shell surfaces here (VM b4: every click and key was swallowed
+    # because the prompt never armed), so start the clock at show_all and
+    # only move it later if a map signal does arrive.
     def on_map(*_):
-        shown["t"] = time.monotonic()
-    win.connect("map-event", on_map)
+        if shown["t"] is None:
+            shown["t"] = time.monotonic()
+    win.connect("map", on_map)
     win.show_all()
+    on_map()
     deny.grab_focus()
     Gtk.main()
     print(answer["v"], flush=True)
