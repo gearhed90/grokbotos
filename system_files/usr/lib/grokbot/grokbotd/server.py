@@ -76,6 +76,12 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _guard(self):
+        uid = policy.tcp_peer_uid(self.client_address[1], self.server.server_address[1])
+        if uid != os.getuid():
+            audit.record(transport="http", principal="http:uid=%s" % uid, decision="deny",
+                         error="foreign_uid")
+            self._send(403, {"error": "forbidden"})
+            return None
         if not _host_ok(self.headers.get("Host"), self.server.server_address[1]):
             audit.record(transport="http", principal="http:bad-host", decision="deny",
                          error="bad_host", host=self.headers.get("Host"))

@@ -127,7 +127,7 @@ visudo -cf /etc/sudoers.d/grokbot-lock
 # Grok Bot OS API daemon (docs/OS_API.md). A systemd user service, so it
 # runs as the session user, never root. --global enables it for every user.
 systemctl --global enable grokbotd.service
-python3 -m py_compile /usr/lib/grokbot/grokbotd/*.py /usr/lib/grokbot/grokbot_os_cli.py
+python3 -m py_compile /usr/lib/grokbot/grokbotd/*.py /usr/lib/grokbot/grokbot_os_cli.py /usr/lib/grokbot/grokbot_consent.py
 
 # Default browser for anything that is not the kiosk window itself.
 # grokbot-open-browser forces a separate Firefox profile and --new-window.

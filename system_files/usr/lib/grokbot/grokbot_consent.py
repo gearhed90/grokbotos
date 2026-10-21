@@ -1,0 +1,170 @@
+#!/usr/bin/python3
+"""Grok Bot OS consent prompt (GTK3 + layer-shell, overlay layer).
+
+grokbotd runs this when a caller's mode for a scope is "ask". The request
+arrives as JSON on stdin; the answer is printed on stdout:
+  once | always | deny
+Esc, closing, or no answer within the timeout means deny. "always" is
+offered only when the request allows it (never for camera, microphone,
+power or permission changes). The prompt takes the keyboard exclusively
+so nothing else can type into it, and its default button is Deny.
+
+The text building is pure (lines()) so it can be unit-tested without GTK.
+"""
+import json
+import sys
+
+
+def who(req):
+    p = req.get("principal") or "?"
+    if p.startswith("origin:"):
+        ko, en = "웹 앱 %s" % p[7:], "Web app %s" % p[7:]
+    elif p.startswith("local:"):
+        ko, en = "이 컴퓨터의 프로그램(Grok Bot, 터미널, MCP 등)", "A program on this computer (Grok Bot, terminal, MCP, ...)"
+    else:
+        ko = en = p
+    c = req.get("client")
+    if c:
+        ko += " · 스스로 밝힌 이름: %s" % c
+        en += " · says it is: %s" % c
+    return ko, en
+
+
+def action(req):
+    t = req.get("description") or [req.get("method"), req.get("method")]
+    if isinstance(t, str):
+        t = [t, t]
+    params = req.get("summary") or {}
+    detail = ", ".join("%s=%s" % (k, json.dumps(v, ensure_ascii=False)) for k, v in sorted(params.items()))
+    return t[0], t[1], "%s(%s)" % (req.get("method"), detail)
+
+
+def lines(req):
+    wk, we = who(req)
+    ak, ae, call = action(req)
+    return {
+        "title": "권한 요청 / Permission request",
+        "who": (wk, we),
+        "scope": (req.get("scope_ko") or req.get("scope"), req.get("scope_en") or req.get("scope")),
+        "action": (ak, ae),
+        "call": call,
+        "always": bool(req.get("allow_always")),
+        "sensitive": req.get("scope") in ("camera", "microphone", "power", "permissions"),
+    }
+
+
+CSS = b"""
+window.grokbot-consent { background-color: rgba(0,0,0,0); }
+.card { background-color: #18181b; border: 2px solid #f59e0b; border-radius: 16px; padding: 22px; color: #f4f4f5; }
+.card.sensitive { border-color: #ef4444; }
+.title { font-size: 20px; font-weight: bold; }
+.key { color: #a1a1aa; font-size: 12px; }
+.val { font-size: 15px; }
+.en { color: #a1a1aa; font-size: 12px; }
+.call { font-family: monospace; font-size: 11px; color: #71717a; }
+button { padding: 8px 14px; border-radius: 10px; }
+button.deny { background: #3f3f46; color: #fff; }
+button.allow { background: #2563eb; color: #fff; }
+button.always { background: #1d4ed8; color: #fff; }
+.timer { color: #a1a1aa; font-size: 12px; }
+"""
+
+
+def main():
+    try:
+        req = json.loads(sys.stdin.read() or "{}")
+    except ValueError:
+        print("deny")
+        return 0
+    t = lines(req)
+    import gi
+    gi.require_version("Gtk", "3.0")
+    gi.require_version("GtkLayerShell", "0.1")
+    from gi.repository import GLib, Gdk, Gtk, GtkLayerShell
+
+    answer = {"v": "deny"}
+    win = Gtk.Window(title="Grok Bot 권한 요청")
+    win.get_style_context().add_class("grokbot-consent")
+    GtkLayerShell.init_for_window(win)
+    GtkLayerShell.set_layer(win, GtkLayerShell.Layer.OVERLAY)
+    GtkLayerShell.set_namespace(win, "grokbot-consent")
+    GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.EXCLUSIVE)
+    prov = Gtk.CssProvider()
+    prov.load_from_data(CSS)
+    Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), prov,
+                                             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    card.get_style_context().add_class("card")
+    if t["sensitive"]:
+        card.get_style_context().add_class("sensitive")
+    card.set_size_request(520, -1)
+
+    def lab(text, cls, wrap=True):
+        lb = Gtk.Label(label=text, xalign=0)
+        lb.set_line_wrap(wrap)
+        lb.set_max_width_chars(60)
+        lb.get_style_context().add_class(cls)
+        card.pack_start(lb, False, False, 0)
+        return lb
+
+    lab(t["title"], "title")
+    for key, pair in (("누가 / Who", t["who"]), ("무엇을 / Scope", t["scope"]),
+                      ("어떤 동작 / Action", t["action"])):
+        lab(key, "key")
+        lab(pair[0], "val")
+        if pair[1] != pair[0]:
+            lab(pair[1], "en")
+    lab(t["call"], "call")
+    timer = lab("", "timer")
+
+    row = Gtk.Box(spacing=8)
+    row.set_halign(Gtk.Align.END)
+
+    def done(v):
+        answer["v"] = v
+        Gtk.main_quit()
+
+    deny = Gtk.Button(label="거부 / Deny")
+    deny.get_style_context().add_class("deny")
+    deny.connect("clicked", lambda *_: done("deny"))
+    row.pack_start(deny, False, False, 0)
+    once = Gtk.Button(label="한 번 허용 / Allow once")
+    once.get_style_context().add_class("allow")
+    once.connect("clicked", lambda *_: done("once"))
+    row.pack_start(once, False, False, 0)
+    if t["always"]:
+        alw = Gtk.Button(label="항상 허용 / Always allow")
+        alw.get_style_context().add_class("always")
+        alw.connect("clicked", lambda *_: done("always"))
+        row.pack_start(alw, False, False, 0)
+    card.pack_start(row, False, False, 6)
+    win.add(card)
+
+    def key(_w, ev):
+        if ev.keyval == Gdk.KEY_Escape:
+            done("deny")
+        return False
+    win.connect("key-press-event", key)
+    win.connect("destroy", lambda *_: done("deny"))
+
+    left = {"s": int(req.get("timeout") or 60)}
+
+    def tick():
+        left["s"] -= 1
+        timer.set_text("%d초 뒤 자동 거부 / auto-deny in %ds" % (left["s"], left["s"]))
+        if left["s"] <= 0:
+            done("deny")
+            return False
+        return True
+    tick()
+    GLib.timeout_add_seconds(1, tick)
+    win.show_all()
+    deny.grab_focus()
+    Gtk.main()
+    print(answer["v"], flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
