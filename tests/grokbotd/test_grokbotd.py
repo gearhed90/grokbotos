@@ -193,6 +193,13 @@ class Base(unittest.TestCase):
         with open(os.path.join(self.tmp.name, "cfg", "grokbot", "api-permissions.json"), "w") as f:
             json.dump({"origins": origins}, f)
 
+    def audit_rejects(self):
+        p = os.path.join(self.tmp.name, "state", "grokbot", "audit-rejects.jsonl")
+        if not os.path.exists(p):
+            return []
+        with open(p) as f:
+            return [json.loads(x) for x in f]
+
     def audit(self):
         with open(os.path.join(self.tmp.name, "state", "grokbot", "audit.jsonl")) as f:
             return [json.loads(x) for x in f]
