@@ -47,5 +47,9 @@ user_pref("dom.serviceWorkers.enabled", true);
 user_pref("dom.securecontext.allowlist", "settings.app.localhost");
 user_pref("privacy.clearOnShutdown.offlineApps", false);
 JS
+# One window: a second firefox on the same profile only shows "already running".
+if command -v swaymsg >/dev/null && swaymsg -t get_tree 2>/dev/null | grep -q '"app_id": "grokbot-settings"'; then
+    swaymsg '[app_id="grokbot-settings"] focus' >/dev/null 2>&1 && exit 0
+fi
 exec /usr/local/bin/grokbot-run firefox --new-instance --no-remote --profile "$profile" \
     --name grokbot-settings --class grokbot-settings "$url"
