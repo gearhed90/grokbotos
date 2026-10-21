@@ -42,7 +42,8 @@ This section states the grokbotd permission model in one place so external revie
 3. **카메라·마이크는 협조형이다.** `camera.session.*`는 API 클라이언트용 사용 세션과 독 표시일 뿐, `/dev/video*`나 PipeWire 접근을 막지 않는다. 장치 수준 강제(xdg-desktop-portal, PipeWire 권한)는 다음 단계다. / Camera/microphone sessions are cooperative: they drive the prompt and the indicator but do not gate `/dev/video*` or PipeWire. Device-level enforcement (portals, PipeWire permissions) is future work.
 4. **Origin은 브라우저를 믿는다.** Origin 헤더는 브라우저가 붙인다. 같은 uid의 비브라우저 프로세스는 위조할 수 있다(1번과 같은 신뢰 수준). / Origin is trusted from the browser; same-uid non-browser processes can forge it (same trust as item 1).
 5. **`*.app.localhost` 한 포트에 여러 앱.** 앱 사이 격리는 브라우저의 origin 격리에 의존한다. 앱별 실행 토큰은 아직 없다. / Apps on `*.app.localhost:7311` rely on browser origin isolation; no per-launch tokens yet.
-6. `files`, `location` scope는 예약만 되어 있고 메서드가 없다. / `files` and `location` are reserved; no methods yet.
+6. **설치한 웹 앱.** 설치는 아무 권한도 주지 않고 확인 창을 거친다. 번들 앱은 앱마다 다른 origin과 Firefox 프로필을 쓰므로 저장소·쿠키·서비스 워커가 섞이지 않는다. URL 앱의 코드는 그 사이트가 언제든 바꿀 수 있으므로, URL 앱에 준 권한은 그 사이트 운영자에게 준 것이다. 번들 앱은 `~/.local/share/grokbot/webapps/`에 있어 같은 uid 프로세스가 고칠 수 있다(1번). / Installing grants nothing and is confirmed. Each bundle app has its own origin and Firefox profile (separate storage, cookies, service worker). A URL app's code is whatever the site serves, so a grant to it is a grant to the site operator. Bundles live in the user's home and can be edited by same-uid processes (item 1).
+7. `files`, `location` scope는 예약만 되어 있고 메서드가 없다. / `files` and `location` are reserved; no methods yet.
 
 ## 무엇이 취약점인가 / What counts as a vulnerability
 

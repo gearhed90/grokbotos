@@ -44,3 +44,7 @@ td.mono, .mono { font-family:"Noto Sans Mono", monospace; font-size:12px; }
 #toast.show { opacity:1; }
 #toast.bad { border-color:var(--bad); }
 .filters { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.appicon { width:36px; height:36px; border-radius:8px; flex:none; }
+.appicon.ph { display:inline-flex; align-items:center; justify-content:center; background:#27272a; }
+.btns { display:flex; gap:8px; align-items:center; }
+input.wide { flex:1; width:auto; }

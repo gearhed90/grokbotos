@@ -9,7 +9,7 @@ import struct
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import peer, VERSION, audit, paths, policy
+from . import peer, webapps, VERSION, audit, paths, policy
 
 MAX_BODY = 64 * 1024
 
@@ -79,7 +79,7 @@ class HttpHandler(BaseHTTPRequestHandler):
         with open(full, "rb") as f:
             data = f.read()
         self.send_response(200)
-        self.send_header("Content-Type", WEBAPP_TYPES[os.path.splitext(full)[1]])
+        self.send_header("Content-Type", WEBAPP_TYPES[os.path.splitext(full)[1].lower()])
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-cache")
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -176,14 +176,13 @@ class HttpHandler(BaseHTTPRequestHandler):
         self._send(code, resp, cors)
 
 
-WEBAPP_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-                ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
-                ".json": "application/json", ".woff2": "font/woff2"}
+WEBAPP_TYPES = webapps.TYPES
 # System web apps are static files from the read-only image, served on
 # their own origin http://<id>.app.localhost:<port>. They reach the OS only
 # through /v1/rpc on that origin, with that origin's grants.
-CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-       "connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; "
+       "media-src 'self' blob:; connect-src 'self'; font-src 'self'; manifest-src 'self'; "
+       "worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 
 
 def webapp_file(host, path):
@@ -192,8 +191,8 @@ def webapp_file(host, path):
     m = re.fullmatch(r"([a-z0-9][a-z0-9-]*)\.app\.localhost:\d+", (host or "").lower())
     if not m:
         return None
-    root = os.path.realpath(os.path.join(paths.webapps_dir(), m.group(1)))
-    if not os.path.isdir(root):
+    root = webapps.app_root(m.group(1))
+    if root is None:
         return None
     rel = path.split("?", 1)[0].split("#", 1)[0]
     if rel.endswith("/"):
@@ -204,7 +203,7 @@ def webapp_file(host, path):
     full = os.path.realpath(os.path.join(root, *parts))
     if not full.startswith(root + os.sep) or not os.path.isfile(full):
         return None
-    if os.path.splitext(full)[1] not in WEBAPP_TYPES:
+    if os.path.splitext(full)[1].lower() not in WEBAPP_TYPES:
         return None
     return full
 

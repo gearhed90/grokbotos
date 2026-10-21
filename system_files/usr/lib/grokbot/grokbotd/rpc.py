@@ -7,7 +7,7 @@ mode is "ask" -> backend. Every outcome is written to the audit log.
 import threading
 import time
 
-from . import audit, backends, consent, perms, schema, writes
+from . import audit, backends, consent, perms, schema, webapps, writes
 
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
@@ -141,6 +141,14 @@ class Dispatcher:
                 result = CTX_METHODS[method](params, ctx)
             else:
                 result = METHODS[method](params)
+        except webapps.Denied as e:
+            base.update(consent="deny", consent_by=e.detail)
+            audit.record(decision="deny", **base)
+            return _err(rid, PERMISSION_DENIED, "permission denied by the user: %s" % method,
+                        {"scope": scope, "access": access, "consent": e.detail})
+        except webapps.InstallError as e:
+            audit.record(decision="allow", error="backend", detail=str(e)[:200], **base)
+            return _err(rid, BACKEND_ERROR, str(e))
         except backends.BackendError as e:
             audit.record(decision="allow", error="backend", detail=str(e)[:200], **base)
             return _err(rid, BACKEND_ERROR, str(e))
