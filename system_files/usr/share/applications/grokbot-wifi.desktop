@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Wi-Fi 설정
-Name[en]=Wi-Fi / Network
-Comment=Connect to Wi-Fi or another network (nmtui)
-Exec=/usr/local/bin/grokbot-wifi
-Icon=network-wireless
-Categories=Settings;System;

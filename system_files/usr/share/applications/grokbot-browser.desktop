@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Grok Bot OS Browser (new window)
-Comment=Opens URLs in a Firefox window that is not the Grok Bot kiosk
-Exec=/usr/local/bin/grokbot-open-browser %u
-Terminal=false
-NoDisplay=true
-MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/about;x-scheme-handler/unknown;

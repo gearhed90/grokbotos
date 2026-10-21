@@ -1,4 +1,0 @@
-{
-  "_comment": "grokbotd web-origin grants. Deny by default: an origin not listed here gets nothing. Users add grants in ~/.config/grokbot/api-permissions.json. Capabilities: see /usr/share/grokbot/api/os-api.schema.json x-capabilities. docs/OS_API.md.",
-  "origins": {}
-}
