@@ -247,7 +247,7 @@ legacy/orchestrator/                  예전 OAIS(AI-OS) 오케스트레이터 �
 
 | 그대로 | 이유 |
 |---|---|
-| GitHub 저장소 `head77x/oais` | 저장소 이름 |
+| (참고) GitHub 저장소는 `head77x/oais`에서 `head77x/grokbotos`로 이름이 바뀌었다 | 이미지·GHCR·S3 이름은 아래처럼 `oais` 그대로 둔다 |
 | `ghcr.io/head77x/oais`, `ghcr.io/head77x/oais-arm64` | 기존 pull, 서명, 디스크 빌드 |
 | `oais.env`의 `IMAGE_NAME=oais` | 워크플로가 이 값으로 이미지 이름을 만든다 |
 | `disk_config/iso.toml`의 `ghcr.io/head77x/oais:latest` | `build-disk.yml`이 이 문자열을 바꿔 넣는다 |

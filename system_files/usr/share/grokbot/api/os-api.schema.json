@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/head77x/oais/os-api.schema.json",
+  "$id": "https://github.com/head77x/grokbotos/os-api.schema.json",
   "title": "Grok Bot OS API",
   "version": "1.0.0",
   "description": "Single source of truth for grokbotd. JSON-RPC 2.0 over the unix socket and POST /v1/rpc, the grokbot-os CLI and the MCP tools are all generated from this file. Phase 1 is read-only.",
