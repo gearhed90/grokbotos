@@ -28,7 +28,7 @@ if [[ -z $accel ]]; then
 fi
 exec qemu-system-x86_64 -accel "$accel" -m "$GBVM_MEM" -smp "$GBVM_SMP" -cpu max "${fw[@]}" \
     -drive "file=$disk,if=virtio,format=qcow2" \
-    -device virtio-vga,xres=1280,yres=800 -display none \
+    -device "virtio-vga,id=vga0,xres=1280,yres=800${GBVM_OUTPUTS:+,max_outputs=$GBVM_OUTPUTS}" -display none \
     -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
     -device qemu-xhci -device usb-kbd -device usb-tablet \
     -audiodev none,id=snd0 -device intel-hda -device hda-duplex,audiodev=snd0 \
