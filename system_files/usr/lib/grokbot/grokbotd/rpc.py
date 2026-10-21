@@ -120,9 +120,10 @@ class Dispatcher:
             if mode == "ask":
                 allow_always = (scope not in perms.ALWAYS_ASK and spec.get("consent") != "always"
                                 and perms.storable(principal))
+                allow_session = scope not in perms.ALWAYS_ASK and spec.get("consent") != "always"
                 ans, detail = consent.prompt(principal, client, scope, method,
                                              spec.get("x-title") or [method, method],
-                                             base.get("params", {}), allow_always)
+                                             base.get("params", {}), allow_always, allow_session)
                 base.update(consent=ans, consent_by=detail)
                 if ans == "deny":
                     audit.record(decision="deny", **base)
@@ -131,6 +132,8 @@ class Dispatcher:
                                  "consent": detail})
                 if ans == "always":
                     perms.set_mode(principal, scope, "allow", by="prompt")
+                elif ans == "session":
+                    perms.session_allow(principal, scope)
         try:
             if method == "api.methods":
                 result = self._api_methods(principal)
@@ -178,9 +181,20 @@ class Dispatcher:
             self._last_request[key] = time.time()
         title = ["이 기능 사용 권한 요청: %s" % params.get("reason", ""),
                  "Permission request: %s" % params.get("reason", "")]
-        allow_always = scope not in perms.ALWAYS_ASK and perms.storable(principal)
+        # A request is about the future, so "once" means nothing here except
+        # for always-ask scopes, where it grants the right to ask (each use
+        # is still confirmed). Others: this session, or always.
+        sensitive = scope in perms.ALWAYS_ASK
+        allow_always = not sensitive and perms.storable(principal)
         ans, detail = consent.prompt(principal, ctx["client"], scope, "permissions.request",
-                                     title, {"scope": scope}, allow_always)
+                                     title, {"scope": scope}, allow_always,
+                                     allow_session=not sensitive, allow_once=sensitive)
+        if ans == "session":
+            perms.session_allow(principal, scope)
+            base.update(consent=ans, consent_by=detail)
+            audit.record(decision="allow", **base)
+            return {"jsonrpc": "2.0", "id": rid, "result": {"scope": scope, "mode": "allow",
+                                                             "answer": ans, "until": "session"}}
         new = {"always": "allow", "once": "ask", "deny": "deny"}[ans]
         if detail in ("timeout", "no_prompt", "bad_answer") or not perms.storable(principal):
             new = None  # no answer: store nothing
