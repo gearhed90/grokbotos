@@ -17,9 +17,15 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     tmux \
     htop \
     sway \
+    swaybg \
     firefox \
     flatpak \
     fuzzel \
+    python3 \
+    python3-gobject \
+    gtk3 \
+    gtk-layer-shell \
+    adwaita-icon-theme \
     google-noto-sans-cjk-ttc-fonts \
     xdg-utils \
     fuse \

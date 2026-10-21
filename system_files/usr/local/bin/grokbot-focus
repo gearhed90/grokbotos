@@ -17,6 +17,7 @@ if ! command -v swaymsg >/dev/null 2>&1; then
     echo "grokbot-focus: swaymsg is not available" >&2
     exit 1
 fi
-# focus alone leaves Grok Bot tiled next to the app that took fullscreen
-# from it (sway allows one fullscreen view per workspace). Re-enable it.
-exec swaymsg "[app_id=\"${app_id}\"] focus, fullscreen enable"
+# Grok Bot sits alone on workspace 1 (sway assign), so focusing it switches
+# there and it fills the area inside the docks. No fullscreen: that would
+# cover the docks.
+exec swaymsg "[app_id=\"${app_id}\"] focus"
