@@ -29,7 +29,7 @@ body:
     attributes:
       label: 이미지와 버전 / Image and version
       description: "`sudo bootc status` 출력의 이미지와 digest, 또는 커밋 / image + digest from `sudo bootc status`, or a commit"
-      placeholder: ghcr.io/head77x/oais:latest@sha256:...
+      placeholder: ghcr.io/head77x/grokbotos:latest@sha256:...
     validations:
       required: true
   - type: dropdown

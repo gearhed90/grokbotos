@@ -4,7 +4,7 @@
 
 | 버전 / Version | 지원 / Supported |
 |---|---|
-| `main` 브랜치와 최신 이미지 (`ghcr.io/head77x/oais:latest`, `ghcr.io/head77x/oais-arm64:latest`) / `main` and the latest images | ✅ |
+| `main` 브랜치와 최신 이미지 (`ghcr.io/head77x/grokbotos:latest`, `ghcr.io/head77x/grokbotos-arm64:latest`) / `main` and the latest images | ✅ |
 | 그 밖의 브랜치, 태그, 예전 이미지 / other branches, tags, older images | ❌ |
 
 보안 수정은 `main`에만 들어가고 다음 이미지 빌드로 배포된다. 설치된 시스템은 `sudo bootc upgrade`로 받는다.

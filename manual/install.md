@@ -21,9 +21,9 @@
 ## 다른 리눅스에서 설치 / Install from a live Linux ✅
 ```sh
 sudo podman run --rm --privileged --pid=host -v /dev:/dev -v /var/lib/containers:/var/lib/containers \
-  --security-opt label=type:unconfined_t ghcr.io/head77x/oais:latest \
+  --security-opt label=type:unconfined_t ghcr.io/head77x/grokbotos:latest \
   bootc install to-disk --wipe --generic-image --filesystem xfs \
-  --target-imgref ghcr.io/head77x/oais:latest /dev/sdX
+  --target-imgref ghcr.io/head77x/grokbotos:latest /dev/sdX
 ```
 
 ## 문제 해결 / Troubleshooting

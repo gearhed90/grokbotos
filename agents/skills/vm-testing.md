@@ -3,7 +3,7 @@
 The tools are in [`tools/vm/`](../../tools/vm/). Work files go in `$GBVM_DIR` (default `<repo>/.vm`, git-ignored). For the general setup, see [`docs/LOCAL_SETUP.md`](../../docs/LOCAL_SETUP.md).
 
 1. Run the tests: `bash tests/run-tests.sh`
-2. Build: `just build` (gives `localhost/oais:latest`; override with `GBVM_IMAGE`).
+2. Build: `just build` (gives `localhost/grokbotos:latest`; override with `GBVM_IMAGE`).
 3. Make a disk without an installer (UEFI):
    ```bash
    sudo -E tools/vm/mkdisk.sh            # -> .vm/disk.qcow2

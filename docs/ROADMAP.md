@@ -64,7 +64,7 @@ fedora-bootc
 
 ## Phase E — 업데이트, 롤백, 하드웨어 이미지
 
-- [x] bootc 이미지 빌드와 GitHub Actions(`build.yml`, `build-disk.yml`)가 amd64와 arm64를 각각 `oais`, `oais-arm64`로 내도록 정의되어 있다. 디스크 이미지는 qcow2와 anaconda ISO. **이 워크플로 정의는 유지했다. 이 전환 커밋으로 이미지를 만들어 보지는 않았다.** 이전 커밋의 GHCR 푸시와 arm64 ISO 설치는 이전 이미지에서 확인됐다.
+- [x] bootc 이미지 빌드와 GitHub Actions(`build.yml`, `build-disk.yml`)가 amd64와 arm64를 각각 `grokbotos`, `grokbotos-arm64`로 내도록(2026-10-21 `oais`에서 이름 변경) 정의되어 있다. 디스크 이미지는 qcow2와 anaconda ISO. **이 워크플로 정의는 유지했다. 이 전환 커밋으로 이미지를 만들어 보지는 않았다.** 이전 커밋의 GHCR 푸시와 arm64 ISO 설치는 이전 이미지에서 확인됐다.
 - [ ] `bootc upgrade`와 이전 배포로 롤백이 이 이미지에서 동작하는지 확인.
 - [ ] `bootc switch`로 기존 bootc 시스템을 이 이미지로 바꾸는 경로. 이전에도 안 했다.
 - [ ] amd64 실기 또는 VM 부팅. 이전 확인은 arm64 UTM뿐이었다.
