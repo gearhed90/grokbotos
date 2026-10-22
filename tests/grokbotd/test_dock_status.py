@@ -51,6 +51,16 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(ids, ["network", "clock"])
         self.assertEqual(st.items(fake(res))[0]["icon"], "network-wired-symbolic")
 
+    def test_update_indicator(self):
+        none = st.items(fake({"update.status": {"available": False, "restart_needed": False}}), now=0)
+        self.assertEqual([i["id"] for i in none], ["clock"])
+        av = {i["id"]: i for i in st.items(fake({"update.status": {"available": True, "available_version": "44.2"}}), now=0)}
+        self.assertEqual(av["update"]["icon"], "software-update-available-symbolic")
+        self.assertTrue(av["update"]["alert"])
+        self.assertIn("44.2", av["update"]["tooltip"])
+        rs = {i["id"]: i for i in st.items(fake({"update.status": {"available": True, "restart_needed": True}}), now=0)}
+        self.assertEqual(rs["update"]["icon"], "system-reboot-symbolic")
+
     def test_offline_and_muted(self):
         res = {"network.status": {"online": False, "interfaces": []},
                "audio.status": {"available": True, "output": {"volume_percent": 50, "muted": True}}}
