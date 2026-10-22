@@ -144,6 +144,16 @@ def _mic(audio):
         return None
     return {"id": "mic-muted", "icon": "microphone-sensitivity-muted-symbolic", "text": "마이크 꺼짐",
             "tooltip": "마이크 음소거됨 / Microphone muted. 클릭: 음소거 해제 / Click: unmute"}
+def _storage(st):
+    """Removable drives plugged in: one item; click opens Settings > Storage."""
+    vols = (st or {}).get("volumes") or []
+    if not vols:
+        return None
+    names = ", ".join(v.get("name") or v.get("id") or "?" for v in vols)
+    opened = [v for v in vols if v.get("mounted")]
+    return {"id": "storage", "icon": "media-removable-symbolic", "text": "USB",
+            "tooltip": "외장 저장장치 / Removable drives: %s (%d 열림 / open). 클릭: 꺼내기 / Click: safely remove"
+                       % (names, len(opened))}
 
 
 def _who(sess):
@@ -194,6 +204,7 @@ def items(call=rpc, now=None):
     """Status items in display order; missing data drops the item."""
     audio = call("audio.status")
     out = _privacy(call("privacy.status")) + [
-        _network(call("network.status")), _bluetooth(call("bluetooth.status")), _mic(audio), _volume(audio),
+        _storage(call("storage.list")), _network(call("network.status")), _bluetooth(call("bluetooth.status")),
+        _mic(audio), _volume(audio),
         _battery(call("power.status")), _update(call("update.status")), clock(now)]
     return [i for i in out if i]

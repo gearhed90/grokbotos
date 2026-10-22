@@ -58,6 +58,7 @@ SCOPES = {
     "audio": ("소리", "Sound"),
     "network": ("네트워크와 Wi-Fi", "Network and Wi-Fi"),
     "bluetooth": ("블루투스", "Bluetooth"),
+    "storage": ("USB와 외장 저장장치", "USB and removable storage"),
     "power": ("전원(절전, 다시 시작, 끄기)", "Power (suspend, restart, shut down)"),
     "input": ("키보드와 한글 입력", "Keyboard and input method"),
     "notifications": ("알림과 방해 금지", "Notifications and Do Not Disturb"),
