@@ -97,7 +97,7 @@ window.I18N = {
     power_battery: "배터리", power_no_battery: "배터리 없음: 전원에 연결되어 있습니다.", power_on_ac: "전원 연결됨", power_on_bat: "배터리 사용 중",
     power_mode: "전원 모드", power_mode_none: "전원 모드를 쓸 수 없습니다(전원 모드 서비스가 실행 중이 아님).",
     pm_power_saver: "절전", pm_balanced: "균형", pm_performance: "성능", pm_degraded: "성능이 제한됨: %s",
-    power_actions: "절전과 다시 시작", power_suspend: "절전", power_reboot: "다시 시작", power_poweroff: "시스템 종료",
+    power_actions: "절전과 다시 시작", power_suspend: "잠자기", power_reboot: "다시 시작", power_poweroff: "시스템 종료",
     bat_Charging: "충전 중", bat_Discharging: "방전 중", bat_Full: "가득 참", "bat_Not charging": "충전 안 함", bat_Unknown: "알 수 없음",
     nav_wifi: "Wi-Fi", nav_sound: "소리", nav_display: "디스플레이", nav_notifications: "알림",
     nav_lock: "잠금과 대기", nav_keyboard: "키보드와 한글", nav_permissions: "권한", nav_audit: "감사 기록",
