@@ -75,9 +75,10 @@ grokbot-dock-config reset               # 사용자 설정 삭제, 기본값으�
 
 ## 상태 영역 / Status area
 
-독 하나의 끝(위·아래 독은 오른쪽 끝, 왼쪽·오른쪽 독은 아래 끝)에 Wi-Fi, 볼륨, 배터리, 시계를 둔다. 데이터는 grokbotd(`network.status`, `audio.status`, `power.status`)에서 5초마다 읽는다. 독도 OS API 클라이언트다. 구현은 `/usr/lib/grokbot/grokbot_status.py`(GTK 없음, 단위 테스트 있음).
+독 하나의 끝(위·아래 독은 오른쪽 끝, 왼쪽·오른쪽 독은 아래 끝)에 Wi-Fi, 블루투스(어댑터가 있을 때만), 볼륨, 배터리, 시계를 둔다. 데이터는 grokbotd(`network.status`, `audio.status`, `power.status`)에서 5초마다 읽는다. 독도 OS API 클라이언트다. 구현은 `/usr/lib/grokbot/grokbot_status.py`(GTK 없음, 단위 테스트 있음).
 
 - `status = auto`(기본): 아래 독, 없으면 켜진 첫 독. `off`이면 숨김. 특정 가장자리를 고르면 그 독이 꺼져 있을 때 표시하지 않는다(새 독을 만들지 않음).
 - 위·아래 독과 왼쪽·오른쪽 `icons` 독은 아이콘만(시계는 숫자). 왼쪽·오른쪽 `labels` 독은 아이콘+글자.
+- 블루투스(`bluetooth.status`): 꺼짐 `bluetooth-disabled-symbolic`, 켜짐 `bluetooth-symbolic`, 기기 연결 시 `bluetooth-active-symbolic`과 기기 이름(툴팁에 전체 목록). 클릭 → 설정 > 블루투스.
 - 클릭: Wi-Fi → `grokbot-wifi`, 볼륨 → 음소거, 볼륨 위에서 스크롤 → 조절. 마우스를 올리면 자세한 내용.
 - 배터리: `Discharging`이면 AC여도 잔량 아이콘과 퍼센트. `Charging`일 때만 충전 아이콘과 "충전 중". AC이고 `Charging`/`Discharging`이 아니면(Unknown, 빈 상태, `Not charging`) 플러그 아이콘(`ac-adapter-symbolic`)과 "전원 연결됨". AC이고 `Full`이면 `battery-level-100-charged-symbolic`과 "전원 연결됨 (가득 참)". 위·아래 독은 아이콘만 보이므로, 그 문구는 모든 독의 배터리 버튼 툴팁에도 있다.

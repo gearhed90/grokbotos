@@ -384,6 +384,8 @@ class Dock:
     def on_status_click(self, _btn, sid):
         if sid == "network":
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "wifi"])
+        elif sid == "bluetooth":
+            subprocess.Popen(["/usr/local/bin/grokbot-settings", "bluetooth"])
         elif sid.startswith("inuse-"):
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "permissions"])
         elif sid == "volume":

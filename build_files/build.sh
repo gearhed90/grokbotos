@@ -42,6 +42,7 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     fuzzel \
     foot \
     NetworkManager-wifi \
+    bluez \
     wpa_supplicant \
     iwlwifi-mvm-firmware \
     iwlwifi-dvm-firmware \
@@ -102,6 +103,9 @@ if ! grep -q '^HOME_URL=' /usr/lib/os-release; then
 fi
 
 systemctl enable podman.socket
+# Bluetooth (bluetooth.* OS API, Settings > Bluetooth). bluetoothd is
+# D-Bus activated only when enabled; adapters stay off until turned on.
+systemctl enable bluetooth.service
 
 # fcitx5 ships launchers for its Qt settings tool and a keyboard layout
 # viewer. They would show up in the dock and launcher; hide them. Korean

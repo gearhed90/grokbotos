@@ -121,6 +121,23 @@ def _volume(audio):
             "tooltip": "볼륨 / Volume %s. 클릭: 음소거, 스크롤: 조절 / Click: mute, scroll: adjust" % text}
 
 
+def _bluetooth(bt):
+    """Shown only when there is an adapter: off, on, or connected (names)."""
+    if not bt or not bt.get("available"):
+        return None
+    names = bt.get("connected") or []
+    if not bt.get("powered"):
+        return {"id": "bluetooth", "icon": "bluetooth-disabled-symbolic", "text": "꺼짐",
+                "tooltip": "블루투스 꺼짐 / Bluetooth off. 클릭: 블루투스 설정 / Click: Bluetooth settings"}
+    if names:
+        return {"id": "bluetooth", "icon": "bluetooth-active-symbolic", "text": names[0][:16],
+                "tooltip": "블루투스 연결됨 / Bluetooth connected: %s. 클릭: 블루투스 설정 / Click: Bluetooth settings"
+                           % ", ".join(names)}
+    return {"id": "bluetooth", "icon": "bluetooth-symbolic", "text": "켜짐",
+            "tooltip": "블루투스 켜짐, 연결된 기기 없음 / Bluetooth on, nothing connected. "
+                       "클릭: 블루투스 설정 / Click: Bluetooth settings"}
+
+
 def _who(sess):
     p = sess.get("principal") or "?"
     name = p[7:] if p.startswith("origin:") else ("이 컴퓨터 / local" if p.startswith("local:") else p)
@@ -168,6 +185,6 @@ def clock(now=None):
 def items(call=rpc, now=None):
     """Status items in display order; missing data drops the item."""
     out = _privacy(call("privacy.status")) + [
-        _network(call("network.status")), _volume(call("audio.status")),
+        _network(call("network.status")), _bluetooth(call("bluetooth.status")), _volume(call("audio.status")),
         _battery(call("power.status")), _update(call("update.status")), clock(now)]
     return [i for i in out if i]

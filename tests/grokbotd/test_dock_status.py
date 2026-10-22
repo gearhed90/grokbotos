@@ -41,6 +41,18 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(by["clock"]["text"], "18:05")
         self.assertIsNone(by["clock"]["icon"])
 
+    def test_bluetooth_item(self):
+        self.assertIsNone(st._bluetooth(None))
+        self.assertIsNone(st._bluetooth({"available": False, "service": True}))
+        self.assertEqual(st._bluetooth({"available": True, "powered": False})["icon"], "bluetooth-disabled-symbolic")
+        on = st._bluetooth({"available": True, "powered": True, "connected": []})
+        self.assertEqual(on["icon"], "bluetooth-symbolic")
+        c = st._bluetooth({"available": True, "powered": True, "connected": ["WH-1000XM4", "Mouse"]})
+        self.assertEqual((c["icon"], c["text"]), ("bluetooth-active-symbolic", "WH-1000XM4"))
+        self.assertIn("Mouse", c["tooltip"])
+        res = {"bluetooth.status": {"available": True, "powered": True, "connected": []}}
+        self.assertEqual([i["id"] for i in st.items(fake(res))], ["bluetooth", "clock"])
+
     def test_items_desktop_vm(self):
         # No battery, wired, muted; daemon missing audio -> item dropped.
         res = {"network.status": {"online": True, "default_route": {"interface": "eth0"},
