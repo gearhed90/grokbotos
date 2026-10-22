@@ -388,6 +388,8 @@ class Dock:
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "bluetooth"])
         elif sid.startswith("inuse-"):
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "permissions"])
+        elif sid == "mic-muted":
+            subprocess.Popen(["/usr/local/bin/grokbot-volume", "mic-mute"])
         elif sid == "volume":
             subprocess.Popen(["/usr/local/bin/grokbot-volume", "mute"])
         elif sid == "update":

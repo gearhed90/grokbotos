@@ -27,6 +27,7 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     sudo \
     openssl \
     wireplumber \
+    pipewire-utils \
     brightnessctl \
     playerctl \
     wob \

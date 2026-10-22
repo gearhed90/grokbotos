@@ -52,6 +52,14 @@ class StatusTests(unittest.TestCase):
         self.assertIn("Mouse", c["tooltip"])
         res = {"bluetooth.status": {"available": True, "powered": True, "connected": []}}
         self.assertEqual([i["id"] for i in st.items(fake(res))], ["bluetooth", "clock"])
+    def test_mic_muted_item(self):
+        self.assertIsNone(st._mic({"available": True, "input": {"muted": False}}))
+        self.assertIsNone(st._mic({"available": True, "input": None}))
+        m = st._mic({"available": True, "input": {"muted": True, "volume_percent": 40}})
+        self.assertEqual(m["id"], "mic-muted")
+        res = {"audio.status": {"available": True, "output": {"volume_percent": 40, "muted": False},
+                                "input": {"volume_percent": 40, "muted": True}}}
+        self.assertEqual([i["id"] for i in st.items(fake(res))], ["mic-muted", "volume", "clock"])
 
     def test_items_desktop_vm(self):
         # No battery, wired, muted; daemon missing audio -> item dropped.

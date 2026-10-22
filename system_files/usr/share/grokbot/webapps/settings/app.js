@@ -142,17 +142,32 @@
     return [...top, mine, near];
   };
 
+  // Sound: default output / input device, then every device with its own
+  // volume and mute. Device names come from drivers and Bluetooth
+  // devices: text nodes only.
   pages.sound = async () => {
-    const a = await rpc("audio.status");
-    if (!a.available) return [...head("sound"), card(null, h("p", { class: "dim" }, t("unavailable")))];
-    const block = (label, target, v) => {
-      const [s, out] = slider(v.volume_percent, (p) => act(() => rpc("audio.set", { target, volume_percent: p })));
-      return card(label, row(h("div", { class: "grow" }, s), out),
-        row(h("span", { class: "grow" }, t("mute")), sw(v.muted, (m) => act(() => rpc("audio.set", { target, muted: m })))));
+    const [a, d] = await Promise.all([rpc("audio.status"), rpc("audio.devices.list").catch(() => ({ available: false }))]);
+    if (!a.available && !d.available) return [...head("sound"), card(null, h("p", { class: "dim" }, t("unavailable")))];
+    const volRow = (params, v) => {
+      const [s, out] = slider(v.volume_percent || 0, (p) => act(() => rpc("audio.set", Object.assign({ volume_percent: p }, params))));
+      return [row(h("div", { class: "grow" }, s), out),
+        row(h("span", { class: "grow" }, t("mute")), sw(v.muted, (m) => act(() => rpc("audio.set", Object.assign({ muted: m }, params)))))];
     };
-    const out = [...head("sound"), block(t("sound_output"), "output", a.output)];
-    if (a.input) out.push(block(t("sound_input"), "input", a.input));
-    return out;
+    const section = (label, target, list, cur) => {
+      if (!d.available || !list.length) return cur ? card(label, ...volRow({ target }, cur)) : null;
+      const pick = h("select", { "aria-label": label });
+      for (const x of list) pick.append(h("option", { value: String(x.id), selected: x.default }, x.description + (x.bluetooth ? " (Bluetooth)" : "")));
+      if (!list.some((x) => x.default)) pick.prepend(h("option", { value: "", selected: true }, "—"));
+      pick.addEventListener("change", () => { if (pick.value) act(() => rpc("audio.set_default", { id: parseInt(pick.value, 10) }), t("saved")).then(render, render); });
+      const c = card(label, row(h("span", { class: "grow" }, t("sound_device")), pick));
+      for (const x of list) {
+        c.append(h("h4", {}, x.description, x.default ? h("span", { class: "pill allow" }, t("sound_default")) : null));
+        c.append(...volRow({ id: x.id }, x));
+      }
+      return c;
+    };
+    return [...head("sound"), section(t("sound_output"), "output", d.outputs || [], a.output),
+      section(t("sound_input"), "input", d.inputs || [], a.input)].filter(Boolean);
   };
 
   // Screens: scale and arrangement (sway outputs) + backlight. A layout change
