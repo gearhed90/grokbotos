@@ -96,6 +96,52 @@
     return [...head("wifi"), status, h("div", { class: "filters" }, rescan), list];
   };
 
+  // Bluetooth: adapter power, paired devices (connect, trust, forget) and a
+  // scan for nearby devices to pair. Device names come from radio
+  // advertisements: untrusted, always text nodes.
+  let btFound = null, btScanning = false;
+  pages.bluetooth = async () => {
+    const b = await rpc("bluetooth.status");
+    const top = [...head("bt")];
+    if (!b.service) return [...top, card(null, h("p", { class: "dim" }, t("bt_no_service")))];
+    if (!b.available) return [...top, card(null, h("p", { class: "dim" }, t("bt_none_adapter")))];
+    top.push(card(null, row(h("span", { class: "grow" }, t("bt_power")), h("span", { class: "dim" }, b.powered ? t("bt_on") : t("bt_off")),
+      sw(b.powered, (on) => act(() => rpc("bluetooth.set_power", { powered: on })).then(() => { if (!on) btFound = null; render(); })))));
+    if (!b.powered) return top;
+    const devName = (d) => h("span", { class: "grow" }, d.name || d.address,
+      h("div", { class: "dim" }, [d.connected ? t("bt_connected") : t("bt_not_connected"), d.address,
+        d.battery_percent != null ? t("bt_battery", String(d.battery_percent)) : null].filter(Boolean).join(" · ")));
+    const mine = card(t("bt_my_devices"));
+    if (!b.devices.length) mine.append(h("p", { class: "dim" }, t("bt_no_devices")));
+    for (const d of b.devices) {
+      const go = (m, p, msg) => act(() => rpc(m, Object.assign({ address: d.address }, p || {})), msg).then(render, () => render());
+      mine.append(row(devName(d),
+        d.connected ? h("span", { class: "pill allow" }, t("bt_connected")) : null,
+        d.connected ? h("button", { type: "button", onclick: () => go("bluetooth.disconnect") }, t("bt_disconnect"))
+                    : h("button", { class: "primary", type: "button", onclick: () => { toast(t("bt_pairing")); go("bluetooth.connect", null, t("bt_connected")); } }, t("bt_connect")),
+        h("button", { class: "danger", type: "button", onclick: () => go("bluetooth.remove", null, t("bt_removed")) }, t("bt_remove"))),
+        row(h("span", { class: "grow dim" }, t("bt_trusted")), sw(d.trusted, (on) => act(() => rpc("bluetooth.trust", { address: d.address, trusted: on })))));
+    }
+    const near = card(t("bt_nearby"));
+    const scanBtn = h("button", { type: "button", disabled: btScanning, onclick: async () => {
+      btScanning = true; render(); toast(t("bt_scanning"));
+      try { btFound = (await act(() => rpc("bluetooth.scan", { seconds: 8 }))).devices; } catch (_) {}
+      btScanning = false; render();
+    } }, btScanning ? t("bt_scanning") : t("bt_scan"));
+    near.append(h("div", { class: "filters" }, scanBtn));
+    if (btFound && !btFound.length) near.append(h("p", { class: "dim" }, t("bt_scan_none")));
+    for (const d of btFound || []) {
+      if (b.devices.some((x) => x.address === d.address)) continue;
+      near.append(row(h("span", { class: "grow" }, d.name || d.address, h("div", { class: "dim" }, d.address + (d.rssi != null ? " · " + d.rssi + " dBm" : ""))),
+        h("button", { class: "primary", type: "button", onclick: async (ev) => {
+          ev.target.disabled = true; toast(t("bt_pairing"));
+          try { await act(() => rpc("bluetooth.pair", { address: d.address }), t("bt_paired")); btFound = btFound.filter((x) => x.address !== d.address); } catch (_) {}
+          render();
+        } }, t("bt_pair"))));
+    }
+    return [...top, mine, near];
+  };
+
   pages.sound = async () => {
     const a = await rpc("audio.status");
     if (!a.available) return [...head("sound"), card(null, h("p", { class: "dim" }, t("unavailable")))];

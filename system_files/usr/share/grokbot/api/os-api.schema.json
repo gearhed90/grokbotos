@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/head77x/grokbotos/os-api.schema.json",
   "title": "Grok Bot OS API",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Single source of truth for grokbotd. JSON-RPC 2.0 over the unix socket and POST /v1/rpc, the grokbot-os CLI and the MCP tools are all generated from this file. Every method has a scope (an OS function) and an access level (read or write); permissions are granted per caller per scope with mode allow, ask or deny (docs/OS_API.md, SECURITY.md).",
   "x-capabilities": {
     "system.read": "OS name, version, kernel, hostname, uptime, memory, bootc image",
@@ -38,7 +38,9 @@
     "mediakeys.read": "Receive Play/Pause/Next/Previous media key presses",
     "mediakeys.write": "Send media key presses to apps",
     "updates.read": "Booted, staged and rollback OS images, update availability, health-check record",
-    "updates.write": "Check for, install (stage) or roll back an OS update (always confirmed)"
+    "updates.write": "Check for, install (stage) or roll back an OS update (always confirmed)",
+    "bluetooth.read": "Bluetooth adapter state and paired or connected devices (names, addresses, battery)",
+    "bluetooth.write": "Turn Bluetooth on or off, look for nearby devices, pair, connect, disconnect, trust and remove devices"
   },
   "methods": {
     "api.methods": {
@@ -1539,6 +1541,212 @@
       "result": {
         "type": "object"
       }
+    },
+    "bluetooth.status": {
+      "description": "Bluetooth adapters (powered, discovering) and known devices: paired, trusted or connected, with battery when the device reports it. available=false when there is no adapter; service=false when bluetoothd is not running.",
+      "capability": "bluetooth.read",
+      "scope": "bluetooth",
+      "access": "read",
+      "x-title": [
+        "블루투스 상태 보기",
+        "See Bluetooth status"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "bluetooth.set_power": {
+      "description": "Turn the Bluetooth adapter on or off. Turning on also lifts a soft rfkill block.",
+      "capability": "bluetooth.write",
+      "scope": "bluetooth",
+      "access": "write",
+      "x-title": [
+        "블루투스 켜기/끄기",
+        "Turn Bluetooth on or off"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "powered": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "powered"
+        ]
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "bluetooth.scan": {
+      "description": "Look for nearby Bluetooth devices for a few seconds and return the ones that are not paired yet, strongest signal first.",
+      "capability": "bluetooth.write",
+      "scope": "bluetooth",
+      "access": "write",
+      "x-title": [
+        "주변 블루투스 기기 찾기",
+        "Look for nearby Bluetooth devices"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 30,
+            "default": 8
+          }
+        },
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "bluetooth.pair": {
+      "description": "Pair with a device found by bluetooth.scan, mark it trusted (it may reconnect by itself) and connect it. Devices that need a PIN or passkey are not supported yet and return an error.",
+      "capability": "bluetooth.write",
+      "scope": "bluetooth",
+      "access": "write",
+      "x-title": [
+        "블루투스 기기 페어링",
+        "Pair a Bluetooth device"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"
+          },
+          "connect": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "address"
+        ]
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "bluetooth.connect": {
+      "description": "Connect a paired device.",
+      "capability": "bluetooth.write",
+      "scope": "bluetooth",
+      "access": "write",
+      "x-title": [
+        "블루투스 기기 연결",
+        "Connect a Bluetooth device"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "address"
+        ]
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "bluetooth.disconnect": {
+      "description": "Disconnect a device (it stays paired).",
+      "capability": "bluetooth.write",
+      "scope": "bluetooth",
+      "access": "write",
+      "x-title": [
+        "블루투스 기기 연결 끊기",
+        "Disconnect a Bluetooth device"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "address"
+        ]
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "bluetooth.trust": {
+      "description": "Trust or untrust a device. A trusted device may connect by itself.",
+      "capability": "bluetooth.write",
+      "scope": "bluetooth",
+      "access": "write",
+      "x-title": [
+        "블루투스 기기 신뢰 설정",
+        "Trust a Bluetooth device"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"
+          },
+          "trusted": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "address",
+          "trusted"
+        ]
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "bluetooth.remove": {
+      "description": "Forget a device: unpair and remove it.",
+      "capability": "bluetooth.write",
+      "scope": "bluetooth",
+      "access": "write",
+      "x-title": [
+        "블루투스 기기 삭제",
+        "Forget a Bluetooth device"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "address"
+        ]
+      },
+      "result": {
+        "type": "object"
+      }
     }
   },
   "x-scopes": {
@@ -1647,6 +1855,11 @@
       "ko": "OS 업데이트(확인, 설치, 되돌리기)",
       "en": "OS updates (check, install, roll back)",
       "always_ask": true
+    },
+    "bluetooth": {
+      "ko": "블루투스",
+      "en": "Bluetooth",
+      "always_ask": false
     }
   }
 }

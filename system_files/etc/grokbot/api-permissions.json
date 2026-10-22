@@ -7,6 +7,7 @@
     "input": "allow",
     "lock": "allow",
     "network": "ask",
+    "bluetooth": "ask",
     "screen": "ask",
     "files": "ask",
     "files-write": "ask",
@@ -23,6 +24,7 @@
     "http://settings.app.localhost:7311": {
       "system": "allow",
       "network": "allow",
+      "bluetooth": "allow",
       "audio": "allow",
       "display": "allow",
       "notifications": "allow",

@@ -60,6 +60,11 @@ prompt. See "Permission model" below and the threat model in
 | `files.mkdir` / `files.move` / `files.trash` | `files-write` write | `files.write` | New folder; rename or move (`path`, `to`); move to the freedesktop trash (`~/.local/share/Trash`) |
 | `media.keys.wait` | `mediakeys` read | `mediakeys.read` | Long poll (`timeout` ≤ 55 s; audited once per subscription, not per poll) for a media key: `{key}` (`play-pause`, `play`, `pause`, `next`, `previous`, `stop`) or `{key: null}`. The newest waiter gets the key |
 | `media.keys.press` | `mediakeys` write | `mediakeys.write` | Deliver a media key (sway's XF86Audio* bindings run `grokbot-os media-key KEY`; with no waiter it falls back to playerctl) |
+| `bluetooth.status` | `bluetooth` read | `bluetooth.read` | `available` (an adapter exists), `service` (bluetoothd on the bus), `powered`, `adapters`, `devices` (paired, trusted or connected: address, name, icon, paired, trusted, connected, battery_percent), `connected` (names). One BlueZ D-Bus call |
+| `bluetooth.set_power` | `bluetooth` write | `bluetooth.write` | Adapter on/off (`powered`); turning on lifts a soft rfkill block |
+| `bluetooth.scan` | `bluetooth` write | `bluetooth.write` | Discover for `seconds` (2-30, default 8); returns unpaired devices, strongest first |
+| `bluetooth.pair` | `bluetooth` write | `bluetooth.write` | Pair, trust and (unless `connect=false`) connect `address`. "Just works" pairing only: devices that need a PIN or passkey return an error |
+| `bluetooth.connect` / `bluetooth.disconnect` / `bluetooth.trust` / `bluetooth.remove` | `bluetooth` write | `bluetooth.write` | Connect, disconnect, set `trusted`, forget (unpair) a device by `address` (`AA:BB:CC:DD:EE:FF`, validated) |
 | `audit.list` | `audit` read | `audit.read` | Recent audit log entries, newest last. Filters: principal, decision, method. |
 
 **Files scope rules.** Paths are relative to the home folder (`/Documents/a.txt`, `~/Documents/a.txt` and `Documents/a.txt` are the same). Refused: `..`, any path that resolves outside `~` (symlinks included), and every hidden component (`.config`, `.local`, `.ssh`, ...), so a `files` grant can never read or rewrite grants, keys or other apps' data. Seeing (`files`) and changing (`files-write`) are separate scopes with separate grants.
@@ -104,6 +109,7 @@ Permissions are per **OS function (scope)**, not per app, and there is no instal
 | `display` | 화면 밝기 / Display |  |
 | `audio` | 소리 / Sound |  |
 | `network` | 네트워크와 Wi-Fi / Network and Wi-Fi |  |
+| `bluetooth` | 블루투스 / Bluetooth | local default `ask`; Settings `allow` |
 | `power` | 전원(절전, 다시 시작, 끄기) / Power (suspend, restart, shut down) | always asks for writes |
 | `input` | 키보드와 한글 입력 / Keyboard and input method |  |
 | `notifications` | 알림과 방해 금지 / Notifications and Do Not Disturb |  |
