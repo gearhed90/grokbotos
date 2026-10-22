@@ -51,14 +51,38 @@ def _battery(power):
         return None
     b = power["batteries"][0]
     cap = b.get("capacity_percent")
-    charging = (b.get("status") or "").lower() == "charging" or bool(power.get("on_ac"))
+    status = (b.get("status") or "").lower()
+    on_ac = bool(power.get("on_ac"))
+    # Charging and Discharging come from the kernel status string.
+    # Anything else while on AC (Unknown, empty, None, Not charging, Full)
+    # still means the adapter is connected. Some ACPI and charge-threshold
+    # laptops never leave Unknown.
+    charging = status == "charging"
+    discharging = status == "discharging"
+    plugged = on_ac and not charging and not discharging
     if cap is None:
-        icon = "battery-missing-symbolic"
+        level, pct = None, "?"
     else:
         level = min(100, max(0, int(round(cap / 10.0)) * 10))
-        icon = "battery-level-%d%s-symbolic" % (level, "-charging" if charging else "")
-    text = "%s%%" % cap if cap is not None else "?"
-    tip = "배터리 / Battery %s%s" % (text, " (충전 중 / charging)" if charging else "")
+        pct = "%s%%" % cap
+    if charging:
+        icon = "battery-missing-symbolic" if level is None else "battery-level-%d-charging-symbolic" % level
+        text = "충전 중"
+        tip = "충전 중 / Charging %s" % pct
+    elif plugged:
+        if status == "full":
+            # Adwaita status icon: full battery plus a charged mark.
+            # Not charging keeps the plug (ac-adapter-symbolic) so an
+            # icon-only dock can tell the two apart.
+            icon = "battery-level-100-charged-symbolic"
+            text, tip = "전원 연결됨 (가득 참)", "전원 연결됨 (가득 참) / Plugged in (full)"
+        else:
+            icon = "ac-adapter-symbolic"
+            text, tip = "전원 연결됨", "전원 연결됨 / Plugged in %s" % pct
+    else:
+        icon = "battery-missing-symbolic" if level is None else "battery-level-%d-symbolic" % level
+        text = pct
+        tip = "배터리 / Battery %s" % pct
     return {"id": "battery", "icon": icon, "text": text, "tooltip": tip}
 
 
