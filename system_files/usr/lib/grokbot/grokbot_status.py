@@ -154,6 +154,19 @@ def _storage(st):
     return {"id": "storage", "icon": "media-removable-symbolic", "text": "USB",
             "tooltip": "외장 저장장치 / Removable drives: %s (%d 열림 / open). 클릭: 꺼내기 / Click: safely remove"
                        % (names, len(opened))}
+def _power_mode(pm):
+    """Shown only when not balanced (the default), so a forgotten power
+    saver or performance mode is visible. Click: Settings > Power."""
+    if not pm or not pm.get("available") or pm.get("active") in (None, "balanced"):
+        return None
+    if pm["active"] == "power-saver":
+        return {"id": "power-mode", "icon": "power-profile-power-saver-symbolic", "text": "절전",
+                "tooltip": "전원 모드: 절전 / Power mode: power saver. 클릭: 전원 설정 / Click: Power settings"}
+    tip = "전원 모드: 성능 / Power mode: performance"
+    if pm.get("degraded"):
+        tip += " (제한됨 / limited: %s)" % pm["degraded"]
+    return {"id": "power-mode", "icon": "power-profile-performance-symbolic", "text": "성능",
+            "tooltip": tip + ". 클릭: 전원 설정 / Click: Power settings"}
 
 
 def _who(sess):
@@ -205,6 +218,6 @@ def items(call=rpc, now=None):
     audio = call("audio.status")
     out = _privacy(call("privacy.status")) + [
         _storage(call("storage.list")), _network(call("network.status")), _bluetooth(call("bluetooth.status")),
-        _mic(audio), _volume(audio),
-        _battery(call("power.status")), _update(call("update.status")), clock(now)]
+        _mic(audio), _volume(audio), _power_mode(call("power.profile.status")), _battery(call("power.status")),
+        _update(call("update.status")), clock(now)]
     return [i for i in out if i]

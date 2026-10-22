@@ -69,6 +69,8 @@ prompt. See "Permission model" below and the threat model in
 | `bluetooth.connect` / `bluetooth.disconnect` / `bluetooth.trust` / `bluetooth.remove` | `bluetooth` write | `bluetooth.write` | Connect, disconnect, set `trusted`, forget (unpair) a device by `address` (`AA:BB:CC:DD:EE:FF`, validated) |
 | `storage.list` | `storage` read | `storage.read` | Removable volumes only (USB, SD, external; never the system disk) from UDisks2: `id` (sdb1), `name`, `label`, `drive`, `fs`, `size`, `mounted`, `mount_points`, `read_only`, `ejectable` |
 | `storage.mount` / `storage.unmount` | `storage` write | `storage.write` | Open a volume under `/run/media/<user>/`; close it, and with `eject=true` close the drive's other volumes and eject / power it off |
+| `power.profile.status` | `power-mode` read | `power-mode.read` | `available`, `active` (`power-saver`, `balanced`, `performance`), `profiles` offered, `degraded` (power-profiles D-Bus API, tuned-ppd) |
+| `power.profile.set` | `power-mode` write | `power-mode.write` | Switch to `profile` (must be offered). Separate from `power` so it does not prompt every time; local default `allow` |
 | `audit.list` | `audit` read | `audit.read` | Recent audit log entries, newest last. Filters: principal, decision, method. |
 
 **Files scope rules.** Paths are relative to the home folder (`/Documents/a.txt`, `~/Documents/a.txt` and `Documents/a.txt` are the same). Refused: `..`, any path that resolves outside `~` (symlinks included), and every hidden component (`.config`, `.local`, `.ssh`, ...), so a `files` grant can never read or rewrite grants, keys or other apps' data. Seeing (`files`) and changing (`files-write`) are separate scopes with separate grants.
@@ -116,6 +118,7 @@ Permissions are per **OS function (scope)**, not per app, and there is no instal
 | `bluetooth` | 블루투스 / Bluetooth | local default `ask`; Settings `allow` |
 | `storage` | USB와 외장 저장장치 / USB and removable storage | local default `ask`; Settings `allow` |
 | `power` | 전원(절전, 다시 시작, 끄기) / Power (suspend, restart, shut down) | always asks for writes |
+| `power-mode` | 전원 모드(절전, 균형, 성능) / Power mode | local and Settings `allow` |
 | `input` | 키보드와 한글 입력 / Keyboard and input method |  |
 | `notifications` | 알림과 방해 금지 / Notifications and Do Not Disturb |  |
 | `lock` | 화면 잠금과 대기 / Screen lock and idle |  |

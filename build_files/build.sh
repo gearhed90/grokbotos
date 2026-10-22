@@ -44,6 +44,7 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     foot \
     NetworkManager-wifi \
     bluez \
+    tuned-ppd \
     wpa_supplicant \
     iwlwifi-mvm-firmware \
     iwlwifi-dvm-firmware \

@@ -16,6 +16,7 @@
     "camera": "ask",
     "microphone": "ask",
     "power": "ask",
+    "power-mode": "allow",
     "permissions": "allow",
     "apps": "allow",
     "mediakeys": "allow",
@@ -35,6 +36,7 @@
       "permissions": "allow",
       "audit": "allow",
       "power": "ask",
+      "power-mode": "allow",
       "apps": "allow",
       "updates": "ask"
     }

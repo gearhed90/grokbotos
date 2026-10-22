@@ -42,7 +42,9 @@
     "bluetooth.read": "Bluetooth adapter state and paired or connected devices (names, addresses, battery)",
     "bluetooth.write": "Turn Bluetooth on or off, look for nearby devices, pair, connect, disconnect, trust and remove devices",
     "storage.read": "Removable drives: label, size, file system, whether and where they are open",
-    "storage.write": "Open (mount), close (unmount) and eject removable drives"
+    "storage.write": "Open (mount), close (unmount) and eject removable drives",
+    "power-mode.read": "Current power mode and the modes this computer offers",
+    "power-mode.write": "Switch power mode (power saver, balanced, performance)"
   },
   "methods": {
     "api.methods": {
@@ -1871,6 +1873,54 @@
       "result": {
         "type": "object"
       }
+    },
+    "power.profile.status": {
+      "description": "Power mode: active (power-saver, balanced or performance), profiles offered here, degraded (why performance is limited, e.g. high temperature). available=false without the power-profiles service.",
+      "capability": "power-mode.read",
+      "scope": "power-mode",
+      "access": "read",
+      "x-title": [
+        "전원 모드 보기",
+        "See power mode"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "power.profile.set": {
+      "description": "Switch power mode. The mode must be one this computer offers.",
+      "capability": "power-mode.write",
+      "scope": "power-mode",
+      "access": "write",
+      "x-title": [
+        "전원 모드 바꾸기",
+        "Change power mode"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": [
+              "power-saver",
+              "balanced",
+              "performance"
+            ]
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
     }
   },
   "x-scopes": {
@@ -1988,6 +2038,11 @@
     "storage": {
       "ko": "USB와 외장 저장장치",
       "en": "USB and removable storage",
+      "always_ask": false
+    },
+    "power-mode": {
+      "ko": "전원 모드(절전, 균형, 성능)",
+      "en": "Power mode (saver, balanced, performance)",
       "always_ask": false
     }
   }

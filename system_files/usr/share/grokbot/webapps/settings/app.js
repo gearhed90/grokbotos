@@ -162,6 +162,31 @@
     return [...top, c];
   };
 
+  // Power: battery (power.status), power mode (power.profile.*), and the
+  // power actions, which always show the consent prompt.
+  pages.power = async () => {
+    const [p, m] = await Promise.all([rpc("power.status").catch(() => null), rpc("power.profile.status")]);
+    const out = [...head("power")];
+    const bc = card(t("power_battery"));
+    if (!p || !p.batteries.length) bc.append(h("p", { class: "dim" }, t("power_no_battery")));
+    else for (const b of p.batteries) bc.append(row(h("span", { class: "grow" }, b.name, h("div", { class: "dim" }, t("bat_" + (b.status || "Unknown")))),
+      h("span", { class: "pill" }, (b.capacity_percent ?? "?") + "%")));
+    if (p) bc.append(h("p", { class: "dim" }, p.on_ac ? t("power_on_ac") : t("power_on_bat")));
+    out.push(bc);
+    const mc = card(t("power_mode"));
+    if (!m.available) mc.append(h("p", { class: "dim" }, t("power_mode_none")));
+    else {
+      mc.append(h("div", { class: "filters" }, ...m.profiles.map((pr) => h("button", { type: "button", class: pr === m.active ? "primary" : "",
+        "aria-pressed": String(pr === m.active), onclick: () => act(() => rpc("power.profile.set", { profile: pr }), t("saved")).then(render, render) },
+        t("pm_" + pr.replace("-", "_"))))));
+      if (m.degraded) mc.append(h("p", { class: "dim" }, t("pm_degraded", m.degraded)));
+    }
+    out.push(mc);
+    out.push(card(t("power_actions"), h("div", { class: "filters" }, ...["suspend", "reboot", "poweroff"].map((a) =>
+      h("button", { type: "button", class: a === "poweroff" ? "danger" : "", onclick: () => act(() => rpc("power.action", { action: a })).catch(() => {}) }, t("power_" + a))))));
+    return out;
+  };
+
   // Sound: default output / input device, then every device with its own
   // volume and mute. Device names come from drivers and Bluetooth
   // devices: text nodes only.
