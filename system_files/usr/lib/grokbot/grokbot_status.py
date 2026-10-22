@@ -136,6 +136,14 @@ def _bluetooth(bt):
     return {"id": "bluetooth", "icon": "bluetooth-symbolic", "text": "켜짐",
             "tooltip": "블루투스 켜짐, 연결된 기기 없음 / Bluetooth on, nothing connected. "
                        "클릭: 블루투스 설정 / Click: Bluetooth settings"}
+def _mic(audio):
+    """Microphone muted: a reminder at the end of the dock (click: unmute)."""
+    if not audio or not audio.get("available") or not audio.get("input"):
+        return None
+    if not audio["input"].get("muted"):
+        return None
+    return {"id": "mic-muted", "icon": "microphone-sensitivity-muted-symbolic", "text": "마이크 꺼짐",
+            "tooltip": "마이크 음소거됨 / Microphone muted. 클릭: 음소거 해제 / Click: unmute"}
 
 
 def _who(sess):
@@ -184,7 +192,8 @@ def clock(now=None):
 
 def items(call=rpc, now=None):
     """Status items in display order; missing data drops the item."""
+    audio = call("audio.status")
     out = _privacy(call("privacy.status")) + [
-        _network(call("network.status")), _bluetooth(call("bluetooth.status")), _volume(call("audio.status")),
+        _network(call("network.status")), _bluetooth(call("bluetooth.status")), _mic(audio), _volume(audio),
         _battery(call("power.status")), _update(call("update.status")), clock(now)]
     return [i for i in out if i]

@@ -35,7 +35,9 @@ prompt. See "Permission model" below and the threat model in
 | `notifications.list` | `notifications` read | `notifications.read` | `daemon_running`, `dnd`, `notifications` (id, app, summary, urgency; never the body). Param `include_history` |
 | `capture.status` | `screen` read | `capture.read` | Screenshot `dir`, `count`, `recent` (name, size, mtime; never image data), `tools`. Param `limit` |
 | `input.status` | `input` read | `input.read` | fcitx5 `running`, `current` (e.g. `hangul`), `active`, `input_methods`, `trigger_keys`, `xmodifiers` |
-| `audio.set` | `audio` write | `audio.write` | Set output or input volume and/or mute. |
+| `audio.set` | `audio` write | `audio.write` | Set output or input volume and/or mute: the default device (`target`) or one device (`id` from `audio.devices.list`). |
+| `audio.devices.list` | `audio` read | `audio.read` | `outputs` and `inputs` (PipeWire nodes): `id`, `description`, `default`, `bluetooth`, `volume_percent`, `muted` |
+| `audio.set_default` | `audio` write | `audio.write` | Make device `id` the default output or input (wpctl set-default); the id must be a current device |
 | `display.set_brightness` | `display` write | `display.write` | Set backlight brightness in percent (1-100; never fully dark). |
 | `network.wifi.list` | `network` read | `network.read` | Visible Wi-Fi networks (SSID, signal, security, in use) via NetworkManager. |
 | `network.wifi.connect` | `network` write | `network.write` | Connect to a Wi-Fi network (nmcli). The password is passed to NetworkManager through a 0600 file, never logged or put on a command line. |

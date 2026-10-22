@@ -39,6 +39,11 @@ def audio_set(params):
     target = "@DEFAULT_AUDIO_SINK@" if params.get("target", "output") == "output" else "@DEFAULT_AUDIO_SOURCE@"
     if "volume_percent" not in params and "muted" not in params:
         raise BackendError("give volume_percent and/or muted")
+    if "id" in params:
+        # One device from audio.devices.list (must exist: never a free string).
+        from . import audiodev
+        audiodev.find(int(params["id"]))
+        target = str(int(params["id"]))
     if "volume_percent" in params:
         _run(["wpctl", "set-volume", "-l", "1.0", target, "%d%%" % params["volume_percent"]])
     if "muted" in params:
