@@ -1,6 +1,0 @@
-# Default root filesystem for `bootc install to-disk` / `to-filesystem`.
-# fedora-bootc ships none, so a plain `bootc install to-disk /dev/sdX`
-# failed with "No root filesystem specified" (seen in a QEMU test
-# 2026-10-21). Anaconda ISOs and bootc-image-builder pick their own.
-[install.filesystem.root]
-type = "xfs"

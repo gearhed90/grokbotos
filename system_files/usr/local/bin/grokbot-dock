@@ -1,8 +1,0 @@
-#!/bin/bash
-# Start the Grok Bot OS docks (one process, one panel per enabled edge).
-# sway runs this once at startup; this loop restarts the dock if it dies.
-set -u
-while true; do
-    /usr/bin/python3 /usr/lib/grokbot/grokbot-dock.py || echo "grokbot-dock: exited $?" >&2
-    sleep 2
-done
