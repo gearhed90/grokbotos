@@ -60,6 +60,14 @@ class StatusTests(unittest.TestCase):
         res = {"audio.status": {"available": True, "output": {"volume_percent": 40, "muted": False},
                                 "input": {"volume_percent": 40, "muted": True}}}
         self.assertEqual([i["id"] for i in st.items(fake(res))], ["mic-muted", "volume", "clock"])
+    def test_storage_item(self):
+        self.assertIsNone(st._storage(None))
+        self.assertIsNone(st._storage({"available": True, "volumes": []}))
+        i = st._storage({"volumes": [{"id": "sdb1", "name": "PHOTOS", "mounted": True}]})
+        self.assertEqual((i["id"], i["icon"]), ("storage", "media-removable-symbolic"))
+        self.assertIn("PHOTOS", i["tooltip"])
+        res = {"storage.list": {"available": True, "volumes": [{"id": "sdb1", "name": "X", "mounted": False}]}}
+        self.assertEqual([x["id"] for x in st.items(fake(res))], ["storage", "clock"])
 
     def test_items_desktop_vm(self):
         # No battery, wired, muted; daemon missing audio -> item dropped.

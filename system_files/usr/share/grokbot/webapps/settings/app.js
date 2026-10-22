@@ -142,6 +142,26 @@
     return [...top, mine, near];
   };
 
+  // Removable storage (UDisks2). Labels come from the drive: text nodes only.
+  const fmtSize = (n) => { const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0; while (n >= 1000 && i < 4) { n /= 1000; i++; } return (i ? n.toFixed(1) : n) + " " + u[i]; };
+  pages.storage = async () => {
+    const s = await rpc("storage.list");
+    const top = [...head("storage"), h("div", { class: "filters" }, h("button", { type: "button", onclick: render }, t("storage_refresh")))];
+    if (!s.available) return [...top, card(null, h("p", { class: "dim" }, t("storage_unavailable")))];
+    if (!s.volumes.length) return [...top, card(null, h("p", { class: "dim" }, t("storage_none")))];
+    const c = card(null);
+    for (const v of s.volumes) {
+      const go = (m, p, msg) => act(() => rpc(m, Object.assign({ id: v.id }, p || {})), msg).then(render, render);
+      c.append(row(h("span", { class: "grow" }, v.name, h("div", { class: "dim" },
+        [v.drive, v.fs, fmtSize(v.size), v.read_only ? t("storage_ro") : null,
+         v.mounted ? t("storage_opened", v.mount_points[0] || "") : t("storage_closed")].filter(Boolean).join(" · "))),
+        v.mounted ? h("button", { type: "button", onclick: () => go("storage.unmount") }, t("storage_close"))
+                  : h("button", { class: "primary", type: "button", onclick: () => go("storage.mount") }, t("storage_open")),
+        h("button", { type: "button", onclick: () => go("storage.unmount", { eject: true }, t("storage_ejected")) }, t("storage_eject"))));
+    }
+    return [...top, c];
+  };
+
   // Sound: default output / input device, then every device with its own
   // volume and mute. Device names come from drivers and Bluetooth
   // devices: text nodes only.

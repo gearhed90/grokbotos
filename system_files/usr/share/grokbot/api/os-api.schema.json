@@ -40,7 +40,9 @@
     "updates.read": "Booted, staged and rollback OS images, update availability, health-check record",
     "updates.write": "Check for, install (stage) or roll back an OS update (always confirmed)",
     "bluetooth.read": "Bluetooth adapter state and paired or connected devices (names, addresses, battery)",
-    "bluetooth.write": "Turn Bluetooth on or off, look for nearby devices, pair, connect, disconnect, trust and remove devices"
+    "bluetooth.write": "Turn Bluetooth on or off, look for nearby devices, pair, connect, disconnect, trust and remove devices",
+    "storage.read": "Removable drives: label, size, file system, whether and where they are open",
+    "storage.write": "Open (mount), close (unmount) and eject removable drives"
   },
   "methods": {
     "api.methods": {
@@ -1795,6 +1797,80 @@
       "result": {
         "type": "object"
       }
+    },
+    "storage.list": {
+      "description": "Removable volumes (USB sticks, SD cards, external disks; never the system disk): id (block device, e.g. sdb1), name, label, drive, fs, size, mounted, mount_points, read_only, ejectable. available=false when udisks2 is not running.",
+      "capability": "storage.read",
+      "scope": "storage",
+      "access": "read",
+      "x-title": [
+        "외장 저장장치 목록",
+        "List removable drives"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "storage.mount": {
+      "description": "Open (mount) a removable volume under /run/media/<user>/. Returns the volume with its mount point.",
+      "capability": "storage.write",
+      "scope": "storage",
+      "access": "write",
+      "x-title": [
+        "외장 저장장치 열기(마운트)",
+        "Open (mount) a removable drive"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{1,31}$"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "storage.unmount": {
+      "description": "Close (unmount) a removable volume; with eject=true also unmount the drive's other volumes and eject or power it off so it can be pulled out safely.",
+      "capability": "storage.write",
+      "scope": "storage",
+      "access": "write",
+      "x-title": [
+        "외장 저장장치 꺼내기",
+        "Safely remove a drive"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{1,31}$"
+          },
+          "eject": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
     }
   },
   "x-scopes": {
@@ -1907,6 +1983,11 @@
     "bluetooth": {
       "ko": "블루투스",
       "en": "Bluetooth",
+      "always_ask": false
+    },
+    "storage": {
+      "ko": "USB와 외장 저장장치",
+      "en": "USB and removable storage",
       "always_ask": false
     }
   }
