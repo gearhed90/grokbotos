@@ -1,0 +1,4 @@
+#!/bin/bash
+# Grok Bot OS API client: CLI (--json) and MCP stdio server (grokbot-os mcp).
+# Talks to grokbotd over $XDG_RUNTIME_DIR/grokbot/api.sock. docs/OS_API.md.
+exec /usr/bin/python3 "${GROKBOT_LIB:-/usr/lib/grokbot}/grokbot_os_cli.py" "$@"

@@ -1,0 +1,24 @@
+[customizations.installer.kickstart]
+contents = """
+%post
+bootc switch --mutate-in-place --transport registry ghcr.io/head77x/grokbotos:latest
+%end
+"""
+
+[customizations.installer.modules]
+enable = [
+  "org.fedoraproject.Anaconda.Modules.Storage",
+  "org.fedoraproject.Anaconda.Modules.Runtime"
+]
+disable = [
+  "org.fedoraproject.Anaconda.Modules.Network",
+  "org.fedoraproject.Anaconda.Modules.Security",
+  "org.fedoraproject.Anaconda.Modules.Services",
+  "org.fedoraproject.Anaconda.Modules.Subscription",
+  "org.fedoraproject.Anaconda.Modules.Timezone"
+]
+# Users is deliberately NOT disabled (unlike the ublue-os/image-template
+# default this file was based on): our kickstart doesn't set a user or
+# root password, so disabling it would produce an installed system with
+# no way to log in at all -- fails Phase 1's actual acceptance criteria.
+# Anaconda's normal interactive account-creation screen handles this.

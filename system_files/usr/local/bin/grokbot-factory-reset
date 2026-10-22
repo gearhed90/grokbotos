@@ -1,0 +1,170 @@
+#!/bin/bash
+# Clear the grokbot kiosk home so the next sign-in starts empty.
+#
+# This is not a full "Reset Computer". It does not touch /usr, the bootc
+# deployment, /etc, machine-id, or any other home directory, and it does
+# not reboot. A resale wipe that re-runs first-boot is still only a design
+# note in docs/ROADMAP.md.
+#
+# Nothing is deleted unless --confirm RESET is passed alone.
+# --dry-run never deletes, including when --confirm is also passed.
+# There is no hotkey. Run it from the admin console (Ctrl+Alt+F2).
+set -euo pipefail
+
+# shellcheck source=/dev/null
+source "${GROKBOT_LIB:-/usr/lib/grokbot/common.sh}"
+
+usage() {
+    cat <<'EOF'
+usage: grokbot-factory-reset [--dry-run] [--confirm RESET]
+
+Deletes only the contents of /var/home/grokbot after --confirm RESET,
+and clears the screen-lock PIN (locks the grokbot password).
+--dry-run prints that list and deletes nothing.
+Does not reboot and does not modify /usr, /etc, or other homes.
+EOF
+}
+
+die() {
+    echo "grokbot-factory-reset: $*" >&2
+    exit 1
+}
+
+refuse() {
+    echo "grokbot-factory-reset: $*" >&2
+    exit 2
+}
+
+ROOT="${GROKBOT_RESET_ROOT:-}"
+dry=0
+confirm=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)
+            dry=1
+            shift
+            ;;
+        --confirm)
+            [[ $# -ge 2 ]] || refuse "확인 토큰이 없습니다. 아무것도 지우지 않았습니다."
+            confirm="$2"
+            shift 2
+            ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            refuse "알 수 없는 인자입니다. 아무것도 지우지 않았습니다."
+            ;;
+    esac
+done
+
+if [[ -z "$ROOT" ]]; then
+    [[ "$(id -u)" -eq 0 ]] || refuse "root가 필요합니다. 아무것도 지우지 않았습니다."
+else
+    [[ "$ROOT" == /* ]] || refuse "GROKBOT_RESET_ROOT는 절대 경로여야 합니다. 아무것도 지우지 않았습니다."
+    case "$ROOT" in
+        *..*) refuse "GROKBOT_RESET_ROOT에 .. 가 있습니다. 아무것도 지우지 않았습니다." ;;
+    esac
+    [[ -d "$ROOT" && ! -L "$ROOT" ]] || refuse "GROKBOT_RESET_ROOT는 실제 디렉터리여야 합니다. 아무것도 지우지 않았습니다."
+fi
+
+home="${ROOT}/var/home/grokbot"
+case "$home" in
+    /var/home/grokbot | /*/var/home/grokbot) ;;
+    *) die "refusing unexpected home path" ;;
+esac
+
+# Refuse a symlink anywhere on the path, including /var or the home itself.
+# Deleting through a symlink could land outside the kiosk home.
+cursor=""
+rest="${home#/}"
+IFS=/ read -ra parts <<<"$rest"
+for part in "${parts[@]}"; do
+    [[ -n "$part" ]] || continue
+    cursor+="/${part}"
+    if [[ -L "$cursor" ]]; then
+        die "symlink 경로는 따라가지 않습니다: ${cursor}"
+    fi
+    if [[ ! -e "$cursor" ]]; then
+        break
+    fi
+done
+
+if [[ -e "$home" && ! -d "$home" ]]; then
+    die "키오스크 홈이 디렉터리가 아닙니다: ${home}"
+fi
+
+if [[ "$dry" -eq 0 && "$confirm" != "RESET" ]]; then
+    cat >&2 <<'EOF'
+grokbot-factory-reset: 아무것도 지우지 않았습니다.
+지울 목록만 보려면 --dry-run
+실제로 /var/home/grokbot 안의 내용만 지우려면 --confirm RESET
+/usr, bootc 이미지, /etc, 다른 사용자 홈은 그대로입니다. 재부팅하지 않습니다.
+EOF
+    exit 2
+fi
+
+shopt -s dotglob nullglob
+entries=()
+if [[ -d "$home" ]]; then
+    entries=("${home}/"*)
+fi
+
+home_dev=""
+if [[ -d "$home" ]]; then
+    home_dev=$(stat -c %d -- "$home")
+fi
+
+for entry in "${entries[@]}"; do
+    base=$(basename -- "$entry")
+    [[ "$base" != "." && "$base" != ".." ]] || die "refusing ${entry}"
+    [[ "$entry" == "${home}/${base}" ]] || die "refusing ${entry}"
+    if [[ -L "$entry" ]]; then
+        continue
+    fi
+    if ! grokbot_under_dir "$entry" "$home"; then
+        die "홈 밖의 경로는 지우지 않습니다: ${entry}"
+    fi
+    if [[ -d "$entry" ]]; then
+        entry_dev=$(stat -c %d -- "$entry")
+        [[ "$entry_dev" == "$home_dev" ]] || die "마운트 지점은 지우지 않습니다: ${entry}"
+    fi
+done
+
+if [[ "$dry" -eq 1 ]]; then
+    echo "dry-run: 지우지 않습니다."
+    echo "clear screen-lock PIN (grokbot password locked, PIN marker removed)"
+    if [[ ${#entries[@]} -eq 0 ]]; then
+        echo "지울 항목이 없습니다."
+    fi
+    for entry in "${entries[@]}"; do
+        echo "remove ${entry}"
+    done
+    exit 0
+fi
+
+for entry in "${entries[@]}"; do
+    if [[ -L "$entry" ]]; then
+        rm -- "$entry"
+    else
+        rm -rf -- "$entry"
+    fi
+done
+
+# The PIN is the kiosk account's unix password. Clear it too, or the next
+# owner cannot set a PIN (the helper asks for the current one) and the
+# previous owner can still unlock (security review #5). The account goes
+# back to its install state: password locked, no PIN marker, no tally.
+lockdir="${ROOT}/var/lib/grokbot"
+rm -f -- "$lockdir/lock-pin/grokbot" "$lockdir/lock-pin/.fail-grokbot" "$lockdir/faillock/grokbot"
+if [[ -z "$ROOT" ]]; then
+    usermod -p '!' grokbot
+    echo "화면 잠금 PIN을 지웠습니다. / Screen-lock PIN cleared."
+else
+    echo "test mode (GROKBOT_RESET_ROOT): grokbot 비밀번호는 건드리지 않았습니다."
+fi
+echo "grokbot 홈의 내용을 지웠습니다. 재부팅은 하지 않았습니다."
+exit 0
