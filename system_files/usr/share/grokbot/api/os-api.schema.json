@@ -1654,7 +1654,7 @@
       }
     },
     "bluetooth.pair": {
-      "description": "Pair with a device found by bluetooth.scan, mark it trusted (it may reconnect by itself) and connect it. Devices that need a PIN or passkey are not supported yet and return an error.",
+      "description": "Pair with a device found by bluetooth.scan, mark it trusted (it may reconnect by itself) and connect it. Devices that need a PIN or passkey are not supported yet and return an error. PIN/passkey: grokbotd's pairing agent asks you to confirm the code (consent prompt) or tells you what to type on the device.",
       "capability": "bluetooth.write",
       "scope": "bluetooth",
       "access": "write",
@@ -1672,6 +1672,11 @@
           "connect": {
             "type": "boolean",
             "default": true
+          },
+          "pin": {
+            "type": "string",
+            "pattern": "^[0-9A-Za-z]{1,16}$",
+            "description": "PIN or passkey for devices that ask for one to be typed (old keyboards, car kits). Passkey confirmation and codes to type on the device are asked/shown with the consent prompt instead."
           }
         },
         "additionalProperties": false,

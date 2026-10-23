@@ -135,7 +135,18 @@
       near.append(row(h("span", { class: "grow" }, d.name || d.address, h("div", { class: "dim" }, d.address + (d.rssi != null ? " · " + d.rssi + " dBm" : ""))),
         h("button", { class: "primary", type: "button", onclick: async (ev) => {
           ev.target.disabled = true; toast(t("bt_pairing"));
-          try { await act(() => rpc("bluetooth.pair", { address: d.address }), t("bt_paired")); btFound = btFound.filter((x) => x.address !== d.address); } catch (_) {}
+          // Passkey confirmation / codes to type come up as grokbotd consent prompts during the call.
+          // A device that wants a typed PIN fails with "needs a PIN": ask for it and pair again.
+          const pairWith = (pin) => rpc("bluetooth.pair", pin ? { address: d.address, pin } : { address: d.address });
+          try {
+            try { await pairWith(null); } catch (e) {
+              if (!/needs a PIN/i.test(e.message || "")) throw e;
+              const pin = (prompt(t("bt_pin_ask")) || "").trim();
+              if (!pin) throw e;
+              await pairWith(pin);
+            }
+            toast(t("bt_paired")); btFound = btFound.filter((x) => x.address !== d.address);
+          } catch (e) { toast(e.message || String(e)); }
           render();
         } }, t("bt_pair"))));
     }
