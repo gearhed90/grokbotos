@@ -22,3 +22,5 @@ td.act button { padding:2px 8px; font-size:13px; margin-left:4px; }
 #vbody textarea { flex:1; resize:none; font:14px/1.6 "Noto Sans Mono CJK KR","Noto Sans Mono",monospace; }
 #vbody img { max-width:100%; max-height:100%; margin:auto; object-fit:contain; }
 .empty { text-align:center; color:var(--dim); padding:40px; }
+#crumbs button.on { border-color:var(--line, #444); font-weight:600; }
+#crumbs .eject { padding:3px 4px; }

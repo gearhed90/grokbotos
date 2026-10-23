@@ -1,4 +1,10 @@
-"""files.* : the user's home folder, nothing else.
+"""files.* : the user's home folder, or one open removable drive.
+
+With "volume" (a storage.list id such as sdb1) the same rules apply with
+the drive's mount point as the root instead of ~. The drive must be a
+removable volume that is mounted under /run/media/<user>/ right now;
+nothing else on the system is reachable. Deletes on a drive go to its
+own freedesktop trash (<drive>/.Trash-<uid>).
 
 Every path is relative to ~ (a leading "/" or "~/" is accepted and means
 the same thing). Refused: anything that resolves outside ~ (.. or a
@@ -7,7 +13,10 @@ where grants, keys and app data live, so the files scope can never be
 used to rewrite a permission file. Deletes go to the freedesktop trash.
 """
 import base64
+import contextlib
 import datetime
+import getpass
+import threading
 import mimetypes
 import os
 import shutil
@@ -20,8 +29,41 @@ MAX_WRITE = 16 * 1024 * 1024
 MAX_LIST = 2000
 
 
+_root = threading.local()
+
+
 def home():
-    return os.path.realpath(os.path.expanduser("~"))
+    """The root of the current call: ~, or the drive set by on_volume()."""
+    r = getattr(_root, "path", None)
+    return r if r else os.path.realpath(os.path.expanduser("~"))
+
+
+def media_base():
+    return os.path.realpath(os.environ.get("GROKBOT_MEDIA_BASE") or
+                            os.path.join("/run/media", getpass.getuser()))
+
+
+def volume_root(vid):
+    """Mount point of an open removable volume, checked to be under /run/media/<user>/."""
+    from . import storage
+    v = storage._find(vid)
+    if not v["mounted"] or not v["mount_points"]:
+        raise BackendError("the drive is not open; open it first (storage.mount)")
+    mp = os.path.realpath(v["mount_points"][0])
+    base = media_base()
+    if not mp.startswith(base + os.sep) or not os.path.isdir(mp):
+        raise BackendError("the drive is not mounted in the user's media folder")
+    return mp
+
+
+@contextlib.contextmanager
+def on_volume(params):
+    vid = params.get("volume") if isinstance(params, dict) else None
+    _root.path = volume_root(vid) if vid else None
+    try:
+        yield
+    finally:
+        _root.path = None
 
 
 def _rel(path):
@@ -173,6 +215,11 @@ def files_move(params):
 
 
 def _trash_dirs():
+    if getattr(_root, "path", None):
+        base = os.path.join(_root.path, ".Trash-%d" % os.getuid())
+        for d in ("files", "info"):
+            os.makedirs(os.path.join(base, d), exist_ok=True)
+        return base
     base = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(home(), ".local", "share"), "Trash")
     for d in ("files", "info"):
         os.makedirs(os.path.join(base, d), exist_ok=True)
@@ -197,7 +244,17 @@ def files_trash(params):
     return {"path": api_path(src), "trashed": True}
 
 
-METHODS = {
+def _scoped(fn):
+    def call(params):
+        with on_volume(params):
+            r = fn(params)
+        if isinstance(r, dict) and params.get("volume"):
+            r = dict(r, volume=params["volume"])
+        return r
+    return call
+
+
+METHODS = {k: _scoped(v) for k, v in {
     "files.list": files_list,
     "files.stat": files_stat,
     "files.read": files_read,
@@ -205,4 +262,4 @@ METHODS = {
     "files.mkdir": files_mkdir,
     "files.move": files_move,
     "files.trash": files_trash,
-}
+}.items()}
