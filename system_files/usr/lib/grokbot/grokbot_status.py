@@ -18,10 +18,15 @@ def socket_path():
         os.environ.get("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid()), "grokbot", "api.sock")
 
 
+# Methods that shell out to slow tools (CUPS lpstat) get more time, so a
+# busy or emulated machine still shows their item.
+SLOW = {"printers.list": 4.0}
+
+
 def rpc(method, timeout=1.0):
     try:
         s = socket.socket(socket.AF_UNIX)
-        s.settimeout(timeout)
+        s.settimeout(SLOW.get(method, timeout))
         s.connect(socket_path())
         f = s.makefile("rwb")
         f.write((json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": {}}) + "\n").encode())
