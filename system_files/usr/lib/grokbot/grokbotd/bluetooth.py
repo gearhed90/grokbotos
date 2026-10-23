@@ -5,12 +5,14 @@ can poll bluetooth.status cheaply. Changes are D-Bus method calls and
 property sets with busctl. Discovery needs a client that stays on the bus
 while it runs, so bluetooth.scan uses `bluetoothctl --timeout N scan on`.
 
-Pairing registers no agent of its own: BlueZ pairs "just works" devices
-(headsets, speakers, most mice) without one. Devices that need a PIN or
-passkey confirmation (some keyboards) fail with an error that says so.
+Pairing runs with grokbotd's own BlueZ agent (btagent.py) registered for
+that one Pair call: passkey confirmation and "type this code" go to the
+consent prompt / a notification, and a PIN can be passed as "pin".
+Without python3-gobject it falls back to a plain Pair ("just works" only).
 Addresses are validated before they reach any command line.
 """
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -167,10 +169,42 @@ def bluetooth_scan(params):
     return {"devices": found, "seconds": secs}
 
 
+def _agent_available():
+    if os.environ.get("GROKBOT_BT_AGENT", "1") == "0":
+        return False
+    try:
+        import gi  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _ask(kind, ko, en, code):
+    from . import consent
+    ans, _ = consent.prompt("grokbotd", "Bluetooth", "bluetooth", "bluetooth.pair", [ko, en],
+                            {"passkey": code} if code else {}, False, allow_session=False, allow_once=True)
+    return ans == "once"
+
+
+def _show(kind, ko, en, code):
+    try:
+        subprocess.run(["notify-send", "-a", "Bluetooth", "-u", "critical", "-t", "60000",
+                        "Bluetooth: %s" % code, "%s\n%s" % (ko, en)], timeout=5, capture_output=True)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
 def bluetooth_pair(params):
+    from . import btagent
     d = _dev_path(params["address"])
+    pin = btagent.check_pin(params.get("pin"))
     if not d["paired"]:
-        _dev_call(d, "Pair")
+        if _agent_available():
+            btagent.pair(d["path"], btagent.Handler(d["path"], d.get("name"), pin, _ask, _show))
+        elif pin:
+            raise BackendError("bluetooth: PIN pairing needs python3-gobject")
+        else:
+            _dev_call(d, "Pair")
     _set_prop(d["path"], "org.bluez.Device1", "Trusted", True)
     if params.get("connect", True):
         _dev_call(d, "Connect")

@@ -51,9 +51,12 @@ class BluetoothTest(unittest.TestCase):
             return ""
         self.p = mock.patch.object(bt, "_run", run)
         self.p.start()
+        self.agent = mock.patch.object(bt, "_agent_available", lambda: False)
+        self.agent.start()
 
     def tearDown(self):
         self.p.stop()
+        self.agent.stop()
 
     def acts(self):
         return [c for c in self.calls if "GetManagedObjects" not in c]
@@ -98,6 +101,21 @@ class BluetoothTest(unittest.TestCase):
         self.assertEqual(a[0][5], MS)
         self.assertEqual(a[1][-3:], ["Trusted", "b", "true"])
         self.assertEqual(a[2][-1], "Connect")
+
+    def test_pair_uses_agent_when_available(self):
+        from grokbotd import btagent
+        seen = {}
+        with mock.patch.object(bt, "_agent_available", lambda: True), \
+                mock.patch.object(btagent, "pair", lambda path, h: seen.update(path=path, pin=h.pin)):
+            bt.bluetooth_pair({"address": "aa:bb:cc:dd:ee:02", "pin": "0000", "connect": False})
+        self.assertEqual(seen, {"path": MS, "pin": "0000"})
+        self.assertFalse(any(c[-1] == "Pair" for c in self.acts()))
+
+    def test_pin_without_agent_refused(self):
+        with self.assertRaises(BackendError):
+            bt.bluetooth_pair({"address": "aa:bb:cc:dd:ee:02", "pin": "0000"})
+        with self.assertRaises(BackendError):
+            bt.bluetooth_pair({"address": "aa:bb:cc:dd:ee:02", "pin": "00 00; rm"})
 
     def test_paired_device_not_repaired(self):
         bt.bluetooth_pair({"address": "AA:BB:CC:DD:EE:01", "connect": False})
