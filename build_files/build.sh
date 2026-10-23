@@ -45,6 +45,9 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     NetworkManager-wifi \
     NetworkManager-openvpn \
     bluez \
+    cups \
+    cups-filters \
+    cups-browsed \
     tuned-ppd \
     wpa_supplicant \
     iwlwifi-mvm-firmware \
@@ -109,6 +112,8 @@ systemctl enable podman.socket
 # Bluetooth (bluetooth.* OS API, Settings > Bluetooth). bluetoothd is
 # D-Bus activated only when enabled; adapters stay off until turned on.
 systemctl enable bluetooth.service
+# CUPS starts on demand (socket); cups-browsed adds driverless network printers.
+systemctl enable cups.socket cups-browsed.service
 
 # fcitx5 ships launchers for its Qt settings tool and a keyboard layout
 # viewer. They would show up in the dock and launcher; hide them. Korean

@@ -61,6 +61,7 @@ SCOPES = {
     "storage": ("USB와 외장 저장장치", "USB and removable storage"),
     "power": ("전원(절전, 다시 시작, 끄기)", "Power (suspend, restart, shut down)"),
     "power-mode": ("전원 모드(절전, 균형, 성능)", "Power mode (saver, balanced, performance)"),
+    "printing": ("프린터와 인쇄", "Printers and printing"),
     "input": ("키보드와 한글 입력", "Keyboard and input method"),
     "notifications": ("알림과 방해 금지", "Notifications and Do Not Disturb"),
     "lock": ("화면 잠금과 대기", "Screen lock and idle"),

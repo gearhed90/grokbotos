@@ -68,6 +68,16 @@ class StatusTests(unittest.TestCase):
         self.assertIn("PHOTOS", i["tooltip"])
         res = {"storage.list": {"available": True, "volumes": [{"id": "sdb1", "name": "X", "mounted": False}]}}
         self.assertEqual([x["id"] for x in st.items(fake(res))], ["storage", "clock"])
+    def test_printing_item(self):
+        self.assertIsNone(st._printing(None))
+        self.assertIsNone(st._printing({"available": False, "printers": [], "jobs": []}))
+        i = st._printing({"printers": [{"name": "Office", "state": "idle"}], "jobs": [{"id": "Office-3", "printer": "Office"}]})
+        self.assertEqual((i["id"], i["text"]), ("printing", "인쇄 1"))
+        self.assertNotIn("alert", i)
+        i = st._printing({"printers": [{"name": "Office", "state": "stopped"}], "jobs": [{"id": "Office-3", "printer": "Office"}]})
+        self.assertTrue(i["alert"])
+        self.assertIn("Office", i["tooltip"])
+
     def test_power_mode_item(self):
         self.assertIsNone(st._power_mode({"available": True, "active": "balanced"}))
         self.assertIsNone(st._power_mode({"available": False}))
