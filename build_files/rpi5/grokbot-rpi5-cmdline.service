@@ -1,0 +1,12 @@
+[Unit]
+Description=Point the Raspberry Pi 5 boot cmdline at the default bootc deployment
+After=local-fs.target
+ConditionPathIsDirectory=/boot/loader/entries
+
+[Service]
+Type=oneshot
+ExecStart=-/usr/lib/grokbot/rpi5-sync-cmdline.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -452,6 +452,84 @@ spawn-vm rebuild="0" type="qcow2" ram="6G":
       --vsock=false --pass-ssh-key=false \
       -i ./output/**/*.{{ type }}
 
+# Raspberry Pi 5 container (arm64). Not the UEFI grokbotos-arm64 image.
+[group('Raspberry Pi 5')]
+build-rpi5 $target_image="localhost/grokbotos-rpi5" $tag=default_tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # An x86_64 host needs qemu-user-static so these arm64 RUN steps execute.
+    BUILD_ARGS=()
+    add_arg() {
+        local name="$1"
+        local value="${2:-}"
+        if [[ -n "$value" ]]; then
+            BUILD_ARGS+=("--build-arg" "${name}=${value}")
+        fi
+    }
+    add_arg GROKBOT_APP_SOURCE "${GROKBOT_APP_SOURCE:-}"
+    add_arg GROKBOT_APP_SHA256 "${GROKBOT_APP_SHA256:-}"
+    add_arg GROKBOT_APP_KIND "${GROKBOT_APP_KIND:-}"
+    add_arg GROKBOT_APP_EXEC "${GROKBOT_APP_EXEC:-}"
+    add_arg GROKBOT_FLATPAK_ID "${GROKBOT_FLATPAK_ID:-}"
+    add_arg GROKBOT_WEB_URL "${GROKBOT_WEB_URL:-}"
+    add_arg GROKBOT_TARGET_ARCH "${GROKBOT_TARGET_ARCH:-}"
+    add_arg GROKBOT_DISABLE_BUNDLED_APP "${GROKBOT_DISABLE_BUNDLED_APP:-}"
+
+    podman build \
+        --arch arm64 \
+        --pull=newer \
+        "${BUILD_ARGS[@]}" \
+        --tag "${target_image}:${tag}" \
+        --file Containerfile.rpi5 \
+        .
+
+# Raw ext4 disk for a Pi 5 SD card or NVMe. Not the desktop btrfs image.
+[group('Raspberry Pi 5')]
+build-rpi5-raw $target_image="localhost/grokbotos-rpi5" $tag=default_tag: (build-rpi5 target_image tag) (_rootful_load_image target_image tag)
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    args=(
+        --type raw
+        --use-librepo=True
+        --rootfs ext4
+        --target-arch arm64
+        --local
+    )
+    BUILDTMP=$(mktemp -p "${PWD}" -d -t _build-rpi5.XXXXXXXXXX)
+    sudo podman run \
+        --rm \
+        --privileged \
+        --pull=newer \
+        --net=host \
+        --security-opt label=type:unconfined_t \
+        -v "${PWD}/disk_config/rpi5.toml:/config.toml:ro" \
+        -v "${BUILDTMP}:/output" \
+        -v /var/lib/containers/storage:/var/lib/containers/storage \
+        "${bib_image}" \
+        "${args[@]}" \
+        "${target_image}:${tag}"
+
+    mkdir -p output
+    sudo mv -f "${BUILDTMP}"/* output/
+    sudo rmdir "${BUILDTMP}"
+    owner="${USER:-$(id -un)}"
+    sudo chown -R "${owner}:${owner}" output
+
+    image=""
+    if [[ -f output/raw/disk.raw ]]; then
+        image=output/raw/disk.raw
+    else
+        image=$(find output -type f -name 'disk.raw' -print -quit)
+    fi
+    if [[ -z "${image}" ]]; then
+        echo "bootc-image-builder did not write a raw disk under output/" >&2
+        find output -maxdepth 3 -type f >&2 || true
+        exit 1
+    fi
+    sudo bash build_files/rpi5-finalize-disk.sh "${image}"
+    echo "Pi 5 raw image: ${image}"
+
 # Runs shell check on all Bash scripts
 lint:
     #!/usr/bin/env bash

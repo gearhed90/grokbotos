@@ -1,0 +1,17 @@
+# Grok Bot OS on Raspberry Pi 5. The EEPROM bootloader reads this from the
+# root of the FAT boot partition. It does not understand a Linux path such
+# as /efi/kernel8.img (that name is what Fedora's kernel-rpi4 package
+# publishes for a Pi 4). Pi 5 loads kernel_2712.img, the 16K-page kernel.
+arm_64bit=1
+kernel=kernel_2712.img
+os_check=0
+arm_boost=1
+enable_uart=1
+uart_2ndstage=1
+dtparam=audio=on
+max_framebuffers=2
+# vc4 display. vc4-kms-v3d-pi5.dtbo is shipped in overlays/ as well.
+# Wi-Fi (brcmfmac) comes from bcm2712-rpi-5-b.dtb plus the firmware files.
+# There is no overlay to turn Wi-Fi on. disable-wifi.dtbo only turns it off.
+dtoverlay=vc4-kms-v3d
+initramfs initramfs_2712 followkernel

@@ -1,0 +1,35 @@
+# Raspberry Pi 5 image. Same Grok Bot OS userspace as Containerfile, then
+# the downstream Pi kernel and firmware. Do not use this file for the
+# generic UEFI arm64 image (UTM / Apple Silicon).
+FROM scratch AS ctx
+COPY build_files /
+COPY system_files /system_files
+COPY grokbot-app /grokbot-app
+
+FROM quay.io/fedora/fedora-bootc:latest@sha256:03808453feb5369ed6b074421117b56734f3a6dff8e25d9e0ddff0e48e4d6d2e
+
+ARG GROKBOT_APP_SOURCE=
+ARG GROKBOT_APP_SHA256=
+ARG GROKBOT_APP_KIND=auto
+ARG GROKBOT_APP_EXEC=
+ARG GROKBOT_FLATPAK_ID=
+ARG GROKBOT_WEB_URL=
+ARG GROKBOT_TARGET_ARCH
+ARG GROKBOT_DISABLE_BUNDLED_APP
+ARG TARGETARCH
+
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build.sh
+
+# Swap the Fedora kernel for kernel-rpi5 and stage the FAT boot files.
+# See build_files/rpi5-prepare.sh and PI5-STATUS.md.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/rpi5-prepare.sh
+
+RUN bootc container lint

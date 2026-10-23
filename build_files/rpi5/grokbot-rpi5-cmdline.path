@@ -1,0 +1,10 @@
+[Unit]
+Description=Update the Pi 5 cmdline when bootc changes the boot entry
+After=local-fs.target
+
+[Path]
+PathChanged=/boot/loader/entries
+Unit=grokbot-rpi5-cmdline.service
+
+[Install]
+WantedBy=multi-user.target

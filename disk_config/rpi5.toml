@@ -1,0 +1,6 @@
+# Floor for the root filesystem. The Pi boot partition is filled later by
+# build_files/rpi5-finalize-disk.sh. ext4 matches the disks that the Pi
+# firmware images actually boot; the desktop grokbotos disk stays btrfs.
+[[customizations.filesystem]]
+mountpoint = "/"
+minsize = "16 GiB"
