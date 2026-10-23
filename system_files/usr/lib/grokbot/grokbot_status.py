@@ -8,6 +8,7 @@ No GTK here, so it can be unit-tested.
 import json
 import os
 import socket
+import threading
 import time
 
 EDGES = ("top", "bottom", "left", "right")
@@ -286,3 +287,52 @@ def items(call=rpc, now=None):
         _mic(audio), _volume(audio), _brightness(call("display.brightness")), _nightlight(call("display.nightlight.status")), _power_mode(call("power.profile.status")), _battery(call("power.status")),
         _update(call("update.status")), clock(now)]
     return [i for i in out if i]
+
+
+class Poller:
+    """Fetch status items off the GTK main loop.
+
+    items() makes a dozen OS API calls (printers.list may take 4 s); run in
+    the GTK main loop it blocked drawing and input, so the Dock (and its
+    clock) stopped updating. request() starts at most one worker thread;
+    a request made while one runs is coalesced into one more run. deliver
+    is called from the worker and must hand the result to the main loop
+    (GLib.idle_add). A failing fetch delivers None and never stops polling.
+    """
+
+    def __init__(self, fetch, deliver, start=None):
+        self.fetch, self.deliver = fetch, deliver
+        self._start = start or (lambda fn: threading.Thread(target=fn, daemon=True).start())
+        self._lock = threading.Lock()
+        self.busy = self.pending = False
+
+    def request(self):
+        with self._lock:
+            if self.busy:
+                self.pending = True
+                return False
+            self.busy = True
+        self._start(self._run)
+        return True
+
+    def _run(self):
+        while True:
+            try:
+                res = self.fetch()
+            except Exception:  # noqa: BLE001 - keep the Dock alive
+                res = None
+            try:
+                self.deliver(res)
+            except Exception:  # noqa: BLE001
+                pass
+            with self._lock:
+                if not self.pending:
+                    self.busy = False
+                    return
+                self.pending = False
+
+
+def with_clock(items, now=None):
+    """Last fetched items with a fresh clock (the clock never waits for RPCs)."""
+    out = [i for i in (items or []) if i.get("id") != "clock"]
+    return out + [clock(now)]

@@ -59,6 +59,39 @@ class StatusTests(unittest.TestCase):
         st.brightness_step(False, call=call)
         self.assertEqual(calls[-1], ("display.set_brightness", {"percent": 1}))
 
+    def test_poller_coalesces_and_survives_errors(self):
+        runs, got, started = [], [], []
+        calls = iter([RuntimeError("boom"), ["a"], ["b"]])
+
+        def fetch():
+            v = next(calls)
+            runs.append(v)
+            if isinstance(v, Exception):
+                raise v
+            return v
+        p = st.Poller(fetch, got.append, start=started.append)
+        self.assertTrue(p.request())
+        self.assertFalse(p.request())  # in flight: coalesced, no second thread
+        self.assertEqual(len(started), 1)
+        started[0]()                   # first run fails, pending run follows
+        self.assertEqual(got, [None, ["a"]])
+        self.assertFalse(p.busy)
+        self.assertTrue(p.request())   # still armed after an error
+        started[1]()
+        self.assertEqual(got[-1], ["b"])
+
+    def test_with_clock_replaces_stale_clock(self):
+        old = [{"id": "printing"}, st.clock(0)]
+        out = st.with_clock(old, now=3600 * 5)
+        self.assertEqual([i["id"] for i in out], ["printing", "clock"])
+        self.assertEqual(out[-1], st.clock(3600 * 5))
+        self.assertEqual([i["id"] for i in st.with_clock(None)], ["clock"])
+
+    def test_dock_never_calls_items_on_main_loop(self):
+        src = open(os.path.join(os.path.dirname(st.__file__), "grokbot-dock.py")).read()
+        self.assertNotIn("grokbot_status.items()", src)
+        self.assertNotIn("grokbot_status.brightness_step(up)", src)
+
     def test_bluetooth_item(self):
         self.assertIsNone(st._bluetooth(None))
         self.assertIsNone(st._bluetooth({"available": False, "service": True}))
