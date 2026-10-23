@@ -14,7 +14,7 @@ COPY grokbot-app /grokbot-app
 # quay.io/fedora/fedora-bootc:latest pointed to on 2026-10-22. To update,
 # resolve the tag again and replace the digest in one reviewed commit:
 #   skopeo inspect --raw docker://quay.io/fedora/fedora-bootc:latest | sha256sum
-FROM quay.io/fedora/fedora-bootc:latest@sha256:dc1055df531e11ea6753af22414cb7ff217023e93d68cca3f92198df6214f9ee
+FROM quay.io/fedora/fedora-bootc:latest@sha256:03808453feb5369ed6b074421117b56734f3a6dff8e25d9e0ddff0e48e4d6d2e
 
 # Grok Bot Linux app. Empty SOURCE selects the pinned RPM for TARGETARCH
 # (amd64 and arm64). GROKBOT_DISABLE_BUNDLED_APP=1 keeps the placeholder.
