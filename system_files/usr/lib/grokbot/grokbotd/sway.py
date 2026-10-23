@@ -1,4 +1,4 @@
-"""Minimal sway (i3) IPC client. RUN_COMMAND is used only by displays.py for
+"""Minimal sway (i3) IPC client. RUN_COMMAND is used only by displays.py and keyboard.py for
 `output ...` commands it builds from validated parameters."""
 import glob
 import json
@@ -13,6 +13,7 @@ RUN_COMMAND = 0
 GET_WORKSPACES = 1
 GET_OUTPUTS = 3
 GET_TREE = 4
+GET_INPUTS = 100
 
 
 class SwayUnavailable(RuntimeError):

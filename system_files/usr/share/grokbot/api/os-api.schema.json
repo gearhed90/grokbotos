@@ -1961,6 +1961,56 @@
       "result": {
         "type": "object"
       }
+    },
+    "keyboard.layout.status": {
+      "description": "Keyboard layout: the chosen layout id, what sway reports as active, whether Korean input (fcitx5 hangul) is configured, and the layouts that can be chosen.",
+      "capability": "input.read",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "layout",
+          "available",
+          "korean_input"
+        ]
+      },
+      "scope": "input",
+      "access": "read",
+      "x-title": [
+        "키보드 배열 보기",
+        "See the keyboard layout"
+      ]
+    },
+    "keyboard.layout.set": {
+      "description": "Choose the keyboard layout (one of keyboard.layout.status available). Applies now in sway, is saved (~/.config/grokbot/keyboard.conf) and is set as the fcitx5 keyboard layout with Korean (hangul) kept, so 한/영 keeps working.",
+      "capability": "input.write",
+      "scope": "input",
+      "access": "write",
+      "x-title": [
+        "키보드 배열 바꾸기",
+        "Change the keyboard layout"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "layout": {
+            "type": "string",
+            "pattern": "^[a-z]{2}(-[a-z0-9]{2,12})?$",
+            "description": "Layout id, e.g. us, kr, us-dvorak, de"
+          }
+        },
+        "required": [
+          "layout"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
     }
   },
   "x-scopes": {

@@ -61,4 +61,5 @@ export SDL_IM_MODULE=fcitx
 # reports a config error.
 mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/grokbot"
 [ -e "${XDG_CONFIG_HOME:-$HOME/.config}/grokbot/outputs.conf" ] || : >"${XDG_CONFIG_HOME:-$HOME/.config}/grokbot/outputs.conf"
+[ -e "${XDG_CONFIG_HOME:-$HOME/.config}/grokbot/keyboard.conf" ] || : >"${XDG_CONFIG_HOME:-$HOME/.config}/grokbot/keyboard.conf"
 exec sway

@@ -101,6 +101,10 @@ bindsym Mod1+Shift+Tab exec /usr/lib/grokbot/grokbot-alttab.py prev
 bindsym Mod1+F4 kill
 bindsym Mod4+q kill
 
+# Keyboard layout chosen in Settings > Keyboard (grokbotd keyboard.layout.set);
+# grokbot-session creates it empty.
+include ~/.config/grokbot/keyboard.conf
+
 # Per-output scale / position / mode saved by Settings > Display (grokbotd
 # display.set). Last, so a problem in it cannot skip anything above;
 # grokbot-session creates it empty.
