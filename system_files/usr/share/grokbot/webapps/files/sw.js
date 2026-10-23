@@ -1,5 +1,5 @@
 // App shell cache so the app opens without grokbotd; OS API calls are never cached.
-const CACHE = "files-v3";
+const CACHE = "files-v4";
 const SHELL = ["./", "index.html", "app.js", "style.css", "icon.svg", "manifest.json", "files.css"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => {
