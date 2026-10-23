@@ -3,6 +3,7 @@ import os
 import stat
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -35,6 +36,7 @@ class PrintingTest(unittest.TestCase):
             self._tool(t, '#!/bin/sh\necho "%s $*" >> %s\n[ %s = lp ] && echo "request id is Office-13 (1 file(s))"\nexit 0\n' % (t, self.log, t))
         with open(os.path.join(self.home, "doc.pdf"), "w") as fh:
             fh.write("%PDF")
+        printing._disc.update(names=[], at=0.0, running=False)
         p = mock.patch.dict(os.environ, {"PATH": self.bin + ":/usr/bin:/bin", "HOME": self.home})
         p.start()
         self.addCleanup(p.stop)
@@ -52,6 +54,7 @@ class PrintingTest(unittest.TestCase):
             return fh.read().splitlines()
 
     def test_list(self):
+        printing._discovered(wait=True)
         r = M["printers.list"]({})
         self.assertTrue(r["available"])
         by = {p["name"]: p for p in r["printers"]}
@@ -61,6 +64,17 @@ class PrintingTest(unittest.TestCase):
         self.assertFalse(by["Old"]["driverless"])
         self.assertTrue(by["Hall_Printer"]["driverless"])
         self.assertEqual(r["jobs"][0]["id"], "Office-12")
+
+    def test_list_does_not_wait_for_discovery(self):
+        # first call: queues only, browse started in the background
+        r = M["printers.list"]({})
+        self.assertEqual({p["name"] for p in r["printers"]}, {"Office", "Old"})
+        for _ in range(100):
+            if not printing._disc["running"]:
+                break
+            time.sleep(0.02)
+        r = M["printers.list"]({})
+        self.assertIn("Hall_Printer", {p["name"] for p in r["printers"]})
 
     def test_no_cups(self):
         with mock.patch.dict(os.environ, {"PATH": os.path.join(self.tmp, "none")}):

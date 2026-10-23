@@ -11,6 +11,8 @@ import os
 import re
 import shutil
 import subprocess
+import threading
+import time
 
 from . import files
 from .backends import BackendError
@@ -62,9 +64,40 @@ def _default():
     return m.group(1) if m else None
 
 
-def _discovered():
-    out = _run(["lpstat", "-e"], ok_empty=True)
-    return [x.strip() for x in out.splitlines() if NAME_RE.match(x.strip())]
+# `lpstat -e` browses the network (DNS-SD) for driverless printers and can
+# take seconds. It is refreshed in the background at most every
+# DISCOVERY_TTL seconds, so printers.list (polled by the Dock) stays fast;
+# a printer that just appeared shows up on the next call.
+DISCOVERY_TTL = 30
+_disc = {"names": [], "at": 0.0, "running": False}
+_disc_lock = threading.Lock()
+
+
+def _browse():
+    try:
+        out = _run(["lpstat", "-e"], timeout=20, ok_empty=True)
+        names = [x.strip() for x in out.splitlines() if NAME_RE.match(x.strip())]
+    except BackendError:
+        names = None
+    with _disc_lock:
+        if names is not None:
+            _disc["names"] = names
+        _disc["at"] = time.monotonic()
+        _disc["running"] = False
+
+
+def _discovered(wait=False):
+    with _disc_lock:
+        stale = time.monotonic() - _disc["at"] > DISCOVERY_TTL
+        start = stale and not _disc["running"]
+        if start:
+            _disc["running"] = True
+    if start:
+        if wait:
+            _browse()
+        else:
+            threading.Thread(target=_browse, daemon=True).start()
+    return list(_disc["names"])
 
 
 def _jobs():
@@ -99,7 +132,7 @@ def printers_list(params):
 def _printer(name):
     if not isinstance(name, str) or not NAME_RE.match(name):
         raise BackendError("bad printer name")
-    if name not in _queues() and name not in _discovered():
+    if name not in _queues() and name not in _discovered(wait=True):
         raise BackendError("no such printer")
     return name
 
