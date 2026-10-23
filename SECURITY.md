@@ -32,7 +32,7 @@ This section states the grokbotd permission model in one place so external revie
 |---|---|
 | 웹 페이지 → API / web page → API | Origin별 scope 모드, Host 검사(DNS rebinding), `application/json` 필수(CSRF 단순 요청 차단), CORS는 권한 있는 origin에만 / per-origin scope modes, Host check, JSON-only, CORS only for granted origins |
 | 다른 로컬 사용자 → API / other local user → API | unix 소켓 `SO_PEERCRED`, HTTP는 `/proc/net/tcp`로 TCP 상대 uid 확인. 다른 uid는 403 / peer uid checks on both transports |
-| API → 시스템 / API → system | grokbotd는 사용자 서비스(root 아님, `NoNewPrivileges`). 전원은 `systemctl` → logind/polkit / user service, power via logind/polkit |
+| API → 시스템 / API → system | grokbotd는 사용자 서비스(root 아님, `NoNewPrivileges`). 전원은 `systemctl` → logind/polkit, 유선·VPN 설정은 NetworkManager/polkit(활성 로컬 세션만) / user service, power via logind/polkit, wired/VPN settings via NetworkManager/polkit (active local session only) |
 | 사용자 동의 / user consent | 동의 창은 grokbotd가 직접 띄우는 별도 프로세스이고, 요청 내용은 stdin JSON으로만 전달. 호출자는 창 내용을 고를 수 없고, 스스로 밝힌 이름은 "스스로 밝힌 이름"으로 표시 / the prompt is spawned by grokbotd; a client's self-reported name is labelled as such |
 
 ### 알려진 한계 / Known limitations (검토 요청 / please review)

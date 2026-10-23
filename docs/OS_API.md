@@ -80,6 +80,8 @@ prompt. See "Permission model" below and the threat model in
 | `power.profile.set` | `power-mode` write | `power-mode.write` | Switch to `profile` (must be offered). Separate from `power` so it does not prompt every time; local default `allow` |
 | `audit.list` | `audit` read | `audit.read` | Recent audit log entries, newest last. Filters: principal, decision, method. |
 
+Wired and VPN profiles are system NetworkManager connections. `/usr/share/polkit-1/rules.d/50-grokbot-network.rules` lets the active local session user change them (`settings.modify.system`; hostname and global DNS stay admin-only); grokbotd asks before each change.
+
 **Files scope rules.** Paths are relative to the home folder (`/Documents/a.txt`, `~/Documents/a.txt` and `Documents/a.txt` are the same). Refused: `..`, any path that resolves outside `~` (symlinks included), and every hidden component (`.config`, `.local`, `.ssh`, ...), so a `files` grant can never read or rewrite grants, keys or other apps' data. Seeing (`files`) and changing (`files-write`) are separate scopes with separate grants.
 
 Errors are JSON-RPC errors:
