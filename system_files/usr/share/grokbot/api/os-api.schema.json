@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/head77x/grokbotos/os-api.schema.json",
   "title": "Grok Bot OS API",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Single source of truth for grokbotd. JSON-RPC 2.0 over the unix socket and POST /v1/rpc, the grokbot-os CLI and the MCP tools are all generated from this file. Every method has a scope (an OS function) and an access level (read or write); permissions are granted per caller per scope with mode allow, ask or deny (docs/OS_API.md, SECURITY.md).",
   "x-capabilities": {
     "system.read": "OS name, version, kernel, hostname, uptime, memory, bootc image",
@@ -1108,7 +1108,7 @@
       }
     },
     "files.list": {
-      "description": "List a folder in the home folder (hidden entries are left out and counted).",
+      "description": "List a folder in the home folder (hidden entries are left out and counted). With volume: on that open removable drive instead.",
       "capability": "files.read",
       "params": {
         "type": "object",
@@ -1117,6 +1117,11 @@
             "type": "string",
             "maxLength": 4096,
             "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          },
+          "volume": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
         "required": [],
@@ -1133,7 +1138,7 @@
       ]
     },
     "files.stat": {
-      "description": "Type, size, mtime and MIME type of one file or folder.",
+      "description": "Type, size, mtime and MIME type of one file or folder. With volume: on that open removable drive instead.",
       "capability": "files.read",
       "params": {
         "type": "object",
@@ -1142,6 +1147,11 @@
             "type": "string",
             "maxLength": 4096,
             "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          },
+          "volume": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
         "required": [
@@ -1160,7 +1170,7 @@
       ]
     },
     "files.read": {
-      "description": "Read a file (max 16 MB) as UTF-8 text or base64.",
+      "description": "Read a file (max 16 MB) as UTF-8 text or base64. With volume: on that open removable drive instead.",
       "capability": "files.read",
       "params": {
         "type": "object",
@@ -1175,6 +1185,11 @@
               "utf-8",
               "base64"
             ]
+          },
+          "volume": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
         "required": [
@@ -1193,7 +1208,7 @@
       ]
     },
     "files.write": {
-      "description": "Create or (with overwrite) replace a file, atomically. Max 16 MB.",
+      "description": "Create or (with overwrite) replace a file, atomically. Max 16 MB. With volume: on that open removable drive instead.",
       "capability": "files.write",
       "params": {
         "type": "object",
@@ -1215,6 +1230,11 @@
           },
           "overwrite": {
             "type": "boolean"
+          },
+          "volume": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
         "required": [
@@ -1234,7 +1254,7 @@
       ]
     },
     "files.mkdir": {
-      "description": "Create a folder.",
+      "description": "Create a folder. With volume: on that open removable drive instead.",
       "capability": "files.write",
       "params": {
         "type": "object",
@@ -1243,6 +1263,11 @@
             "type": "string",
             "maxLength": 4096,
             "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          },
+          "volume": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
         "required": [
@@ -1261,7 +1286,7 @@
       ]
     },
     "files.move": {
-      "description": "Rename or move a file or folder inside the home folder.",
+      "description": "Rename or move a file or folder inside the home folder. With volume: on that open removable drive instead.",
       "capability": "files.write",
       "params": {
         "type": "object",
@@ -1275,6 +1300,11 @@
             "type": "string",
             "maxLength": 4096,
             "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          },
+          "volume": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
         "required": [
@@ -1294,7 +1324,7 @@
       ]
     },
     "files.trash": {
-      "description": "Move a file or folder to the trash (~/.local/share/Trash).",
+      "description": "Move a file or folder to the trash (~/.local/share/Trash). With volume: on that open removable drive instead.",
       "capability": "files.write",
       "params": {
         "type": "object",
@@ -1303,6 +1333,11 @@
             "type": "string",
             "maxLength": 4096,
             "description": "Path inside the home folder, e.g. /Documents/a.txt (\"/\" is ~). Hidden names are refused."
+          },
+          "volume": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
         "required": [

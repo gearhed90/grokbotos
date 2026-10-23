@@ -12,7 +12,8 @@
       denied: "거부되었습니다. 설정 > 권한에서 바꿀 수 있습니다.", asking: "확인 창에서 선택해 주세요…",
       ro: "보기만", rw: "보기 · 바꾸기", rwask: "보기 · 바꿀 때마다 확인", newname: "새 이름", foldername: "새 폴더 이름",
       filename: "새 파일 이름", confirmtrash: "\"%s\"을(를) 휴지통으로 옮길까요?", trashed: "휴지통으로 옮겼습니다", saved: "저장했습니다",
-      big: "파일이 너무 커서 여기서 열 수 없습니다", binary: "미리 볼 수 없는 파일입니다 (%s)", offline: "grokbotd에 연결할 수 없습니다", dir: "폴더" },
+      big: "파일이 너무 커서 여기서 열 수 없습니다", binary: "미리 볼 수 없는 파일입니다 (%s)", offline: "grokbotd에 연결할 수 없습니다", dir: "폴더",
+      drives: "USB 드라이브", eject: "꺼내기", ejected: "꺼냈습니다. 이제 뽑아도 됩니다", opening: "드라이브를 여는 중…" },
     en: { title: "Files", home: "Home", up: "Up", mkdir: "New folder", newfile: "New text file", filter: "Find in this folder",
       name: "Name", size: "Size", modified: "Modified", open: "Open", rename: "Rename", trash: "Trash", save: "Save", close: "Close",
       lang: "한국어", empty: "This folder is empty", hidden: "%s hidden items are not shown", items: "%s items",
@@ -21,7 +22,8 @@
       denied: "Denied. You can change it in Settings > Permissions.", asking: "Answer the prompt…",
       ro: "View only", rw: "View · change", rwask: "View · confirm each change", newname: "New name", foldername: "Folder name",
       filename: "File name", confirmtrash: "Move \"%s\" to the trash?", trashed: "Moved to the trash", saved: "Saved",
-      big: "Too large to open here", binary: "No preview for this file (%s)", offline: "Cannot reach grokbotd", dir: "Folder" }
+      big: "Too large to open here", binary: "No preview for this file (%s)", offline: "Cannot reach grokbotd", dir: "Folder",
+      drives: "USB drives", eject: "Eject", ejected: "Ejected. Safe to remove", opening: "Opening the drive…" }
   };
   let lang = localStorage.getItem("files.lang") || "ko";
   const t = (k, ...a) => { let s = (T[lang] || T.ko)[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
@@ -37,11 +39,13 @@
   const fmtB = (b) => { const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0; while (b >= 1024 && i < 4) { b /= 1024; i++; } return b.toFixed(i ? 1 : 0) + " " + u[i]; };
   const when = (s) => new Date(s * 1000).toLocaleString(lang === "ko" ? "ko-KR" : "en-US", { dateStyle: "medium", timeStyle: "short" });
 
-  let rid = 0;
+  let rid = 0, vol = null, drives = [];
+  // files.* calls go to the open USB drive when one is selected (volume = storage.list id).
+  const withVol = (m, p) => (vol && m.startsWith("files.")) ? Object.assign({}, p, { volume: vol.id }) : p;
   class ApiError extends Error { constructor(e) { super(e.message); this.code = e.code; } }
   async function rpc(method, params) {
     const r = await fetch("/v1/rpc", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: ++rid, method, params: params || {}, "x-client": "Files" }) });
+      body: JSON.stringify({ jsonrpc: "2.0", id: ++rid, method, params: withVol(method, params || {}), "x-client": "Files" }) });
     const b = await r.json();
     if (b.error) throw new ApiError(b.error);
     return b.result;
@@ -72,7 +76,15 @@
   function crumbs() {
     const nav = $("crumbs"); nav.replaceChildren();
     const parts = cwd.split("/").filter(Boolean);
-    nav.append(h("button", { type: "button", onclick: () => go("/") }, "🏠 " + t("home")));
+    nav.append(h("button", { type: "button", class: vol ? "" : "on", onclick: () => setVol(null) }, "🏠 " + t("home")));
+    for (const d of drives) {
+      nav.append(h("button", { type: "button", class: "drive" + (vol && vol.id === d.id ? " on" : ""), title: d.device || d.id,
+        onclick: () => openDrive(d) }, "💾 " + (d.label || d.id)));
+      if (d.mounted) nav.append(h("button", { type: "button", class: "eject", title: t("eject"), onclick: () => eject(d) }, "⏏"));
+    }
+    if (modes && modes["storage.list"] !== "allow")
+      nav.append(h("button", { type: "button", class: "drive", onclick: (ev) => askDrives(ev.target) }, "💾 " + t("drives")));
+    nav.append(h("span", { class: "sep" }, "|"));
     parts.forEach((p, i) => {
       nav.append(h("span", { class: "sep" }, "›"));
       nav.append(h("button", { type: "button", onclick: () => go("/" + parts.slice(0, i + 1).join("/")) }, p));
@@ -128,12 +140,40 @@
     main.append(h("p", { class: "dim" }, t("items", listing.entries.length) + (listing.hidden ? " · " + t("hidden", listing.hidden) : "")));
   }
 
+  async function loadDrives() {
+    drives = [];
+    if (!modes || modes["storage.list"] !== "allow") return;
+    try { drives = (await rpc("storage.list")).volumes || []; } catch (e) { drives = []; }
+    if (vol && !drives.some((d) => d.id === vol.id && d.mounted)) vol = null;
+  }
+  async function askDrives(btn) {
+    btn.disabled = true;
+    try { const r = await rpc("permissions.request", { scope: "storage", reason: lang === "ko" ? "파일 앱에서 USB 드라이브 열기" : "Files app: open USB drives" });
+      await loadModes(); if (r.mode === "deny") toast(t("denied")); await loadDrives(); render();
+    } catch (e) { toast(e.message); btn.disabled = false; }
+  }
+  async function openDrive(d) {
+    try {
+      if (!d.mounted) { toast(t("opening")); await rpc("storage.mount", { id: d.id }); await loadDrives(); d = drives.find((x) => x.id === d.id) || d; }
+      vol = { id: d.id, label: d.label || d.id }; closeView(); go("/");
+    } catch (e) { toast(e.message); }
+  }
+  async function eject(d) {
+    try {
+      if (vol && vol.id === d.id) { vol = null; closeView(); }
+      await rpc("storage.unmount", { id: d.id, eject: true }); toast(t("ejected"));
+    } catch (e) { toast(e.message); }
+    await loadDrives(); go(vol ? cwd : (localStorage.getItem("files.cwd") || "/"));
+  }
+  function setVol(v) { vol = v; closeView(); go(v ? "/" : (localStorage.getItem("files.cwd") || "/")); }
+
   async function go(path) {
     if (!canRead()) return render();
     try {
       listing = await rpc("files.list", { path });
-      cwd = listing.path; localStorage.setItem("files.cwd", cwd); sel = null;
+      cwd = listing.path; if (!vol) localStorage.setItem("files.cwd", cwd); sel = null;
     } catch (e) {
+      if (vol && e.message && /drive|volume/i.test(e.message)) { vol = null; await loadDrives(); return go("/"); }
       if (path !== "/") return go("/");
       toast(e.message); listing = null;
     }
@@ -197,6 +237,6 @@
 
   (async () => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
-    await loadModes(); render(); go(cwd);
+    await loadModes(); await loadDrives(); render(); go(cwd);
   })();
 })();
