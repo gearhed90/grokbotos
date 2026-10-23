@@ -208,10 +208,13 @@
     for (const v of s.volumes) {
       const go = (m, p, msg) => act(() => rpc(m, Object.assign({ id: v.id }, p || {})), msg).then(render, render);
       c.append(row(h("span", { class: "grow" }, v.name, h("div", { class: "dim" },
-        [v.drive, v.fs, fmtSize(v.size), v.read_only ? t("storage_ro") : null,
-         v.mounted ? t("storage_opened", v.mount_points[0] || "") : t("storage_closed")].filter(Boolean).join(" · "))),
-        v.mounted ? h("button", { type: "button", onclick: () => go("storage.unmount") }, t("storage_close"))
+        [v.drive, v.locked ? t("storage_encrypted") : v.fs, fmtSize(v.size), v.read_only ? t("storage_ro") : null,
+         v.encrypted && !v.locked ? t("storage_unlocked") : null,
+         v.locked ? t("storage_locked") : v.mounted ? t("storage_opened", v.mount_points[0] || "") : t("storage_closed")].filter(Boolean).join(" · "))),
+        v.locked ? h("button", { class: "primary", type: "button", onclick: () => go("storage.unlock", { mount: true }) }, t("storage_unlock"))
+          : v.mounted ? h("button", { type: "button", onclick: () => go("storage.unmount") }, t("storage_close"))
                   : h("button", { class: "primary", type: "button", onclick: () => go("storage.mount") }, t("storage_open")),
+        v.encrypted && !v.locked ? h("button", { type: "button", onclick: () => go("storage.lock", null, t("storage_locked_msg")) }, t("storage_lock")) : null,
         h("button", { type: "button", onclick: () => go("storage.unmount", { eject: true }, t("storage_ejected")) }, t("storage_eject"))));
     }
     return [...top, c];

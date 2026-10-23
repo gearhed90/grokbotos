@@ -30,6 +30,7 @@ METHODS.update(keyboard.METHODS)
 METHODS.update(netconn.METHODS)
 METHODS.update(printing.METHODS)
 CTX_METHODS = dict(writes.CTX_METHODS)
+CTX_METHODS.update(storage.CTX_METHODS)
 SPECIAL = {"api.methods", "permissions.request"}
 REQUEST_COOLDOWN_S = 600
 
@@ -128,7 +129,11 @@ class Dispatcher:
                 return _err(rid, PERMISSION_DENIED, "permission denied: %s needs scope %s (%s)"
                             % (method, scope, access), {"capability": cap, "scope": scope,
                                                         "access": access, "mode": mode})
-            if mode == "ask":
+            if mode == "ask" and spec.get("x-secret-prompt"):
+                # The backend shows the secure prompt (who / what + the
+                # secret field); answering it is the consent for this call.
+                base.update(consent="secret_prompt")
+            elif mode == "ask":
                 allow_always = (scope not in perms.ALWAYS_ASK and spec.get("consent") != "always"
                                 and perms.storable(principal))
                 allow_session = scope not in perms.ALWAYS_ASK and spec.get("consent") != "always"

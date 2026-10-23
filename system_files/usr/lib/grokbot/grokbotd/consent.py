@@ -17,6 +17,7 @@ import uuid
 from . import paths, perms
 
 TIMEOUT = 60
+SECRET_TIMEOUT = 120
 SESSION_MAX_S = 3600
 _prompt_lock = threading.Lock()
 _pending_lock = threading.Lock()
@@ -96,6 +97,38 @@ def _prompt(principal, client, scope, method, description, summary, allow_always
     if ans == "once" and not allow_once:
         ans = "deny"
     return ans, "user"
+
+
+def secret_prompt(principal, client, scope, method, description, summary, warning):
+    """The consent prompt with a hidden text field (e.g. a drive passphrase).
+    Returns (answer, detail, secret). answer is "once" or "deny"; secret is
+    only set for "once". The secret comes back on the prompt's stdout pipe
+    (never argv, env or a file) and is not logged by anyone."""
+    ko, en = perms.SCOPES.get(scope, (scope, scope))
+    req = {"principal": principal, "client": client, "scope": scope, "scope_ko": ko, "scope_en": en,
+           "method": method, "description": description, "summary": summary,
+           "allow_always": False, "allow_session": False, "allow_once": True, "secret": True,
+           "warning": warning, "timeout": SECRET_TIMEOUT}
+    with _prompt_lock:
+        try:
+            r = subprocess.run(_cmd(), input=json.dumps(req, ensure_ascii=False), capture_output=True,
+                               text=True, timeout=SECRET_TIMEOUT + 5, env=_env())
+        except subprocess.TimeoutExpired:
+            return "deny", "timeout", None
+        except OSError:
+            return "deny", "no_prompt", None
+    if r.returncode != 0:
+        return "deny", "no_prompt", None
+    try:
+        out = json.loads((r.stdout or "").strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return "deny", "bad_answer", None
+    if not isinstance(out, dict) or out.get("answer") != "once":
+        return "deny", "user", None
+    secret = out.get("secret")
+    if not isinstance(secret, str) or not secret:
+        return "deny", "user", None
+    return "once", "user", secret
 
 
 # ---------------- camera / microphone sessions ----------------
