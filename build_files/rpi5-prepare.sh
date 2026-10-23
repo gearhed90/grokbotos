@@ -108,6 +108,10 @@ grep -qE '^CONFIG_EROFS_FS=(y|m)$' "$cfg" || {
     exit 1
 }
 
+# /root is a symlink to var/roothome in bootc images, and /var is empty at
+# build time. dracut-install aborts on the dangling link, leaving out erofs.ko.
+mkdir -p /var/roothome
+
 install -D -m 0644 /ctx/rpi5/dracut-rpi5.conf /usr/lib/dracut/dracut.conf.d/50-rpi5.conf
 dracut \
     --force \
@@ -145,6 +149,12 @@ rpi5_kernel_magic_ok "${stage}/kernel_2712.img" || {
     exit 1
 }
 cp -a "${moddir}/initramfs.img" "${stage}/initramfs_2712"
+
+# ostree and bootc only look for a file named vmlinuz next to the modules.
+# The rpi5 kernel package ships an uncompressed vmlinux, so give it that name.
+if [[ ! -f "${moddir}/vmlinuz" ]]; then
+    cp -a "$kimg" "${moddir}/vmlinuz"
+fi
 
 shopt -s nullglob
 dtbs=("${moddir}/dtb/broadcom/"bcm2712*.dtb)
@@ -198,7 +208,10 @@ install -D -m 0644 /ctx/rpi5/grokbot-rpi5-cmdline.path \
 systemctl enable grokbot-rpi5-cmdline.service grokbot-rpi5-cmdline.path
 
 if command -v lsinitrd >/dev/null 2>&1; then
-    if ! lsinitrd "${stage}/initramfs_2712" | grep -q 'erofs.ko'; then
+    # Capture the listing first: with pipefail, grep -q exits early and
+    # lsinitrd dies of SIGPIPE, which made this check fail on a good image.
+    initrd_list=$(lsinitrd "${stage}/initramfs_2712")
+    if ! grep -q 'erofs.ko' <<<"$initrd_list"; then
         echo "initramfs is missing erofs.ko; ostree-prepare-root will fail" >&2
         exit 1
     fi

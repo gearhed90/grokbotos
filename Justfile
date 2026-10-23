@@ -477,6 +477,7 @@ build-rpi5 $target_image="localhost/grokbotos-rpi5" $tag=default_tag:
 
     podman build \
         --arch arm64 \
+        --build-arg TARGETARCH=arm64 \
         --pull=newer \
         "${BUILD_ARGS[@]}" \
         --tag "${target_image}:${tag}" \

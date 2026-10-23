@@ -164,9 +164,10 @@ rpi5_install_boot() {
         [[ "$name" == "cmdline.txt" ]] && continue
         if [[ -d "$entry" ]]; then
             mkdir -p "${fat}/${name}"
-            cp -a "${entry}/." "${fat}/${name}/"
+            # FAT has no hard links, owners or modes, so copy plain files.
+            cp -rL "${entry}/." "${fat}/${name}/"
         else
-            cp -a "$entry" "${fat}/${name}"
+            cp -rL "$entry" "${fat}/${name}"
         fi
     done
     [[ "$nullglob_was" -eq 1 ]] || shopt -u nullglob

@@ -102,7 +102,9 @@ rpi5_finalize_image() {
         fi
     done
     payload=$(rpi5_find_one "$work" '*/usr/lib/grokbot/rpi5-boot/kernel_2712.img')
-    bls=$(rpi5_find_one "$work" '*/loader/entries/*.conf')
+    # ostree makes loader a symlink to loader.0 or loader.1, and find
+    # does not follow symlinks, so match the real directory.
+    bls=$(rpi5_find_one "$work" '*/loader*/entries/*.conf')
     if [[ -z "$payload" ]]; then
         echo "disk has no /usr/lib/grokbot/rpi5-boot (not built from Containerfile.rpi5?)" >&2
         return 1
