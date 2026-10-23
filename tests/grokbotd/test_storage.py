@@ -210,7 +210,7 @@ class UnlockDispatchTest(unittest.TestCase):
 
     def call(self):
         return self.disp.handle({"jsonrpc": "2.0", "id": 1, "method": "storage.unlock", "params": {"id": "sdc1"}},
-                                "local:uid=1000:exe=/usr/bin/x", "unix")
+                                "local:uid=%d:exe=/usr/bin/x" % os.getuid(), "unix")
 
     def audit(self):
         with open(os.path.join(self.env.root, "state", "grokbot", "audit.jsonl")) as f:
@@ -225,7 +225,7 @@ class UnlockDispatchTest(unittest.TestCase):
 
     def test_deny_mode(self):
         from grokbotd import perms
-        perms.set_mode("local:uid=1000:exe=/usr/bin/x", "storage", "deny", by="test")
+        perms.set_mode("local:uid=%d:exe=/usr/bin/x" % os.getuid(), "storage", "deny", by="test")
         r = self.call()
         self.assertEqual(r["error"]["code"], self.rpc.PERMISSION_DENIED)
 
