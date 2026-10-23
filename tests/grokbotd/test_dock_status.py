@@ -85,6 +85,18 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(ids, ["network", "clock"])
         self.assertEqual(st.items(fake(res))[0]["icon"], "network-wired-symbolic")
 
+    def test_vpn_item_only_when_up(self):
+        res = {"network.status": {"online": True, "default_route": {"interface": "eth0"},
+                                  "interfaces": [{"name": "eth0", "state": "up", "wireless": False,
+                                                  "addresses": ["10.0.2.15/24"]}]},
+               "network.connections.list": {"vpn_active": ["office"]}}
+        items = st.items(fake(res))
+        self.assertEqual([i["id"] for i in items], ["network", "vpn", "clock"])
+        self.assertEqual(items[0]["page"], "network")
+        self.assertIn("office", items[1]["tooltip"])
+        res["network.connections.list"] = {"vpn_active": []}
+        self.assertEqual([i["id"] for i in st.items(fake(res))], ["network", "clock"])
+
     def test_update_indicator(self):
         none = st.items(fake({"update.status": {"available": False, "restart_needed": False}}), now=0)
         self.assertEqual([i["id"] for i in none], ["clock"])

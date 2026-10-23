@@ -96,6 +96,50 @@
     return [...head("wifi"), status, h("div", { class: "filters" }, rescan), list];
   };
 
+  // Wired and VPN (NetworkManager through network.connections.* / network.vpn.*).
+  // Connection names come from profiles and files: untrusted, text nodes only.
+  pages.network = async () => {
+    const r = await rpc("network.connections.list");
+    const pill = (c) => h("span", { class: "pill " + (c.active ? "allow" : "ask") }, c.active ? t("net_on") : t("net_off"));
+    const upDown = (c) => h("button", { type: "button", class: c.active ? "" : "primary",
+      onclick: () => act(() => rpc(c.active ? "network.connection.down" : "network.connection.up", { uuid: c.uuid }),
+        c.active ? t("net_disconnected") : t("net_connected")).then(render, render) }, c.active ? t("net_disconnect") : t("net_connect"));
+    const wired = card(t("net_wired"));
+    if (!r.wired_devices.length) wired.append(h("p", { class: "dim" }, t("net_no_wired")));
+    for (const dv of r.wired_devices)
+      wired.append(row(h("span", { class: "grow mono" }, dv.device), h("span", { class: "dim" }, dv.cable ? (dv.connection || dv.state) : t("net_no_cable"))));
+    for (const c of r.connections.filter((x) => x.kind === "wired")) {
+      const ip = c.ipv4 || {};
+      const method = h("select", {}, h("option", { value: "auto" }, t("net_auto")), h("option", { value: "manual" }, t("net_manual")));
+      method.value = ip.method === "manual" ? "manual" : "auto";
+      const addr = h("input", { type: "text", placeholder: "192.168.1.20/24", value: (ip.addresses || [])[0] || "" });
+      const gw = h("input", { type: "text", placeholder: t("net_gateway"), value: ip.gateway || "" });
+      const dns = h("input", { type: "text", placeholder: "DNS 1.1.1.1, 8.8.8.8", value: (ip.dns || []).join(", ") });
+      const manual = h("div", { class: method.value === "manual" ? "" : "hidden" }, row(addr), row(gw), row(dns));
+      method.addEventListener("change", () => manual.classList.toggle("hidden", method.value !== "manual"));
+      const save = h("button", { type: "button", onclick: () => {
+        const p = { uuid: c.uuid, ipv4: method.value };
+        if (method.value === "manual") {
+          p.address = addr.value.trim(); if (gw.value.trim()) p.gateway = gw.value.trim();
+          p.dns = dns.value.split(/[ ,]+/).filter(Boolean);
+        }
+        act(() => rpc("network.wired.configure", p), t("saved")).then(render, () => {});
+      } }, t("net_apply"));
+      wired.append(row(h("span", { class: "grow" }, c.name, h("div", { class: "dim" }, (c.device || "-") + " · " + ((ip.current || []).join(", ") || t("net_noaddr")))), pill(c), upDown(c)),
+        row(h("span", { class: "grow" }, t("net_ipv4")), method, save), manual);
+    }
+    const vpn = card(t("net_vpn"));
+    const vpns = r.connections.filter((x) => x.kind === "vpn");
+    if (!vpns.length) vpn.append(h("p", { class: "dim" }, t("net_no_vpn")));
+    for (const c of vpns)
+      vpn.append(row(h("span", { class: "grow" }, c.name, h("div", { class: "dim" }, c.type === "wireguard" ? "WireGuard" : "VPN")), pill(c), upDown(c),
+        h("button", { type: "button", class: "danger", onclick: () => { if (confirm(t("net_delete_q").replace("%s", c.name))) act(() => rpc("network.vpn.delete", { uuid: c.uuid }), t("net_deleted")).then(render, render); } }, t("net_delete"))));
+    const file = h("input", { type: "text", class: "grow", placeholder: "/Downloads/office.conf" });
+    vpn.append(h("p", { class: "dim" }, t("net_import_hint")),
+      row(file, h("button", { type: "button", class: "primary", onclick: () => { if (file.value.trim()) act(() => rpc("network.vpn.import", { path: file.value.trim() }), t("net_imported")).then(render, () => {}); } }, t("net_import"))));
+    return [...head("net"), wired, vpn];
+  };
+
   // Bluetooth: adapter power, paired devices (connect, trust, forget) and a
   // scan for nearby devices to pair. Device names come from radio
   // advertisements: untrusted, always text nodes.

@@ -43,6 +43,7 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     fuzzel \
     foot \
     NetworkManager-wifi \
+    NetworkManager-openvpn \
     bluez \
     tuned-ppd \
     wpa_supplicant \

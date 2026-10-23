@@ -42,6 +42,11 @@ prompt. See "Permission model" below and the threat model in
 | `network.wifi.list` | `network` read | `network.read` | Visible Wi-Fi networks (SSID, signal, security, in use) via NetworkManager. |
 | `network.wifi.connect` | `network` write | `network.write` | Connect to a Wi-Fi network (nmcli). The password is passed to NetworkManager through a 0600 file, never logged or put on a command line. |
 | `network.wifi.disconnect` | `network` write | `network.write` | Disconnect a Wi-Fi device (default: the connected one). |
+| `network.connections.list` | `network` read | `network.read` | Wired and VPN (WireGuard/OpenVPN) NetworkManager connections, wired IPv4 settings, ethernet devices, active VPNs. No secrets |
+| `network.connection.up` / `.down` | `network` write | `network.write` | Connect / disconnect a wired or VPN connection by `uuid` (Wi-Fi profiles are refused here) |
+| `network.wired.configure` | `network` write | `network.write` | IPv4 `auto` (DHCP) or `manual` with `address` (a.b.c.d/nn), `gateway` (same network) and `dns` |
+| `network.vpn.import` | `network` write | `network.write` | Import a `.conf` (WireGuard) or `.ovpn` (OpenVPN) file from the home folder (files-scope path rules) |
+| `network.vpn.delete` | `network` write | `network.write` | Delete a VPN profile |
 | `notifications.set_dnd` | `notifications` write | `notifications.write` | Turn Do Not Disturb on or off. |
 | `power.action` | `power` write | `power.write` | Suspend, reboot, power off or lock. Always shows the consent prompt, for every caller. |
 | `lock.set_idle` | `lock` write | `lock.write` | Set idle timeouts in seconds (0 = off) in ~/.config/grokbot/idle.conf and restart the idle watcher. |
