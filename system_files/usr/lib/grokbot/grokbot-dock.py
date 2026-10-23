@@ -27,6 +27,7 @@ import shlex
 import signal
 import subprocess
 import sys
+import threading
 
 import gi
 
@@ -333,11 +334,35 @@ class Dock:
         return win
 
     def refresh_status(self):
+        """Timer (2 s), rebuild and clicks: ask the worker for fresh items
+        and redraw now with the last ones (fresh clock). Never blocks the
+        main loop and always stays armed."""
+        if not hasattr(self, "poller"):
+            self.status_items = []
+            self.poller = grokbot_status.Poller(
+                grokbot_status.items, lambda res: GLib.idle_add(self._status_ready, res))
+        self.poller.request()
+        try:
+            self.apply_status(self.status_items)
+        except Exception as e:  # noqa: BLE001 - a bad item must not stop the timer
+            print("dock status: %s" % e, file=sys.stderr)
+        return True
+
+    def _status_ready(self, res):
+        if res is not None:
+            self.status_items = res
+        try:
+            self.apply_status(self.status_items)
+        except Exception as e:  # noqa: BLE001
+            print("dock status: %s" % e, file=sys.stderr)
+        return False
+
+    def apply_status(self, fetched):
         if self.status_box is None:
-            return True
+            return
         horiz, mode = self.status_mode
         size = max(16, min(24, self.conf["icon_size"] // 2))
-        items = grokbot_status.items()
+        items = grokbot_status.with_clock(fetched)
         live = {i["id"] for i in items}
         self.status_pages = {i["id"]: i.get("page") for i in items}
         for sid, (b, _i, _l) in self.status_widgets.items():
@@ -381,7 +406,6 @@ class Dock:
             # Every dock, including icon-only top/bottom: the label lives
             # in the tooltip (충전 중, 전원 연결됨, 전원 연결됨 (가득 참), NN%).
             btn.set_tooltip_text(item["tooltip"])
-        return True
 
     def on_status_click(self, _btn, sid):
         if sid == "network":
@@ -415,7 +439,7 @@ class Dock:
         up = event.direction == Gdk.ScrollDirection.UP or (
             event.direction == Gdk.ScrollDirection.SMOOTH and event.delta_y < 0)
         if sid == "brightness":
-            grokbot_status.brightness_step(up)
+            threading.Thread(target=grokbot_status.brightness_step, args=(up,), daemon=True).start()
         else:
             subprocess.Popen(["/usr/local/bin/grokbot-volume", "up" if up else "down"])
         GLib.timeout_add(300, self.refresh_status_once)
