@@ -1,0 +1,14 @@
+[Unit]
+Description=Grok Bot OS night light (gammastep)
+Documentation=https://github.com/head77x/grokbotos/blob/main/docs/OS_API.md
+# Started by sway (exec in /etc/sway/config) and by grokbotd when the user
+# changes Settings > Display > Night light. Exits at once when it is off.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/grokbot-nightlight
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes

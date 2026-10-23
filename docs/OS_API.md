@@ -39,6 +39,8 @@ prompt. See "Permission model" below and the threat model in
 | `audio.devices.list` | `audio` read | `audio.read` | `outputs` and `inputs` (PipeWire nodes): `id`, `description`, `default`, `bluetooth`, `volume_percent`, `muted` |
 | `audio.set_default` | `audio` write | `audio.write` | Make device `id` the default output or input (wpctl set-default); the id must be a current device |
 | `display.set_brightness` | `display` write | `display.write` | Set backlight brightness in percent (1-100; never fully dark). |
+| `display.nightlight.status` | `display` read | `display.read` | Night light (gammastep): enabled, temperature K, schedule `always`/`custom` with `from`/`to` (HH:MM), available, running |
+| `display.nightlight.set` | `display` write | `display.write` | Change night light (2500-6000 K; schedule; times). Saved to `~/.config/grokbot/nightlight.json`, applied by the user unit `grokbot-nightlight.service` (no root). |
 | `network.wifi.list` | `network` read | `network.read` | Visible Wi-Fi networks (SSID, signal, security, in use) via NetworkManager. |
 | `network.wifi.connect` | `network` write | `network.write` | Connect to a Wi-Fi network (nmcli). The password is passed to NetworkManager through a 0600 file, never logged or put on a command line. |
 | `network.wifi.disconnect` | `network` write | `network.write` | Disconnect a Wi-Fi device (default: the connected one). |

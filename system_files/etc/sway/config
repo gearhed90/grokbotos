@@ -23,7 +23,8 @@
 # sway would start a second swaybg. Never any desktop icons.
 # grokbotd (systemd user service) gets the session environment so
 # system.info can report it. It finds the sway IPC socket on its own.
-exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_DATA_DIRS XMODIFIERS QT_IM_MODULE SDL_IM_MODULE
+# Night light (gammastep) starts after that, if it is turned on.
+exec sh -c 'systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_DATA_DIRS XMODIFIERS QT_IM_MODULE SDL_IM_MODULE; systemctl --user start grokbot-nightlight.service'
 exec /usr/local/bin/grokbot-desktop >>"$HOME/.local/share/grokbot/desktop.log" 2>&1
 
 exec sh -c 'mkdir -p "$HOME/.local/share/grokbot" "$HOME/Apps" "$HOME/.local/share/applications" && exec /usr/local/bin/grokbot-kiosk >>"$HOME/.local/share/grokbot/shell.log" 2>&1'

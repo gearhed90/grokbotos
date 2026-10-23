@@ -1,0 +1,45 @@
+#!/bin/bash
+# Night light runner for grokbot-nightlight.service (user unit).
+# Reads ~/.config/grokbot/nightlight.json (written by grokbotd,
+# display.nightlight.set) and runs gammastep on the Wayland session.
+#   always: one temperature all the time
+#   custom: warm between "from" and "to" (HH:MM), with a 30-minute fade
+set -euo pipefail
+conf=${XDG_CONFIG_HOME:-$HOME/.config}/grokbot/nightlight.json
+[[ -f $conf ]] || exit 0
+read -r enabled temp schedule from to < <(python3 - "$conf" <<'PY'
+import json, re, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    d = {}
+t = d.get("temperature", 4000)
+t = t if isinstance(t, int) and 2500 <= t <= 6000 else 4000
+ok = lambda s: isinstance(s, str) and re.match(r"^([01][0-9]|2[0-3]):[0-5][0-9]$", s)
+f = d.get("from") if ok(d.get("from")) else "20:00"
+o = d.get("to") if ok(d.get("to")) else "07:00"
+print("1" if d.get("enabled") is True else "0", t, "custom" if d.get("schedule") == "custom" else "always", f, o)
+PY
+)
+[[ $enabled == 1 ]] || exit 0
+if [[ $schedule == always ]]; then
+    exec gammastep -m wayland -P -O "$temp"
+fi
+# gammastep's dusk/dawn times: night starts at "from" (dusk), ends at "to" (dawn).
+add30() {
+    local h=$((10#${1%:*})) m=$((10#${1#*:} + 30))
+    printf '%02d:%02d\n' $(((h + m / 60) % 24)) $((m % 60))
+}
+run=${XDG_RUNTIME_DIR:-/tmp}/grokbot
+mkdir -p "$run"
+cfg=$run/gammastep.ini
+cat >"$cfg" <<INI
+[general]
+temp-day=6500
+temp-night=$temp
+fade=1
+adjustment-method=wayland
+dusk-time=$from-$(add30 "$from")
+dawn-time=$to-$(add30 "$to")
+INI
+exec gammastep -c "$cfg"

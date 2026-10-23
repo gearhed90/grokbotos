@@ -1,6 +1,6 @@
 // Settings app shell cache: the window opens (with an offline notice)
 // even when grokbotd is down. OS API calls are never cached.
-const CACHE = "settings-v3";
+const CACHE = "settings-v4";
 const SHELL = ["./", "index.html", "app.js", "i18n.js", "style.css"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => {
