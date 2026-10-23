@@ -46,6 +46,8 @@ prompt. See "Permission model" below and the threat model in
 | `power.action` | `power` write | `power.write` | Suspend, reboot, power off or lock. Always shows the consent prompt, for every caller. |
 | `lock.set_idle` | `lock` write | `lock.write` | Set idle timeouts in seconds (0 = off) in ~/.config/grokbot/idle.conf and restart the idle watcher. |
 | `input.set` | `input` write | `input.write` | Turn the Korean input method on (active=true) or off (fcitx5-remote). |
+| `keyboard.layout.status` | `input` read | `input.read` | Chosen layout id, the layout sway reports, whether Korean input (hangul) is configured, and the allow-listed layouts |
+| `keyboard.layout.set` | `input` write | `input.write` | `layout` from the allow-list: applied in sway, saved to ~/.config/grokbot/keyboard.conf, and set as the fcitx5 keyboard layout with hangul kept (한/영 still works) |
 | `capture.screenshot` | `screen` write | `capture.write` | Take a full-screen screenshot into the screenshot folder; returns the file name and size, never image data. |
 | `camera.session.start` | `camera` write | `camera.use` | Ask to use the camera. Always prompts; while the session is open the dock shows the camera-in-use indicator. Returns a session id. |
 | `microphone.session.start` | `microphone` write | `microphone.use` | Ask to use the microphone. Always prompts; while the session is open the dock shows the microphone-in-use indicator. Returns a session id. |

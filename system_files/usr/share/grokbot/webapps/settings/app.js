@@ -338,8 +338,23 @@
   };
 
   pages.keyboard = async () => {
-    const i = await rpc("input.status");
-    return [...head("kbd"),
+    const [i, kl] = await Promise.all([rpc("input.status"), rpc("keyboard.layout.status").catch(() => null)]);
+    let layoutCard = null;
+    if (kl) {
+      const sel = h("select", { "aria-label": t("kbd_layout") });
+      for (const l of kl.available) {
+        const o = h("option", { value: l.id }, lang === "ko" ? l.ko : l.en);
+        if (l.id === kl.layout) o.selected = true;
+        sel.append(o);
+      }
+      sel.addEventListener("change", () => act(() => rpc("keyboard.layout.set", { layout: sel.value }), t("kbd_layout_set")).then(render, render));
+      layoutCard = card(t("kbd_layout"),
+        row(h("span", { class: "grow" }, t("kbd_layout"), h("div", { class: "dim" }, t("kbd_layout_hint"))), sel),
+        row(h("span", { class: "grow" }, t("kbd_active")), h("span", { class: "mono" }, kl.active_name || "-")),
+        row(h("span", { class: "grow" }, t("korean_input")), h("span", { class: "pill " + (kl.korean_input ? "allow" : "deny") }, kl.korean_input ? t("kbd_kept") : t("ime_off"))),
+        row(h("input", { type: "text", class: "grow", placeholder: t("kbd_try") })));
+    }
+    return [...head("kbd"), ...(layoutCard ? [layoutCard] : []),
       card(null, row(h("span", { class: "grow" }, t("korean_on"), h("div", { class: "dim" }, t("kbd_hint"))),
         i.running ? sw(!!i.active, (on) => act(() => rpc("input.set", { active: on }))) : h("span", { class: "dim" }, t("ime_off")))),
       card(t("ime"), row(h("span", { class: "grow" }, "fcitx5"), h("span", { class: "pill " + (i.running ? "allow" : "deny") }, i.running ? t("ime_running") : t("ime_off"))),
