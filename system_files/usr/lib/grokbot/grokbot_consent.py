@@ -80,6 +80,7 @@ window.grokbot-consent { background-color: rgba(0,0,0,0); }
 button { padding: 8px 14px; border-radius: 10px; }
 button.deny { background: #3f3f46; color: #fff; }
 button.allow { background: #2563eb; color: #fff; }
+entry.secret { font-size: 16px; padding: 6px 8px; }
 button.always { background: #1d4ed8; color: #fff; }
 .timer { color: #a1a1aa; font-size: 12px; }
 button.session { background: #1e40af; color: #fff; }
@@ -168,12 +169,34 @@ def main():
         row.pack_start(b, False, False, 0)
         return b
 
-    deny = button("거부 / Deny", "deny", "deny")
-    if t["once"]:
+    secret = None
+    if req.get("secret"):
+        # Hidden field: the text never leaves this process except as the
+        # answer on stdout (a pipe to grokbotd).
+        secret = Gtk.Entry()
+        secret.set_visibility(False)
+        secret.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+        secret.set_placeholder_text("암호 / Passphrase")
+        secret.get_style_context().add_class("secret")
+        card.pack_start(secret, False, False, 4)
+
+        def submit(*_):
+            if armed() and secret.get_text():
+                answer["secret"] = secret.get_text()
+                done("once")
+        secret.connect("activate", submit)
+
+    deny = button("취소 / Cancel" if secret is not None else "거부 / Deny", "deny", "deny")
+    if secret is not None:
+        ok = Gtk.Button(label="잠금 해제 / Unlock")
+        ok.get_style_context().add_class("allow")
+        ok.connect("clicked", submit)
+        row.pack_start(ok, False, False, 0)
+    elif t["once"]:
         button("이번 한 번만 / Allow once", "allow", "once")
-    if t["session"]:
+    if t["session"] and secret is None:
         button("이번 세션 동안 / This session", "session", "session")
-    if t["always"]:
+    if t["always"] and secret is None:
         button("항상 허용 / Always allow", "always", "always")
     card.pack_start(row, False, False, 6)
     win.add(card)
@@ -218,8 +241,12 @@ def main():
     win.connect("map", on_map)
     win.show_all()
     on_map()
-    deny.grab_focus()
+    (secret or deny).grab_focus()
     Gtk.main()
+    if secret is not None:
+        print(json.dumps({"answer": answer["v"], "secret": answer.get("secret") if answer["v"] == "once" else None}),
+              flush=True)
+        return 0
     print(answer["v"], flush=True)
     return 0
 

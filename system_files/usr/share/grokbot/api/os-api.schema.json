@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/head77x/grokbotos/os-api.schema.json",
   "title": "Grok Bot OS API",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Single source of truth for grokbotd. JSON-RPC 2.0 over the unix socket and POST /v1/rpc, the grokbot-os CLI and the MCP tools are all generated from this file. Every method has a scope (an OS function) and an access level (read or write); permissions are granted per caller per scope with mode allow, ask or deny (docs/OS_API.md, SECURITY.md).",
   "x-capabilities": {
     "system.read": "OS name, version, kernel, hostname, uptime, memory, bootc image",
@@ -42,7 +42,7 @@
     "bluetooth.read": "Bluetooth adapter state and paired or connected devices (names, addresses, battery)",
     "bluetooth.write": "Turn Bluetooth on or off, look for nearby devices, pair, connect, disconnect, trust and remove devices",
     "storage.read": "Removable drives: label, size, file system, whether and where they are open",
-    "storage.write": "Open (mount), close (unmount) and eject removable drives",
+    "storage.write": "Open (mount), close (unmount), eject, unlock and lock (LUKS) removable drives",
     "power-mode.read": "Current power mode and the modes this computer offers",
     "power-mode.write": "Switch power mode (power saver, balanced, performance)",
     "printing.read": "Printers (CUPS queues and driverless network printers), the default printer and your print jobs",
@@ -1122,7 +1122,7 @@
           },
           "volume": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
             "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
@@ -1152,7 +1152,7 @@
           },
           "volume": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
             "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
@@ -1190,7 +1190,7 @@
           },
           "volume": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
             "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
@@ -1235,7 +1235,7 @@
           },
           "volume": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
             "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
@@ -1268,7 +1268,7 @@
           },
           "volume": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
             "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
@@ -1305,7 +1305,7 @@
           },
           "volume": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
             "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
@@ -1338,7 +1338,7 @@
           },
           "volume": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9]{1,31}$",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
             "description": "Removable drive id from storage.list (must be open). Paths are then relative to the drive instead of the home folder."
           }
         },
@@ -1843,7 +1843,7 @@
       }
     },
     "storage.list": {
-      "description": "Removable volumes (USB sticks, SD cards, external disks; never the system disk): id (block device, e.g. sdb1), name, label, drive, fs, size, mounted, mount_points, read_only, ejectable. available=false when udisks2 is not running.",
+      "description": "Removable volumes (USB sticks, SD cards, external disks; never the system disk): id (block device, e.g. sdb1), name, label, drive, fs, size, mounted, mount_points, read_only, ejectable. available=false when udisks2 is not running. Encrypted (LUKS) drives are listed with encrypted/locked; an unlocked one appears as its own volume with backing = the container id. exFAT and NTFS are mounted like other file systems.",
       "capability": "storage.read",
       "scope": "storage",
       "access": "read",
@@ -1874,7 +1874,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9]{1,31}$"
+            "pattern": "^[a-z][a-z0-9_]{1,31}$"
           }
         },
         "required": [
@@ -1900,11 +1900,68 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9]{1,31}$"
+            "pattern": "^[a-z][a-z0-9_]{1,31}$"
           },
           "eject": {
             "type": "boolean",
             "default": false
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "storage.unlock": {
+      "description": "Unlock an encrypted (LUKS) removable drive. The passphrase is typed by the user into the secure prompt (never a parameter, never logged); answering it is the consent. With mount (default true) the unlocked file system is opened too. Returns the unlocked volume.",
+      "capability": "storage.write",
+      "scope": "storage",
+      "access": "write",
+      "x-secret-prompt": true,
+      "x-title": [
+        "암호화된 드라이브 잠금 해제",
+        "Unlock an encrypted drive"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
+            "description": "Locked volume id from storage.list"
+          },
+          "mount": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "storage.lock": {
+      "description": "Close an unlocked encrypted drive: unmount its file system and lock the LUKS container (id = the unlocked volume).",
+      "capability": "storage.write",
+      "scope": "storage",
+      "access": "write",
+      "x-title": [
+        "암호화된 드라이브 잠그기",
+        "Lock an encrypted drive"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$"
           }
         },
         "required": [
@@ -2260,7 +2317,7 @@
           },
           "volume": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9]{1,31}$"
+            "pattern": "^[a-z][a-z0-9_]{1,31}$"
           },
           "copies": {
             "type": "integer",

@@ -44,6 +44,7 @@ This section states the grokbotd permission model in one place so external revie
 5. **`*.app.localhost` 한 포트에 여러 앱.** 앱 사이 격리는 브라우저의 origin 격리에 의존한다. 각 앱의 토큰은 그 origin에만 유효하다. / Apps on `*.app.localhost:7311` rely on browser origin isolation; each app's token is bound to its origin.
 6. **설치한 웹 앱.** 설치는 아무 권한도 주지 않고 확인 창을 거친다. 번들 앱은 앱마다 다른 origin과 Firefox 프로필을 쓰므로 저장소·쿠키·서비스 워커가 섞이지 않는다. URL 앱의 코드는 그 사이트가 언제든 바꿀 수 있으므로, URL 앱에 준 권한은 그 사이트 운영자에게 준 것이다. 번들 앱은 `~/.local/share/grokbot/webapps/`에 있어 같은 uid 프로세스가 고칠 수 있다(1번). / Installing grants nothing and is confirmed. Each bundle app has its own origin and Firefox profile (separate storage, cookies, service worker). A URL app's code is whatever the site serves, so a grant to it is a grant to the site operator. Bundles live in the user's home and can be edited by same-uid processes (item 1).
 7. `files`, `location` scope는 예약만 되어 있고 메서드가 없다. / `files` and `location` are reserved; no methods yet.
+8. **암호화 드라이브 암호.** `storage.unlock`의 암호는 동의 창의 숨김 입력란에만 입력되고, 파이프(stdout)로 grokbotd에 전달된 뒤 D-Bus로 UDisks2에 넘겨진다. 매개변수, 명령줄, 파일, 감사 로그에는 남지 않는다. 다만 2번처럼 같은 세션의 클라이언트가 비슷한 창을 그려 암호를 받아낼 수 있다. / **Encrypted drive passphrases.** The `storage.unlock` passphrase is typed only into the consent prompt's hidden field, goes to grokbotd over a stdout pipe and to UDisks2 over D-Bus. It is never a parameter, command-line argument, file or audit entry. As in item 2, a same-session client could still draw a look-alike window to phish it.
 
 ## 무엇이 취약점인가 / What counts as a vulnerability
 

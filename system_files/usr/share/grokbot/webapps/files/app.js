@@ -13,7 +13,7 @@
       ro: "보기만", rw: "보기 · 바꾸기", rwask: "보기 · 바꿀 때마다 확인", newname: "새 이름", foldername: "새 폴더 이름",
       filename: "새 파일 이름", confirmtrash: "\"%s\"을(를) 휴지통으로 옮길까요?", trashed: "휴지통으로 옮겼습니다", saved: "저장했습니다",
       big: "파일이 너무 커서 여기서 열 수 없습니다", binary: "미리 볼 수 없는 파일입니다 (%s)", offline: "grokbotd에 연결할 수 없습니다", dir: "폴더",
-      drives: "USB 드라이브", eject: "꺼내기", ejected: "꺼냈습니다. 이제 뽑아도 됩니다", opening: "드라이브를 여는 중…" },
+      drives: "USB 드라이브", eject: "꺼내기", ejected: "꺼냈습니다. 이제 뽑아도 됩니다", opening: "드라이브를 여는 중…", unlock: "잠금 해제", unlocking: "암호 입력 창에서 암호를 입력하세요…", lock: "잠그기", locked: "드라이브를 잠갔습니다" },
     en: { title: "Files", home: "Home", up: "Up", mkdir: "New folder", newfile: "New text file", filter: "Find in this folder",
       name: "Name", size: "Size", modified: "Modified", open: "Open", rename: "Rename", trash: "Trash", save: "Save", close: "Close",
       lang: "한국어", empty: "This folder is empty", hidden: "%s hidden items are not shown", items: "%s items",
@@ -23,7 +23,7 @@
       ro: "View only", rw: "View · change", rwask: "View · confirm each change", newname: "New name", foldername: "Folder name",
       filename: "File name", confirmtrash: "Move \"%s\" to the trash?", trashed: "Moved to the trash", saved: "Saved",
       big: "Too large to open here", binary: "No preview for this file (%s)", offline: "Cannot reach grokbotd", dir: "Folder",
-      drives: "USB drives", eject: "Eject", ejected: "Ejected. Safe to remove", opening: "Opening the drive…" }
+      drives: "USB drives", eject: "Eject", ejected: "Ejected. Safe to remove", opening: "Opening the drive…", unlock: "Unlock", unlocking: "Type the passphrase in the secure prompt…", lock: "Lock", locked: "Drive locked" }
   };
   let lang = localStorage.getItem("files.lang") || "ko";
   const t = (k, ...a) => { let s = (T[lang] || T.ko)[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
@@ -78,8 +78,8 @@
     const parts = cwd.split("/").filter(Boolean);
     nav.append(h("button", { type: "button", class: vol ? "" : "on", onclick: () => setVol(null) }, "🏠 " + t("home")));
     for (const d of drives) {
-      nav.append(h("button", { type: "button", class: "drive" + (vol && vol.id === d.id ? " on" : ""), title: d.device || d.id,
-        onclick: () => openDrive(d) }, "💾 " + (d.label || d.id)));
+      nav.append(h("button", { type: "button", class: "drive" + (vol && vol.id === d.id ? " on" : ""), 
+        title: (d.locked ? t("unlock") + " · " : "") + (d.device || d.id) + (d.fs ? " · " + d.fs : ""), onclick: () => openDrive(d) }, (d.locked ? "🔒 " : d.encrypted ? "🔓 " : "💾 ") + (d.label || d.id)));
       if (d.mounted) nav.append(h("button", { type: "button", class: "eject", title: t("eject"), onclick: () => eject(d) }, "⏏"));
     }
     if (modes && modes["storage.list"] !== "allow")
@@ -154,6 +154,11 @@
   }
   async function openDrive(d) {
     try {
+      if (d.locked) {
+        toast(t("unlocking"));
+        const u = await rpc("storage.unlock", { id: d.id, mount: true });
+        await loadDrives(); d = drives.find((x) => x.id === u.id) || u;
+      }
       if (!d.mounted) { toast(t("opening")); await rpc("storage.mount", { id: d.id }); await loadDrives(); d = drives.find((x) => x.id === d.id) || d; }
       vol = { id: d.id, label: d.label || d.id }; closeView(); go("/");
     } catch (e) { toast(e.message); }
