@@ -158,7 +158,8 @@ def pair(device_path, handler, timeout=60):
             bus.unregister_object(reg)
             bus.close_sync(None)
     except GLib.Error as e:
-        raise BackendError("bluetooth: %s" % e.message)
+        from .bluetooth import _friendly
+        raise BackendError("bluetooth: %s" % _friendly(e.message))
     finally:
         ctx.pop_thread_default()
     if "err" in res:

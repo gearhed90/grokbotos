@@ -46,7 +46,8 @@ def _friendly(msg):
                       ("org.bluez.Error.NotReady", "the adapter is off"),
                       ("AlreadyExists", "the device is already paired"),
                       ("DoesNotExist", "unknown device"),
-                      ("ServiceUnknown", "the Bluetooth service (bluetoothd) is not running")):
+                      ("ServiceUnknown", "the Bluetooth service (bluetoothd) is not running"),
+                      ("NameHasNoOwner", "the Bluetooth service (bluetoothd) is not running (no adapter?)")):
         if key in msg:
             return text
     return msg[:200]
