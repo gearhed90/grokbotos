@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/head77x/grokbotos/os-api.schema.json",
   "title": "Grok Bot OS API",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "description": "Single source of truth for grokbotd. JSON-RPC 2.0 over the unix socket and POST /v1/rpc, the grokbot-os CLI and the MCP tools are all generated from this file. Every method has a scope (an OS function) and an access level (read or write); permissions are granted per caller per scope with mode allow, ask or deny (docs/OS_API.md, SECURITY.md).",
   "x-capabilities": {
     "system.read": "OS name, version, kernel, hostname, uptime, memory, bootc image",
@@ -14,12 +14,12 @@
     "network.read": "Network interfaces, addresses and default route; wired and VPN connections",
     "lock.read": "Screen lock and idle state: whether a PIN is set, locked, idle timeouts",
     "audio.read": "Output and input devices, volume and mute state",
-    "display.read": "Display backlight brightness",
+    "display.read": "Display backlight brightness and night light settings",
     "notifications.read": "Notification app names and summaries (never bodies) and Do Not Disturb state",
     "capture.read": "Screenshot folder, file names and sizes (never image data)",
     "input.read": "Keyboard input method (fcitx5): configured methods, current method, trigger keys",
     "audio.write": "Change output/input volume and mute",
-    "display.write": "Change display backlight brightness",
+    "display.write": "Change display backlight brightness and night light",
     "network.write": "Scan, connect to and disconnect from Wi-Fi; connect, configure and disconnect wired and VPN connections; import and delete VPN profiles",
     "notifications.write": "Turn Do Not Disturb on or off",
     "power.write": "Suspend, restart, shut down or lock (always confirmed by the user)",
@@ -594,6 +594,73 @@
         "required": [
           "percent"
         ]
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "display.nightlight.status": {
+      "description": "Night light (warmer colours, gammastep): enabled, temperature (K), schedule (always or custom between from and to, HH:MM), and whether it is available and running.",
+      "capability": "display.read",
+      "scope": "display",
+      "access": "read",
+      "x-title": [
+        "야간 모드 보기",
+        "Read night light"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "available",
+          "enabled"
+        ]
+      }
+    },
+    "display.nightlight.set": {
+      "description": "Change night light. Omitted fields keep their value. Saved in ~/.config/grokbot/nightlight.json and applied at once (user unit grokbot-nightlight.service).",
+      "capability": "display.write",
+      "scope": "display",
+      "access": "write",
+      "x-title": [
+        "야간 모드 바꾸기",
+        "Change night light"
+      ],
+      "params": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "temperature": {
+            "type": "integer",
+            "minimum": 2500,
+            "maximum": 6000,
+            "description": "Colour temperature in kelvin (lower = warmer)"
+          },
+          "schedule": {
+            "type": "string",
+            "enum": [
+              "always",
+              "custom"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "description": "Start (HH:MM) for schedule custom"
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            "description": "End (HH:MM) for schedule custom"
+          }
+        }
       },
       "result": {
         "type": "object"

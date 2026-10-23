@@ -28,7 +28,7 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     openssl \
     wireplumber \
     pipewire-utils \
-    brightnessctl \
+    brightnessctl gammastep \
     playerctl \
     wob \
     mako \

@@ -393,6 +393,8 @@ class Dock:
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "bluetooth"])
         elif sid == "storage":
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "storage"])
+        elif sid in ("brightness", "nightlight"):
+            subprocess.Popen(["/usr/local/bin/grokbot-settings", "display"])
         elif sid == "printing":
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "printers"])
         elif sid in ("power-mode", "battery"):
@@ -408,11 +410,14 @@ class Dock:
         GLib.timeout_add(400, self.refresh_status_once)
 
     def on_status_scroll(self, _btn, event, sid):
-        if sid != "volume":
+        if sid not in ("volume", "brightness"):
             return False
         up = event.direction == Gdk.ScrollDirection.UP or (
             event.direction == Gdk.ScrollDirection.SMOOTH and event.delta_y < 0)
-        subprocess.Popen(["/usr/local/bin/grokbot-volume", "up" if up else "down"])
+        if sid == "brightness":
+            grokbot_status.brightness_step(up)
+        else:
+            subprocess.Popen(["/usr/local/bin/grokbot-volume", "up" if up else "down"])
         GLib.timeout_add(300, self.refresh_status_once)
         return True
 

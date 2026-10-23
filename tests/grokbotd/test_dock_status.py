@@ -41,6 +41,24 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(by["clock"]["text"], "18:05")
         self.assertIsNone(by["clock"]["icon"])
 
+    def test_brightness_and_nightlight_items(self):
+        br = {"available": True, "devices": [{"name": "intel_backlight", "percent": 40}]}
+        self.assertEqual(st._brightness(br)["text"], "40%")
+        self.assertIsNone(st._brightness({"available": False, "devices": []}))
+        self.assertIsNone(st._nightlight({"enabled": True, "running": False}))
+        self.assertEqual(st._nightlight({"enabled": True, "running": True, "temperature": 4000,
+                                         "schedule": "custom", "from": "20:00", "to": "07:00"})["id"], "nightlight")
+        calls = []
+
+        def call(m, params=None):
+            calls.append((m, params))
+            return br
+        st.brightness_step(False, call=call)
+        self.assertEqual(calls[-1], ("display.set_brightness", {"percent": 35}))
+        br["devices"][0]["percent"] = 3
+        st.brightness_step(False, call=call)
+        self.assertEqual(calls[-1], ("display.set_brightness", {"percent": 1}))
+
     def test_bluetooth_item(self):
         self.assertIsNone(st._bluetooth(None))
         self.assertIsNone(st._bluetooth({"available": False, "service": True}))

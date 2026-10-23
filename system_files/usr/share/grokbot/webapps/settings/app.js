@@ -343,6 +343,16 @@
           ...SCALES.map((s) => h("option", { value: s, selected: o.scale === s }, Math.round(s * 100) + "%")));
         const rows = [row(h("span", { class: "grow dim" }, [o.make, o.model].filter(Boolean).join(" ") || o.name), h("span", { class: "dim mono" }, res)),
           row(h("span", { class: "grow" }, t("disp_scale")), scaleSel)];
+        const modes = [];
+        for (const m of o.modes || []) if (!modes.some((x) => x.width === m.width && x.height === m.height)) modes.push(m);
+        if (modes.length > 1) {
+          const cur = o.mode ? `${o.mode.width}x${o.mode.height}` : "";
+          rows.push(row(h("span", { class: "grow" }, t("disp_mode")),
+            h("select", { "aria-label": t("disp_mode"), disabled: !o.active,
+              onchange: (e) => { const [w, hh] = e.target.value.split("x").map(Number);
+                applyDisplay({ name: o.name, mode: { width: w, height: hh } }, o.mode ? { name: o.name, mode: { width: o.mode.width, height: o.mode.height } } : { name: o.name }); } },
+              ...modes.map((m) => h("option", { value: `${m.width}x${m.height}`, selected: cur === `${m.width}x${m.height}` }, `${m.width}×${m.height}`)))));
+        }
         if (outs.length > 1) {
           const where = arrangement(o, ref);
           if (o !== ref) {
@@ -362,6 +372,27 @@
       const [s, o] = slider(dev.percent, (p) => act(() => rpc("display.set_brightness", { percent: Math.max(1, p) })));
       out.push(card(t("brightness") + " · " + dev.name, row(h("div", { class: "grow" }, s), o)));
     });
+    const nl = await rpc("display.nightlight.status").catch(() => null);
+    if (nl) {
+      const setNl = (p) => act(() => rpc("display.nightlight.set", p), t("saved"));
+      const kids = [row(h("span", { class: "grow" }, t("nl_on"), h("div", { class: "dim" }, nl.available ? t("nl_hint") : t("nl_missing"))),
+        sw(nl.enabled, (on) => setNl({ enabled: on })))];
+      if (nl.available) {
+        const temp = h("select", { "aria-label": t("nl_temp"), onchange: (e) => setNl({ temperature: Number(e.target.value) }) },
+          ...[[5000, "nl_t_light"], [4000, "nl_t_mid"], [3200, "nl_t_warm"], [2700, "nl_t_warmest"]].map(([k, l]) => h("option", { value: k, selected: nl.temperature === k }, `${t(l)} (${k}K)`)));
+        if (![5000, 4000, 3200, 2700].includes(nl.temperature)) temp.prepend(h("option", { value: nl.temperature, selected: true }, `${nl.temperature}K`));
+        const sched = h("select", { "aria-label": t("nl_schedule"), onchange: (e) => setNl({ schedule: e.target.value }) },
+          h("option", { value: "always", selected: nl.schedule === "always" }, t("nl_always")),
+          h("option", { value: "custom", selected: nl.schedule === "custom" }, t("nl_custom")));
+        kids.push(row(h("span", { class: "grow" }, t("nl_temp")), temp), row(h("span", { class: "grow" }, t("nl_schedule")), sched));
+        if (nl.schedule === "custom") {
+          const tm = (k) => h("input", { type: "time", value: nl[k], "aria-label": t("nl_" + k), onchange: (e) => e.target.value && setNl({ [k]: e.target.value }) });
+          kids.push(row(h("span", { class: "grow" }, t("nl_from")), tm("from")), row(h("span", { class: "grow" }, t("nl_to")), tm("to")));
+        }
+        if (nl.enabled && !nl.running) kids.push(h("p", { class: "dim" }, t("nl_not_running")));
+      }
+      out.push(card(t("nl_title"), ...kids));
+    }
     return out;
   };
 

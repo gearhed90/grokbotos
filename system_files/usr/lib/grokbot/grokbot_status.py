@@ -23,13 +23,13 @@ def socket_path():
 SLOW = {"printers.list": 4.0}
 
 
-def rpc(method, timeout=1.0):
+def rpc(method, timeout=1.0, params=None):
     try:
         s = socket.socket(socket.AF_UNIX)
         s.settimeout(SLOW.get(method, timeout))
         s.connect(socket_path())
         f = s.makefile("rwb")
-        f.write((json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": {}}) + "\n").encode())
+        f.write((json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}) + "\n").encode())
         f.flush()
         r = json.loads(f.readline() or b"{}")
         s.close()
@@ -168,6 +168,41 @@ def _storage(st):
     return {"id": "storage", "icon": "media-removable-symbolic", "text": "USB",
             "tooltip": "외장 저장장치 / Removable drives: %s (%d 열림 / open). 클릭: 꺼내기 / Click: safely remove"
                        % (names, len(opened))}
+def _brightness(br):
+    """Backlight (laptops): NN%; scroll changes it like the brightness keys,
+    click opens Settings > Display. Nothing without a backlight."""
+    devs = (br or {}).get("devices") or []
+    if not (br or {}).get("available") or not devs:
+        return None
+    p = devs[0].get("percent")
+    if not isinstance(p, int):
+        return None
+    return {"id": "brightness", "icon": "display-brightness-symbolic", "text": "%d%%" % p,
+            "tooltip": "화면 밝기 %d%% / Brightness %d%%. 스크롤: 조절 / Scroll: adjust. 클릭: 디스플레이 설정 / Click: Display settings"
+                       % (p, p)}
+
+
+def _nightlight(nl):
+    """Night light on: one item (warm temperature); click opens Settings > Display."""
+    if not nl or not nl.get("enabled") or not nl.get("running"):
+        return None
+    sched = "%s–%s" % (nl.get("from"), nl.get("to")) if nl.get("schedule") == "custom" else "항상 / always"
+    return {"id": "nightlight", "icon": "weather-clear-night-symbolic", "text": "야간",
+            "tooltip": "야간 모드 켜짐 %dK (%s) / Night light on. 클릭: 디스플레이 설정 / Click: Display settings"
+                       % (nl.get("temperature") or 0, sched)}
+
+
+def brightness_step(up, call=rpc, step=5):
+    """Dock scroll on the brightness item: through grokbotd
+    (display.set_brightness, display scope), never below 1%."""
+    br = call("display.brightness")
+    devs = (br or {}).get("devices") or []
+    if not devs or not isinstance(devs[0].get("percent"), int):
+        return None
+    p = max(1, min(100, devs[0]["percent"] + (step if up else -step)))
+    return call("display.set_brightness", params={"percent": p})
+
+
 def _printing(pr):
     """Print jobs waiting: one item while any job is queued, highlighted
     when a printer with jobs is stopped. Click: Settings > Printers."""
@@ -248,6 +283,6 @@ def items(call=rpc, now=None):
     audio = call("audio.status")
     out = _privacy(call("privacy.status")) + [
         _storage(call("storage.list")), _printing(call("printers.list")), _network(call("network.status")), _vpn(call("network.connections.list")), _bluetooth(call("bluetooth.status")),
-        _mic(audio), _volume(audio), _power_mode(call("power.profile.status")), _battery(call("power.status")),
+        _mic(audio), _volume(audio), _brightness(call("display.brightness")), _nightlight(call("display.nightlight.status")), _power_mode(call("power.profile.status")), _battery(call("power.status")),
         _update(call("update.status")), clock(now)]
     return [i for i in out if i]
