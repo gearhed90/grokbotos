@@ -99,8 +99,17 @@ def _network(net):
     if dev.get("wireless"):
         return {"id": "network", "icon": "network-wireless-signal-good-symbolic", "text": "Wi-Fi",
                 "tooltip": "Wi-Fi: %s" % dev["name"]}
-    return {"id": "network", "icon": "network-wired-symbolic", "text": "유선",
-            "tooltip": "유선 / Wired: %s" % dev["name"]}
+    return {"id": "network", "icon": "network-wired-symbolic", "text": "유선", "page": "network",
+            "tooltip": "유선 / Wired: %s. 클릭: 유선·VPN 설정 / Click: Wired and VPN settings" % dev["name"]}
+
+
+def _vpn(conns):
+    """Shown only while a VPN is up."""
+    if not conns or not conns.get("vpn_active"):
+        return None
+    names = ", ".join(conns["vpn_active"])
+    return {"id": "vpn", "icon": "network-vpn-symbolic", "text": "VPN",
+            "tooltip": "VPN 연결됨 / VPN on: %s. 클릭: 유선·VPN 설정 / Click: Wired and VPN settings" % names}
 
 
 def _volume(audio):
@@ -217,7 +226,7 @@ def items(call=rpc, now=None):
     """Status items in display order; missing data drops the item."""
     audio = call("audio.status")
     out = _privacy(call("privacy.status")) + [
-        _storage(call("storage.list")), _network(call("network.status")), _bluetooth(call("bluetooth.status")),
+        _storage(call("storage.list")), _network(call("network.status")), _vpn(call("network.connections.list")), _bluetooth(call("bluetooth.status")),
         _mic(audio), _volume(audio), _power_mode(call("power.profile.status")), _battery(call("power.status")),
         _update(call("update.status")), clock(now)]
     return [i for i in out if i]

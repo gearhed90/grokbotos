@@ -42,6 +42,11 @@ prompt. See "Permission model" below and the threat model in
 | `network.wifi.list` | `network` read | `network.read` | Visible Wi-Fi networks (SSID, signal, security, in use) via NetworkManager. |
 | `network.wifi.connect` | `network` write | `network.write` | Connect to a Wi-Fi network (nmcli). The password is passed to NetworkManager through a 0600 file, never logged or put on a command line. |
 | `network.wifi.disconnect` | `network` write | `network.write` | Disconnect a Wi-Fi device (default: the connected one). |
+| `network.connections.list` | `network` read | `network.read` | Wired and VPN (WireGuard/OpenVPN) NetworkManager connections, wired IPv4 settings, ethernet devices, active VPNs. No secrets |
+| `network.connection.up` / `.down` | `network` write | `network.write` | Connect / disconnect a wired or VPN connection by `uuid` (Wi-Fi profiles are refused here) |
+| `network.wired.configure` | `network` write | `network.write` | IPv4 `auto` (DHCP) or `manual` with `address` (a.b.c.d/nn), `gateway` (same network) and `dns` |
+| `network.vpn.import` | `network` write | `network.write` | Import a `.conf` (WireGuard) or `.ovpn` (OpenVPN) file from the home folder (files-scope path rules) |
+| `network.vpn.delete` | `network` write | `network.write` | Delete a VPN profile |
 | `notifications.set_dnd` | `notifications` write | `notifications.write` | Turn Do Not Disturb on or off. |
 | `power.action` | `power` write | `power.write` | Suspend, reboot, power off or lock. Always shows the consent prompt, for every caller. |
 | `lock.set_idle` | `lock` write | `lock.write` | Set idle timeouts in seconds (0 = off) in ~/.config/grokbot/idle.conf and restart the idle watcher. |
@@ -74,6 +79,8 @@ prompt. See "Permission model" below and the threat model in
 | `power.profile.status` | `power-mode` read | `power-mode.read` | `available`, `active` (`power-saver`, `balanced`, `performance`), `profiles` offered, `degraded` (power-profiles D-Bus API, tuned-ppd) |
 | `power.profile.set` | `power-mode` write | `power-mode.write` | Switch to `profile` (must be offered). Separate from `power` so it does not prompt every time; local default `allow` |
 | `audit.list` | `audit` read | `audit.read` | Recent audit log entries, newest last. Filters: principal, decision, method. |
+
+Wired and VPN profiles are system NetworkManager connections. `/usr/share/polkit-1/rules.d/50-grokbot-network.rules` lets the active local session user change them (`settings.modify.system`; hostname and global DNS stay admin-only); grokbotd asks before each change.
 
 **Files scope rules.** Paths are relative to the home folder (`/Documents/a.txt`, `~/Documents/a.txt` and `Documents/a.txt` are the same). Refused: `..`, any path that resolves outside `~` (symlinks included), and every hidden component (`.config`, `.local`, `.ssh`, ...), so a `files` grant can never read or rewrite grants, keys or other apps' data. Seeing (`files`) and changing (`files-write`) are separate scopes with separate grants.
 

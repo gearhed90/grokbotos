@@ -1,0 +1,12 @@
+// Wired settings and VPN profiles are system NetworkManager connections
+// (they must work before login and for every boot). The logged-in, local,
+// active session user may add and change them, as on a single-user
+// desktop; nothing remote or inactive. grokbotd asks the user before every
+// such change (scope network, docs/OS_API.md). Hostname and global DNS
+// stay admin-only.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.NetworkManager.settings.modify.system" &&
+        subject.local && subject.active) {
+        return polkit.Result.YES;
+    }
+});

@@ -7,7 +7,7 @@ mode is "ask" -> backend. Every outcome is written to the audit log.
 import threading
 import time
 
-from . import audiodev, audit, backends, bluetooth, consent, displays, files, keyboard, mediakeys, perms, powermode, schema, storage, updates, webapps, writes
+from . import audiodev, audit, backends, bluetooth, consent, displays, files, keyboard, mediakeys, netconn, perms, powermode, schema, storage, updates, webapps, writes
 
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
@@ -27,6 +27,7 @@ METHODS.update(audiodev.METHODS)
 METHODS.update(storage.METHODS)
 METHODS.update(powermode.METHODS)
 METHODS.update(keyboard.METHODS)
+METHODS.update(netconn.METHODS)
 CTX_METHODS = dict(writes.CTX_METHODS)
 SPECIAL = {"api.methods", "permissions.request"}
 REQUEST_COOLDOWN_S = 600

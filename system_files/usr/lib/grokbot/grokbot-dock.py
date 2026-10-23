@@ -183,6 +183,7 @@ class Dock:
         self.status_box = None
         self.status_mode = None
         self.status_widgets = {}
+        self.status_pages = {}
         self.conf = load_config()
         self.monitor = Gio.AppInfoMonitor.get()
         self.monitor.connect("changed", lambda *_: self.rebuild())
@@ -338,6 +339,7 @@ class Dock:
         size = max(16, min(24, self.conf["icon_size"] // 2))
         items = grokbot_status.items()
         live = {i["id"] for i in items}
+        self.status_pages = {i["id"]: i.get("page") for i in items}
         for sid, (b, _i, _l) in self.status_widgets.items():
             b.set_visible(sid in live)
         for pos, item in enumerate(items):
@@ -383,7 +385,10 @@ class Dock:
 
     def on_status_click(self, _btn, sid):
         if sid == "network":
-            subprocess.Popen(["/usr/local/bin/grokbot-settings", "wifi"])
+            wired = getattr(self, "status_pages", {}).get("network") == "network"
+            subprocess.Popen(["/usr/local/bin/grokbot-settings", "network" if wired else "wifi"])
+        elif sid == "vpn":
+            subprocess.Popen(["/usr/local/bin/grokbot-settings", "network"])
         elif sid == "bluetooth":
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "bluetooth"])
         elif sid == "storage":
