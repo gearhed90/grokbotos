@@ -1,5 +1,5 @@
 #!/bin/bash
-# Open the Settings web app: grokbot-settings [update|wifi|network|bluetooth|storage|power|sound|display|notifications|lock|keyboard|permissions|audit]
+# Open the Settings web app: grokbot-settings [update|wifi|network|bluetooth|storage|power|sound|display|notifications|lock|keyboard|printers|permissions|audit]
 # The app is static files served by grokbotd on its own origin
 # (http://settings.app.localhost:7311) and talks only to the public OS API.
 # It is shown in a chromeless Firefox window with its own profile and

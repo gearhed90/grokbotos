@@ -417,6 +417,23 @@
         row(h("span", { class: "grow" }, t("triggers")), h("span", { class: "mono" }, (i.trigger_keys || []).join(", ") || "-")))];
   };
 
+  pages.printers = async () => {
+    const r = await rpc("printers.list");
+    if (!r.available) return [...head("prn"), card(null, h("p", { class: "err" }, t("prn_unavail") + " (" + (r.reason || "") + ")"))];
+    const list = card(t("prn_printers"));
+    if (!r.printers.length) list.append(h("p", { class: "dim" }, t("prn_none")));
+    for (const p of r.printers) list.append(row(h("span", { class: "grow" }, p.name,
+        h("div", { class: "dim" }, t("prn_st_" + p.state) + " · " + (p.driverless ? t("prn_driverless") : p.connection))),
+      p.default ? h("span", { class: "pill allow" }, t("prn_default")) :
+        h("button", { type: "button", onclick: () => act(() => rpc("printers.set_default", { printer: p.name }), t("saved")).then(render, render) }, t("prn_make_default")),
+      h("button", { type: "button", onclick: () => act(() => rpc("print.test_page", { printer: p.name }), t("prn_sent")).then(render, render) }, t("prn_test"))));
+    const jobs = card(t("prn_jobs"));
+    if (!r.jobs.length) jobs.append(h("p", { class: "dim" }, t("prn_no_jobs")));
+    for (const j of r.jobs) jobs.append(row(h("span", { class: "grow mono" }, j.id), h("span", { class: "dim" }, j.printer),
+      h("button", { class: "danger", type: "button", onclick: () => act(() => rpc("print.job.cancel", { job: j.id }), t("saved")).then(render, render) }, t("prn_cancel"))));
+    return [...head("prn"), list, jobs, h("p", { class: "dim" }, t("prn_hint"))];
+  };
+
   let showAll = false;
   const modePill = (m, has) => has === false ? h("span", { class: "dim" }, "—") : h("span", { class: "pill " + m }, t("mode_" + m));
   pages.permissions = async () => {

@@ -163,6 +163,22 @@ def _storage(st):
     return {"id": "storage", "icon": "media-removable-symbolic", "text": "USB",
             "tooltip": "외장 저장장치 / Removable drives: %s (%d 열림 / open). 클릭: 꺼내기 / Click: safely remove"
                        % (names, len(opened))}
+def _printing(pr):
+    """Print jobs waiting: one item while any job is queued, highlighted
+    when a printer with jobs is stopped. Click: Settings > Printers."""
+    jobs = (pr or {}).get("jobs") or []
+    if not jobs:
+        return None
+    stopped = {p["name"] for p in pr.get("printers", []) if p.get("state") == "stopped"}
+    stuck = sorted({j["printer"] for j in jobs if j.get("printer") in stopped})
+    it = {"id": "printing", "icon": "printer-symbolic", "text": "인쇄 %d" % len(jobs),
+          "tooltip": "인쇄 작업 %d개 / %d print job(s). 클릭: 프린터 / Click: Printers" % (len(jobs), len(jobs))}
+    if stuck:
+        it["alert"] = True
+        it["tooltip"] = "프린터 멈춤 / Printer stopped: %s. " % ", ".join(stuck) + it["tooltip"]
+    return it
+
+
 def _power_mode(pm):
     """Shown only when not balanced (the default), so a forgotten power
     saver or performance mode is visible. Click: Settings > Power."""
@@ -226,7 +242,7 @@ def items(call=rpc, now=None):
     """Status items in display order; missing data drops the item."""
     audio = call("audio.status")
     out = _privacy(call("privacy.status")) + [
-        _storage(call("storage.list")), _network(call("network.status")), _vpn(call("network.connections.list")), _bluetooth(call("bluetooth.status")),
+        _storage(call("storage.list")), _printing(call("printers.list")), _network(call("network.status")), _vpn(call("network.connections.list")), _bluetooth(call("bluetooth.status")),
         _mic(audio), _volume(audio), _power_mode(call("power.profile.status")), _battery(call("power.status")),
         _update(call("update.status")), clock(now)]
     return [i for i in out if i]

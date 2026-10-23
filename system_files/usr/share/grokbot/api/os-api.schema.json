@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/head77x/grokbotos/os-api.schema.json",
   "title": "Grok Bot OS API",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Single source of truth for grokbotd. JSON-RPC 2.0 over the unix socket and POST /v1/rpc, the grokbot-os CLI and the MCP tools are all generated from this file. Every method has a scope (an OS function) and an access level (read or write); permissions are granted per caller per scope with mode allow, ask or deny (docs/OS_API.md, SECURITY.md).",
   "x-capabilities": {
     "system.read": "OS name, version, kernel, hostname, uptime, memory, bootc image",
@@ -44,7 +44,9 @@
     "storage.read": "Removable drives: label, size, file system, whether and where they are open",
     "storage.write": "Open (mount), close (unmount) and eject removable drives",
     "power-mode.read": "Current power mode and the modes this computer offers",
-    "power-mode.write": "Switch power mode (power saver, balanced, performance)"
+    "power-mode.write": "Switch power mode (power saver, balanced, performance)",
+    "printing.read": "Printers (CUPS queues and driverless network printers), the default printer and your print jobs",
+    "printing.write": "Choose the default printer, print a file from the home folder or an open USB drive, print a test page, cancel your jobs"
   },
   "methods": {
     "api.methods": {
@@ -2189,6 +2191,152 @@
       "result": {
         "type": "object"
       }
+    },
+    "printers.list": {
+      "description": "Printers from CUPS (configured queues and driverless IPP Everywhere / AirPrint printers found on the network), which one is the default, and your print jobs.",
+      "capability": "printing.read",
+      "scope": "printing",
+      "access": "read",
+      "x-title": [
+        "프린터 목록 보기",
+        "List printers"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "printers.set_default": {
+      "description": "Make a printer your default (lpoptions -d, per user).",
+      "capability": "printing.write",
+      "scope": "printing",
+      "access": "write",
+      "x-title": [
+        "기본 프린터 바꾸기",
+        "Change the default printer"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "printer": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.@-]{1,127}$",
+            "description": "Printer name from printers.list"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "printer"
+        ]
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "print.file": {
+      "description": "Print a file from the home folder, or from an open USB drive with volume (files-scope path rules: no hidden paths, nothing outside the root). Up to 64 MB.",
+      "capability": "printing.write",
+      "scope": "printing",
+      "access": "write",
+      "x-title": [
+        "파일 인쇄",
+        "Print a file"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "printer": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.@-]{1,127}$",
+            "description": "Printer name from printers.list"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "volume": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]{1,31}$"
+          },
+          "copies": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          },
+          "sides": {
+            "type": "string",
+            "enum": [
+              "one-sided",
+              "two-sided-long-edge"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "printer",
+          "path"
+        ]
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "print.test_page": {
+      "description": "Print the CUPS test page.",
+      "capability": "printing.write",
+      "scope": "printing",
+      "access": "write",
+      "x-title": [
+        "테스트 페이지 인쇄",
+        "Print a test page"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "printer": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.@-]{1,127}$",
+            "description": "Printer name from printers.list"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "printer"
+        ]
+      },
+      "result": {
+        "type": "object"
+      }
+    },
+    "print.job.cancel": {
+      "description": "Cancel one of your print jobs (id from printers.list jobs).",
+      "capability": "printing.write",
+      "scope": "printing",
+      "access": "write",
+      "x-title": [
+        "인쇄 작업 취소",
+        "Cancel a print job"
+      ],
+      "params": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.@-]{1,127}-[0-9]{1,9}$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "job"
+        ]
+      },
+      "result": {
+        "type": "object"
+      }
     }
   },
   "x-scopes": {
@@ -2311,6 +2459,11 @@
     "power-mode": {
       "ko": "전원 모드(절전, 균형, 성능)",
       "en": "Power mode (saver, balanced, performance)",
+      "always_ask": false
+    },
+    "printing": {
+      "ko": "프린터와 인쇄",
+      "en": "Printers and printing",
       "always_ask": false
     }
   }

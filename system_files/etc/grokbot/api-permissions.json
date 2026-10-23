@@ -20,7 +20,8 @@
     "permissions": "allow",
     "apps": "allow",
     "mediakeys": "allow",
-    "updates": "ask"
+    "updates": "ask",
+    "printing": "ask"
   },
   "origins": {
     "http://settings.app.localhost:7311": {
@@ -38,7 +39,8 @@
       "power": "ask",
       "power-mode": "allow",
       "apps": "allow",
-      "updates": "ask"
+      "updates": "ask",
+      "printing": "allow"
     }
   }
 }

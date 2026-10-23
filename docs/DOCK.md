@@ -82,6 +82,7 @@ grokbot-dock-config reset               # 사용자 설정 삭제, 기본값으�
 - 블루투스(`bluetooth.status`): 꺼짐 `bluetooth-disabled-symbolic`, 켜짐 `bluetooth-symbolic`, 기기 연결 시 `bluetooth-active-symbolic`과 기기 이름(툴팁에 전체 목록). 클릭 → 설정 > 블루투스.
 - 마이크 음소거(`audio.status` input muted): `microphone-sensitivity-muted-symbolic` "마이크 꺼짐". 클릭 → 음소거 해제(`grokbot-volume mic-mute`). 음소거가 아니면 표시하지 않는다.
 - 외장 저장장치(`storage.list`): 꽂혀 있을 때만 `media-removable-symbolic` "USB"(툴팁에 이름과 열린 개수). 클릭 → 설정 > 저장장치(열기, 닫기, 안전하게 제거).
+- 인쇄(`printers.list`): 인쇄 작업이 있을 때만 `printer-symbolic` "인쇄 N". 작업이 걸린 프린터가 멈췄으면 강조(alert)하고 툴팁에 이름. 클릭 → 설정 > 프린터(기본 프린터, 테스트 페이지, 작업 취소).
 - 전원 모드(`power.profile.status`): 균형(기본)이 아닐 때만 `power-profile-power-saver-symbolic` "절전" 또는 `power-profile-performance-symbolic` "성능"(제한 이유는 툴팁). 클릭(배터리도) → 설정 > 전원.
 - 클릭: Wi-Fi → `grokbot-wifi`, 볼륨 → 음소거, 볼륨 위에서 스크롤 → 조절. 마우스를 올리면 자세한 내용.
 - 배터리: `Discharging`이면 AC여도 잔량 아이콘과 퍼센트. `Charging`일 때만 충전 아이콘과 "충전 중". AC이고 `Charging`/`Discharging`이 아니면(Unknown, 빈 상태, `Not charging`) 플러그 아이콘(`ac-adapter-symbolic`)과 "전원 연결됨". AC이고 `Full`이면 `battery-level-100-charged-symbolic`과 "전원 연결됨 (가득 참)". 위·아래 독은 아이콘만 보이므로, 그 문구는 모든 독의 배터리 버튼 툴팁에도 있다.

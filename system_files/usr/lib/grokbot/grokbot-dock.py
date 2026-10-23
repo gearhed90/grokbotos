@@ -393,6 +393,8 @@ class Dock:
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "bluetooth"])
         elif sid == "storage":
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "storage"])
+        elif sid == "printing":
+            subprocess.Popen(["/usr/local/bin/grokbot-settings", "printers"])
         elif sid in ("power-mode", "battery"):
             subprocess.Popen(["/usr/local/bin/grokbot-settings", "power"])
         elif sid.startswith("inuse-"):
