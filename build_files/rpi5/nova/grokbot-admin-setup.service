@@ -1,0 +1,20 @@
+[Unit]
+Description=Grok Bot OS first boot: set the admin password
+ConditionPathExists=!/var/lib/grokbot/admin-setup-done
+After=systemd-user-sessions.service plymouth-quit-wait.service systemd-vconsole-setup.service
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/grokbot-admin-setup
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+RemainAfterExit=no
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target

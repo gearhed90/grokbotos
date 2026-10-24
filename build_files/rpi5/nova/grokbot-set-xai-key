@@ -1,0 +1,42 @@
+#!/bin/bash
+# Save the xAI API key that Nova (novad) uses, as /etc/grokbot/xai_key,
+# owned root:grokbot, mode 0640. Run as an admin: sudo grokbot-set-xai-key
+# Reads the key from the terminal without echo (or from stdin when piped,
+# e.g. sudo grokbot-set-xai-key < ~/xai_key). Never prints the key.
+#   grokbot-set-xai-key --remove   delete it
+set -euo pipefail
+dest=${GROKBOT_XAI_KEY_FILE:-/etc/grokbot/xai_key}
+group=${GROKBOT_XAI_KEY_GROUP:-grokbot}
+if (( EUID != 0 )); then
+    echo "grokbot-set-xai-key: run with sudo" >&2
+    exit 2
+fi
+if [[ ${1:-} == "--remove" ]]; then
+    rm -f "$dest"
+    echo "Removed ${dest}."
+    exit 0
+fi
+if [[ -t 0 ]]; then
+    IFS= read -r -s -p "xAI API key (input hidden): " key
+    echo
+else
+    IFS= read -r key || true
+fi
+key=${key//[[:space:]]/}
+if [[ -z $key ]]; then
+    echo "grokbot-set-xai-key: empty key, nothing saved" >&2
+    exit 1
+fi
+if [[ ! $key =~ ^[A-Za-z0-9._-]{20,}$ ]]; then
+    echo "grokbot-set-xai-key: that does not look like an API key, nothing saved" >&2
+    exit 1
+fi
+install -d -m 0755 "$(dirname "$dest")"
+tmp=$(mktemp "${dest}.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+printf '%s\n' "$key" >"$tmp"
+chown "root:${group}" "$tmp"
+chmod 0640 "$tmp"
+mv -f "$tmp" "$dest"
+trap - EXIT
+echo "Saved ${dest} (root:${group}, 0640). Nova uses it on the next request."

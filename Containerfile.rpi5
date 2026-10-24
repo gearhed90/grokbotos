@@ -32,4 +32,11 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/rpi5-prepare.sh
 
+# Nova main screen, keypad lock, codecs, admin first boot (build_files/rpi5-nova.sh).
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/rpi5-nova.sh
+
 RUN bootc container lint
