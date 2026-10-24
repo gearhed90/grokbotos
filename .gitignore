@@ -9,3 +9,6 @@ grokbot-app/SHA256SUMS
 __pycache__/
 *.pyc
 /.vm/
+
+# Pi admin password hash (generated locally with openssl passwd -6; never commit)
+build_files/rpi5/nova/admin.hash

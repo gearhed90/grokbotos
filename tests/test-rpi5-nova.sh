@@ -11,18 +11,18 @@ nova=build_files/rpi5/nova
 
 for f in avatar.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py \
     nova-web-user.js grokbot-lock-keypad.py grokbot-nova grokbot-set-xai-key \
-    grokbot-admin-setup grokbot-admin-setup.service novad.service grokbot-lock.pam sway-rpi5-nova.conf; do
+    grokbot-admin-provision grokbot-admin-provision.service novad.service grokbot-lock.pam sway-rpi5-nova.conf; do
     assert_file "${nova}/${f}"
 done
 assert_file "build_files/rpi5/fonts/Nunito[wght].ttf"
 assert_file build_files/rpi5/fonts/OFL.txt
 python3 -m py_compile "${nova}"/*.py
-bash -n build_files/rpi5-nova.sh "${nova}/grokbot-nova" "${nova}/grokbot-set-xai-key" "${nova}/grokbot-admin-setup" build-pi-image.sh
+bash -n build_files/rpi5-nova.sh "${nova}/grokbot-nova" "${nova}/grokbot-set-xai-key" "${nova}/grokbot-admin-provision" build-pi-image.sh
 
 # Containerfile runs the Nova step after the Pi kernel step and before lint.
 a=$(grep -n '^    /ctx/rpi5-prepare.sh' Containerfile.rpi5 | cut -d: -f1)
 b=$(grep -n '^    /ctx/rpi5-nova.sh' Containerfile.rpi5 | cut -d: -f1)
-c=$(grep -n '^RUN bootc container lint' Containerfile.rpi5 | cut -d: -f1)
+c=$(grep -n '^RUN .*bootc container lint' Containerfile.rpi5 | cut -d: -f1)
 [[ -n $a && -n $b && -n $c ]] || fail "Containerfile.rpi5 is missing a step"
 (( a < b && b < c )) || fail "Containerfile.rpi5 order: prepare ${a}, nova ${b}, lint ${c}"
 
@@ -56,8 +56,15 @@ fi
 if find . -path ./.git -prune -o \( -name '*.nmconnection' -o -name 'xai_key' \) -print | grep -q .; then
     fail "a NetworkManager keyfile or key file is in the repo"
 fi
-grep -q 'chpasswd' "${nova}/grokbot-admin-setup" || fail "admin setup does not set a password"
-grep -qE 'passwd[^|]*--stdin|echo .*:[a-z]' "${nova}/grokbot-admin-setup" && fail "admin setup has a default password"
+# Admin account: Zack chose a fixed gearhed/gearhed admin. Only the hash, from
+# an untracked gitignored file, goes in the image; nothing tracked holds it.
+assert_contains "${nova}/grokbot-admin-provision" 'usermod -p'
+assert_contains build_files/rpi5-nova.sh 'admin.hash'
+assert_contains build_files/rpi5-nova.sh 'visudo -cf /etc/sudoers.d/nova-grokbot'
+git check-ignore -q "${nova}/admin.hash" || fail "admin.hash is not gitignored"
+git ls-files --error-unmatch "${nova}/admin.hash" >/dev/null 2>&1 && fail "admin.hash is committed"
+git grep -qE '\$6\$|chpasswd|gearhed:gearhed' -- build_files build-pi-image.sh && fail "a password or hash is committed"
+grep -lP '[\x{AC00}-\x{D7A3}]' "${nova}/grokbot-admin-provision" "${nova}/grokbot-admin-provision.service" && fail "Korean text in admin files"
 
 # grokbot-set-xai-key refuses to run without root.
 if bash "${nova}/grokbot-set-xai-key" </dev/null 2>/dev/null; then

@@ -23,7 +23,7 @@ if command -v shellcheck >/dev/null 2>&1; then
         build-pi-image.sh \
         build_files/rpi5/nova/grokbot-nova \
         build_files/rpi5/nova/grokbot-set-xai-key \
-        build_files/rpi5/nova/grokbot-admin-setup \
+        build_files/rpi5/nova/grokbot-admin-provision \
         tests/*.sh
 else
     echo "SKIP shellcheck: not installed"

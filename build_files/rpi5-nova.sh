@@ -1,8 +1,8 @@
 #!/bin/bash
 # Raspberry Pi 5 image only (Containerfile.rpi5, after rpi5-prepare.sh).
 # Nova becomes the main screen: native GTK avatar app + novad, a touch keypad
-# lock screen, H.264 video for Firefox, English web apps, a first-boot admin
-# password prompt and the Nunito font. See PI5-STATUS.md and docs/NOVA.md.
+# lock screen, H.264 video for Firefox, English web apps, the gearhed admin
+# account (first-boot oneshot) and the Nunito font. See PI5-STATUS.md and docs/NOVA.md.
 # Never puts a key, password or Wi-Fi secret in the image.
 set -euo pipefail
 ctx=${GROKBOT_CTX:-/ctx}
@@ -64,10 +64,20 @@ screen_off = 300
 lock = 600
 CONF
 
-# --- first-boot admin password -------------------------------------------
-install -m 0755 "${src}/grokbot-admin-setup" /usr/local/sbin/grokbot-admin-setup
-install -m 0644 "${src}/grokbot-admin-setup.service" /usr/lib/systemd/system/grokbot-admin-setup.service
-systemctl enable grokbot-admin-setup.service
+# --- admin account "gearhed" + Nova sudo (Zack's explicit choice) --------
+# The password hash comes from the untracked, gitignored rpi5/nova/admin.hash
+# (openssl passwd -6); a first-boot oneshot creates the user and sets it,
+# since /etc/passwd and /etc/shadow edits in the build don't reliably reach
+# the deployed bootc system. Never echo the hash.
+[[ -s "${src}/admin.hash" ]] || { echo "missing ${src}/admin.hash (openssl passwd -6 > it)" >&2; exit 1; }
+install -D -m 0600 -o root -g root "${src}/admin.hash" /usr/lib/grokbot/admin.hash
+install -m 0755 "${src}/grokbot-admin-provision" /usr/local/sbin/grokbot-admin-provision
+install -m 0644 "${src}/grokbot-admin-provision.service" /usr/lib/systemd/system/grokbot-admin-provision.service
+systemctl enable grokbot-admin-provision.service
+install -d -m 0750 /etc/sudoers.d
+printf 'grokbot ALL=(ALL) NOPASSWD: ALL\n' >/etc/sudoers.d/nova-grokbot
+chmod 0440 /etc/sudoers.d/nova-grokbot
+visudo -cf /etc/sudoers.d/nova-grokbot
 
 # --- built-in web apps open in English (each keeps its 한국어 switch) -----
 web=/usr/share/grokbot/webapps
