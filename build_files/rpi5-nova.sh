@@ -34,6 +34,7 @@ done
 install -m 0755 "${src}/grokbot-lock-keypad.py" "${nova}/grokbot-lock-keypad.py"
 ln -sf "${nova}/grokbot-lock-keypad.py" /usr/local/bin/grokbot-lock-keypad
 install -m 0755 "${src}/grokbot-nova" /usr/local/bin/grokbot-nova
+install -d -m 0755 /usr/local/sbin
 install -m 0755 "${src}/grokbot-set-xai-key" /usr/local/sbin/grokbot-set-xai-key
 install -m 0644 "${src}/grokbot-lock.pam" /etc/pam.d/grokbot-lock
 install -m 0644 "${src}/novad.service" /usr/lib/systemd/user/novad.service
