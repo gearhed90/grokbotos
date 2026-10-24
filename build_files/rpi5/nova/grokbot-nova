@@ -1,0 +1,19 @@
+#!/bin/bash
+# Nova, the Raspberry Pi 5 image's main screen (GROKBOT_EXEC in /etc/grokbot/app.conf).
+# sway -> grokbot-kiosk -> grokbot-launch -> this. Starts novad (systemd user unit)
+# if it is not up, then the native GTK app, fullscreen, app_id nova-shell.
+set -euo pipefail
+port=${NOVA_PORT:-8765}
+nova_dir=${NOVA_DIR:-/usr/share/grokbot/nova}
+health() { curl -fs --max-time 1 "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; }
+# novad opens windows (Firefox, apps) and talks to sway, so it needs these.
+systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_DATA_DIRS 2>/dev/null || true
+if ! health; then
+    systemctl --user start novad.service || true
+    for _ in $(seq 20); do
+        health && break
+        sleep 0.5
+    done
+fi
+export GDK_BACKEND=${GDK_BACKEND:-wayland} NO_AT_BRIDGE=1
+exec /usr/bin/python3 "${nova_dir}/nova_native.py" --fullscreen "$@"

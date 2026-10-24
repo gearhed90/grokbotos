@@ -1,0 +1,13 @@
+[Unit]
+Description=Nova prompt-shell backend (localhost only)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/share/grokbot/nova/novad.py
+Environment=NOVA_PORT=8765
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+
+# No [Install]: grokbot-nova starts it after importing the sway session
+# environment (WAYLAND_DISPLAY, SWAYSOCK), which novad needs to open windows.
