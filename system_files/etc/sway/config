@@ -47,6 +47,8 @@ workspace_layout default
 
 # No desktop icons, ever. The only app surfaces are the docks
 # (/etc/grokbot/dock.conf, grokbot-dock-config) and the fuzzel launcher.
+# Turn it off with "dock = off" in /etc/grokbot/desktop.conf, or per user
+# with ~/.config/grokbot/dock-enabled containing "off" (grokbot-dock checks).
 exec /usr/local/bin/grokbot-dock >>"$HOME/.local/share/grokbot/dock.log" 2>&1
 
 bindsym Mod4+space exec /usr/local/bin/grokbot-switch
@@ -105,6 +107,10 @@ bindsym Mod4+q kill
 # Keyboard layout chosen in Settings > Keyboard (grokbotd keyboard.layout.set);
 # grokbot-session creates it empty.
 include ~/.config/grokbot/keyboard.conf
+
+# Image-specific snippets (e.g. Raspberry Pi 5 DSI panel rotation). The
+# directory is empty on the generic image, so the glob matches nothing.
+include /etc/sway/grokbot.d/*.conf
 
 # Per-output scale / position / mode saved by Settings > Display (grokbotd
 # display.set). Last, so a problem in it cannot skip anything above;

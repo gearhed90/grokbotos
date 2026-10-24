@@ -1,7 +1,25 @@
 #!/bin/bash
 # Start the Grok Bot OS docks (one process, one panel per enabled edge).
 # sway runs this once at startup; this loop restarts the dock if it dies.
+# Skipped when the dock is turned off: ~/.config/grokbot/dock-enabled
+# (on|off) wins, else "dock =" in /etc/grokbot/desktop.conf, else on.
 set -u
+dock_enabled() {
+    local user_flag="${XDG_CONFIG_HOME:-$HOME/.config}/grokbot/dock-enabled"
+    local sys_conf="${GROKBOT_DESKTOP_SYS_CONF:-/etc/grokbot/desktop.conf}"
+    local v=""
+    if [[ -f "$user_flag" ]]; then
+        v="$(tr -d '[:space:]' <"$user_flag")"
+    elif [[ -f "$sys_conf" ]]; then
+        v="$(sed -n 's/^[[:space:]]*dock[[:space:]]*=[[:space:]]*\([^[:space:]#]*\).*/\1/p' "$sys_conf" | tail -n1)"
+    fi
+    case "${v,,}" in off|no|false|0) return 1 ;; esac
+    return 0
+}
+if ! dock_enabled; then
+    echo "grokbot-dock: disabled, not starting" >&2
+    exit 0
+fi
 while true; do
     /usr/bin/python3 /usr/lib/grokbot/grokbot-dock.py || echo "grokbot-dock: exited $?" >&2
     sleep 2

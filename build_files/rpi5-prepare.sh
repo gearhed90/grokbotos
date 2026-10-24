@@ -197,6 +197,10 @@ fi
 }
 
 install -m 0644 /ctx/rpi5/config.txt "${stage}/config.txt"
+# Pi-only desktop bits: DSI panel landscape + touch mapping, dock off.
+install -D -m 0644 /ctx/rpi5/sway-rpi5-dsi.conf /etc/sway/grokbot.d/50-rpi5-dsi.conf
+sed -i 's/^dock = on$/dock = off/' /etc/grokbot/desktop.conf
+grep -q '^dock = off$' /etc/grokbot/desktop.conf || { echo "dock default not set" >&2; exit 1; }
 install -m 0644 /ctx/rpi5/cmdline.txt "${stage}/cmdline.txt"
 
 install -D -m 0755 /ctx/rpi5-sync-cmdline.sh /usr/lib/grokbot/rpi5-sync-cmdline.sh

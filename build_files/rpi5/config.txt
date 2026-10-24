@@ -14,4 +14,10 @@ max_framebuffers=2
 # Wi-Fi (brcmfmac) comes from bcm2712-rpi-5-b.dtb plus the firmware files.
 # There is no overlay to turn Wi-Fi on. disable-wifi.dtbo only turns it off.
 dtoverlay=vc4-kms-v3d
+# Raspberry Pi Touch Display 2, 7-inch, on DSI port 1 (CAM/DISP 1). Without
+# it the panel stays blank. For the 5-inch panel use
+# vc4-kms-dsi-ili9881-5inch. On port 0 append ,dsi0 to the line. Harmless
+# when no panel is attached. The panel is portrait; landscape and touch
+# mapping are in /etc/sway/grokbot.d/50-rpi5-dsi.conf.
+dtoverlay=vc4-kms-dsi-ili9881-7inch
 initramfs initramfs_2712 followkernel
