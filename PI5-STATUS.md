@@ -28,7 +28,7 @@ Real `cmdline.txt` as seen in `/proc/cmdline` (firmware prefix first, then ours)
 - BLS lookup uses a `loader*` glob (`loader` or `loader.1`) instead of one fixed directory.
 - FAT staging copies with `cp -rL`, since FAT cannot hold symlinks.
 
-## Fixes after first boot (this change, not yet committed)
+## Fixes after first boot (dabb017)
 
 These were first made by hand on the card, then moved into the repo:
 
@@ -57,3 +57,25 @@ These were first made by hand on the card, then moved into the repo:
 ## What was not changed
 
 `.github/workflows/` was not modified. Image names stay `grokbotos` and `grokbotos-arm64`. The Pi recipe tags `localhost/grokbotos-rpi5`.
+
+## Next flash (branch feat/rpi5-next-flash)
+
+다음 플래시: Nova 네이티브 앱이 기본 앱이 됩니다 (`/etc/grokbot/app.conf`의 `GROKBOT_MODE=native`). / Next flash: the Nova native app becomes the default app (`GROKBOT_MODE=native` in `/etc/grokbot/app.conf`).
+
+잠금 화면은 이제 GTK4 + gtk4-layer-shell(ext-session-lock-v1) 키패드입니다. PIN은 grokbot 계정의 유닉스 비밀번호이며 PAM 서비스 `grokbot-lock`로 확인합니다. 키패드가 없으면 swaylock을 씁니다. / The lock screen is now a GTK4 + gtk4-layer-shell (ext-session-lock-v1) keypad. The PIN is the grokbot account's unix password, checked with the PAM service `grokbot-lock`. Without the keypad, swaylock is used.
+
+화면 꺼짐 5분, 잠금 10분. Nova 창은 전체 화면이며 유휴 억제를 하지 않습니다. / Screen off after 5 minutes, lock after 10 minutes. The Nova window is fullscreen and does not inhibit idle.
+
+xAI 키는 이미지에 들어 있지 않습니다. 관리자가 `sudo grokbot-set-xai-key`로 `/etc/grokbot/xai_key`(root:grokbot 0640)에 설정합니다. / The xAI key is not in the image. An admin sets it with `sudo grokbot-set-xai-key` into `/etc/grokbot/xai_key` (root:grokbot 0640).
+
+첫 부팅 때 tty1에서 `admin` 계정의 비밀번호를 정하라고 묻습니다. 기본 비밀번호는 없습니다. 비워 두면 계정은 잠긴 채로 남고 다음 부팅에서 다시 묻습니다. / On first boot, tty1 asks you to choose a password for the `admin` account. There is no default password. If left blank, the account stays locked and it asks again next boot.
+
+RPM Fusion free의 libavcodec-freeworld로 브라우저 H.264/AAC 재생을 켭니다. 파일/노트/플레이어/시스템 앱은 기본 영어이며 버튼으로 한국어로 바꿀 수 있습니다. 글꼴은 Nunito(OFL)입니다. / libavcodec-freeworld from RPM Fusion free enables H.264/AAC in the browser. The files/notes/player/system apps default to English with a button to switch to Korean. The font is Nunito (OFL).
+
+업데이트 출처는 `ghcr.io/gearhed90/grokbotos-rpi5:latest`로 설정되지만, 그 이미지가 올라가기 전까지는 오프라인 아카이브로 업데이트합니다: `sudo bootc switch --transport oci-archive /path/grokbotos-rpi5.oci.tar`. / The update source is set to `ghcr.io/gearhed90/grokbotos-rpi5:latest`, but until that image is pushed, update from the offline archive: `sudo bootc switch --transport oci-archive /path/grokbotos-rpi5.oci.tar`.
+
+웨이크 워드("Nova")는 미뤘습니다. 사전 학습된 모델이 없고 빌드 때 pip 휠이 필요합니다. novad의 `wake_word_hook`은 남아 있고 기본은 꺼짐입니다. / The wake word ("Nova") is deferred. There is no pretrained model, and it needs pip wheels at build time. novad keeps `wake_word_hook`, off by default.
+
+빌드: Alpha에서 `sudo /home/gearhed/grokbotos-rpi5/build-pi-image.sh`. 결과는 `/data/grokbotos-build/`에 저장됩니다. WiFi 연결 파일은 빌드 때 이전 이미지에서 복사하며 저장소에는 없습니다. / Build: on Alpha, `sudo /home/gearhed/grokbotos-rpi5/build-pi-image.sh`. Output goes to `/data/grokbotos-build/`. The WiFi connection file is copied from the old image at build time and is not in the repo.
+
+테스트: `bash tests/run-tests.sh` (Nova 단위, 모의 xAI, 음성 테스트 포함). Pi 실기기와 GTK4 화면에서는 아직 테스트하지 않았습니다. / Tests: `bash tests/run-tests.sh` (includes Nova unit, mock-xAI and voice tests). Not yet tested on the Pi or on a real GTK4 screen.
