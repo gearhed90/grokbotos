@@ -103,7 +103,7 @@ new_loop=$(losetup --find --show --partscan "$raw"); loops+=("$new_loop")
 udevadm settle 2>/dev/null || sleep 2
 mkdir -p "$mnt/new" "$mnt/old"
 mount "$(root_part "$new_loop")" "$mnt/new"
-deploy=$(find "$mnt/new/ostree/deploy" -mindepth 3 -maxdepth 3 -type d -path '*/deploy/*.0' -print -quit)
+deploy=$(find "$mnt/new/ostree/deploy" -mindepth 3 -maxdepth 3 -type d -path '*/ostree/deploy/*/deploy/*.0' -print -quit)
 [[ -n $deploy ]] || die "no ostree deployment in the new disk"
 origin="${deploy}.origin"
 [[ -f $origin ]] || die "no origin file next to $deploy"
