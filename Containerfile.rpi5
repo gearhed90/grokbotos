@@ -39,4 +39,9 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/rpi5-nova.sh
 
-RUN bootc container lint
+# bootc's lint needs syscalls qemu-user does not implement (ENOSYS, os
+# error 38) when this arm64 image is built emulated on x86_64. Skip it only
+# in that case; any real lint failure still stops the build.
+RUN out=$(bootc container lint 2>&1) && echo "$out" || { echo "$out"; \
+    echo "$out" | grep -q 'os error 38' || exit 1; \
+    echo 'warning: bootc container lint skipped (not supported under qemu emulation)'; }
