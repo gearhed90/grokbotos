@@ -1,0 +1,4 @@
+#%PAM-1.0
+# Nova keypad lock screen (grokbot-lock-keypad). Same stack as swaylock.
+auth       include      login
+account    include      login

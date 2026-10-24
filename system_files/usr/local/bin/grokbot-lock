@@ -54,7 +54,14 @@ if [[ $pin_state != "set" ]]; then
     exit 0
 fi
 
-if ! pgrep -u "$user" -x swaylock >/dev/null; then
+# Images may ship a touch keypad locker (Raspberry Pi 5: grokbot-lock-keypad,
+# ext-session-lock + PAM). Fall back to swaylock if it is missing or fails.
+keypad=${GROKBOT_LOCK_KEYPAD:-/usr/local/bin/grokbot-lock-keypad}
+if pgrep -u "$user" -f 'grokbot-lock-keypad' >/dev/null || pgrep -u "$user" -x swaylock >/dev/null; then
+    :
+elif [[ -x $keypad ]] && "$keypad" -f; then
+    :
+else
     # -f: fork once the lock surface is up, so suspend happens after locking.
     swaylock -f -c 18181b --indicator-radius 80 --show-failed-attempts
 fi
