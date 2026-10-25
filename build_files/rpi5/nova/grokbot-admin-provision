@@ -1,21 +1,18 @@
 #!/bin/bash
-# Grok Bot OS first boot: make sure the admin account "gearhed" exists
-# (wheel, home dir) with the password hash baked into the image at
-# /usr/lib/grokbot/admin.hash. Runs every boot; does nothing once in place.
-# Never prints the hash.
+# Grok Bot OS first boot: make sure the admin account "admin" exists (wheel,
+# home dir). A brand-new or locked account gets the default password
+# "password", marked expired, so the first login (console or SSH) must choose
+# a new one. Runs every boot; does nothing once the account has a password.
 set -euo pipefail
-user=gearhed
-hashfile=/usr/lib/grokbot/admin.hash
-[[ -r $hashfile ]] || { echo "no $hashfile" >&2; exit 1; }
+user=admin
 if ! getent passwd "$user" >/dev/null; then
     useradd -m -G wheel -s /bin/bash -c "Grok Bot OS admin" "$user"
     echo "created $user"
 fi
 id -nG "$user" | grep -qw wheel || usermod -aG wheel "$user"
-[[ -d /var/home/$user || -d /home/$user ]] || mkhomedir_helper "$user" 2>/dev/null || true
 cur=$(getent shadow "$user" | cut -d: -f2)
-want=$(<"$hashfile")
-if [[ $cur != "$want" && ( $cur == '!'* || $cur == '*'* || -z $cur ) ]]; then
-    usermod -p "$want" "$user"
-    echo "set password for $user"
+if [[ -z $cur || $cur == '!'* || $cur == '*'* ]]; then
+    printf '%s:%s\n' "$user" password | chpasswd
+    chage -d 0 "$user"
+    echo "set default password for $user (must be changed at first login)"
 fi

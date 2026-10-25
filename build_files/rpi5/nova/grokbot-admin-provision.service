@@ -1,5 +1,5 @@
 [Unit]
-Description=Grok Bot OS: ensure the gearhed admin account exists
+Description=Grok Bot OS: ensure the admin account exists
 After=systemd-sysusers.service systemd-tmpfiles-setup.service local-fs.target
 Before=systemd-user-sessions.service sshd.service getty@tty1.service
 

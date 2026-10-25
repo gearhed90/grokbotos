@@ -56,14 +56,9 @@ fi
 if find . -path ./.git -prune -o \( -name '*.nmconnection' -o -name 'xai_key' \) -print | grep -q .; then
     fail "a NetworkManager keyfile or key file is in the repo"
 fi
-# Admin account: Zack chose a fixed gearhed/gearhed admin. Only the hash, from
-# an untracked gitignored file, goes in the image; nothing tracked holds it.
-assert_contains "${nova}/grokbot-admin-provision" 'usermod -p'
-assert_contains build_files/rpi5-nova.sh 'admin.hash'
-assert_contains build_files/rpi5-nova.sh 'visudo -cf /etc/sudoers.d/nova-grokbot'
-git check-ignore -q "${nova}/admin.hash" || fail "admin.hash is not gitignored"
-git ls-files --error-unmatch "${nova}/admin.hash" >/dev/null 2>&1 && fail "admin.hash is committed"
-git grep -qE '\$6\$|chpasswd|gearhed:gearhed' -- build_files build-pi-image.sh && fail "a password or hash is committed"
+# Admin account: default admin/password, expired so it must be changed at first login.
+assert_contains "${nova}/grokbot-admin-provision" 'user=admin'
+assert_contains "${nova}/grokbot-admin-provision" 'chage -d 0'
 grep -lP '[\x{AC00}-\x{D7A3}]' "${nova}/grokbot-admin-provision" "${nova}/grokbot-admin-provision.service" && fail "Korean text in admin files"
 
 # grokbot-set-xai-key refuses to run without root.
