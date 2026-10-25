@@ -65,14 +65,19 @@ lock = 600
 CONF
 
 # --- admin account "admin" (default password "password", expired so the
-# first login must change it) + Nova sudo ---------------------------------
+# first login must change it), optional local Nova sudo ---------------------------------
 install -m 0755 "${src}/grokbot-admin-provision" /usr/local/sbin/grokbot-admin-provision
 install -m 0644 "${src}/grokbot-admin-provision.service" /usr/lib/systemd/system/grokbot-admin-provision.service
 systemctl enable grokbot-admin-provision.service
-install -d -m 0750 /etc/sudoers.d
-printf 'grokbot ALL=(ALL) NOPASSWD: ALL\n' >/etc/sudoers.d/nova-grokbot
-chmod 0440 /etc/sudoers.d/nova-grokbot
-visudo -cf /etc/sudoers.d/nova-grokbot
+# Passwordless sudo for the grokbot (Nova) user is OFF by default. It is only
+# added for a local build that has the untracked, gitignored marker file
+# build_files/rpi5/nova/local-nova-sudo (the owner's own Pi).
+if [[ -e "${src}/local-nova-sudo" ]]; then
+    install -d -m 0750 /etc/sudoers.d
+    printf 'grokbot ALL=(ALL) NOPASSWD: ALL\n' >/etc/sudoers.d/nova-grokbot
+    chmod 0440 /etc/sudoers.d/nova-grokbot
+    visudo -cf /etc/sudoers.d/nova-grokbot
+fi
 
 # --- built-in web apps open in English (each keeps its 한국어 switch) -----
 web=/usr/share/grokbot/webapps

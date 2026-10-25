@@ -59,6 +59,8 @@ fi
 # Admin account: default admin/password, expired so it must be changed at first login.
 assert_contains "${nova}/grokbot-admin-provision" 'user=admin'
 assert_contains "${nova}/grokbot-admin-provision" 'chage -d 0'
+assert_contains build_files/rpi5-nova.sh 'local-nova-sudo'
+git ls-files --error-unmatch "${nova}/local-nova-sudo" >/dev/null 2>&1 && fail "local-nova-sudo is committed"
 grep -lP '[\x{AC00}-\x{D7A3}]' "${nova}/grokbot-admin-provision" "${nova}/grokbot-admin-provision.service" && fail "Korean text in admin files"
 
 # grokbot-set-xai-key refuses to run without root.

@@ -10,3 +10,5 @@ __pycache__/
 *.pyc
 /.vm/
 
+# Local-only: give the grokbot (Nova) user passwordless sudo in this build
+build_files/rpi5/nova/local-nova-sudo
