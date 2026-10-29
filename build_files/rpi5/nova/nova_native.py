@@ -76,7 +76,7 @@ class Nova:
         prov = Gtk.CssProvider(); prov.load_from_data(CSS)
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         s = Gtk.Settings.get_default(); s.set_property("gtk-application-prefer-dark-theme", True)
-        w = self.win = Gtk.Window(title="Nova"); w.get_style_context().add_class("nova")
+        w = self.win = Gtk.Window(title="Pixel"); w.get_style_context().add_class("nova")
         w.set_default_size(*a.size); w.connect("destroy", Gtk.main_quit)
         ov = Gtk.Overlay(); w.add(ov)
         if a.renderer == "gl":
@@ -100,7 +100,7 @@ class Nova:
             sm = Gtk.Label(label=key); sm.get_style_context().add_class("small"); bx.add(sm); b.add(bx); bx.show_all()
             b.connect("clicked", lambda _b, y=yes: self.answer(y)); b.show(); self.cf.add(b)
         row = Gtk.Overlay()
-        self.inp = Gtk.Entry(name="in", placeholder_text="Ask Nova…"); self.inp.connect("activate", self.on_enter)
+        self.inp = Gtk.Entry(name="in", placeholder_text="Ask Pixel…"); self.inp.connect("activate", self.on_enter)
         self.inp.set_input_hints(Gtk.InputHints.INHIBIT_OSK)   # never pop an on-screen keyboard
         row.add(self.inp)
         vb = Gtk.Box(spacing=6, halign=Gtk.Align.END, valign=Gtk.Align.CENTER, margin_end=8)

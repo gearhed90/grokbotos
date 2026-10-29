@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Nova</title><style>
+<title>Pixel</title><style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif}
 canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 #bar{position:fixed;left:50%;bottom:3.5vh;transform:translateX(-50%);width:min(720px,80vw)}
@@ -21,7 +21,7 @@ background:rgba(20,24,22,.6);color:#fff;font-size:20px;outline:none;background:r
 #vnote{position:fixed;left:50%;bottom:calc(3.5vh + 62px);transform:translateX(-50%);color:rgba(255,255,255,.55);font-size:15px;opacity:0;transition:opacity .6s;pointer-events:none}
 #in::placeholder{color:rgba(255,255,255,.4)}#in:focus{border-color:rgba(110,231,183,.45)}
 </style></head><body><canvas id="c"></canvas>
-<div id="bar"><div id="reply"></div><div id="echo"></div><div id="cf"><button id="yes">Yes<small>Enter</small></button><button id="no">No<small>Esc</small></button></div><div style="position:relative"><input id="in" placeholder="Ask Nova…" autocomplete="off"><div id="vb">
+<div id="bar"><div id="reply"></div><div id="echo"></div><div id="cf"><button id="yes">Yes<small>Enter</small></button><button id="no">No<small>Esc</small></button></div><div style="position:relative"><input id="in" placeholder="Ask Pixel…" autocomplete="off"><div id="vb">
 <button id="mute" hidden title="Spoken replies"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path class="w" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="x" d="M16 9l6 6M22 9l-6 6" style="display:none"/></svg></button>
 <button id="mic" hidden title="Hold to talk (or hold Space)"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button></div></div></div><div id="vnote"></div>
 <script>

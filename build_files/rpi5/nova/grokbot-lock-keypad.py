@@ -66,7 +66,7 @@ class Locker:
 
     def start(self):
         if PREVIEW:
-            w = Gtk.Window(application=self.app, title="Nova lock (preview)")
+            w = Gtk.Window(application=self.app, title="Pixel lock (preview)")
             w.set_default_size(1280, 720)
             self.attach(w)
             w.present()

@@ -438,7 +438,7 @@ def tool_schema():
         f("power", "Lock the screen, restart or shut down. Asks the user first.", {"action": {"type": "string", "enum": ["lock", "restart", "shutdown"]}}, ["action"]),
     ]
 
-SYSTEM = ("You are Nova, the assistant built into Zack's Grok Bot OS on a Raspberry Pi touchscreen. "
+SYSTEM = ("You are Pixel, the assistant built into Zack's Grok Bot OS on a Raspberry Pi touchscreen. "
           "Act on requests using your tools. For streamers on Twitch open https://www.twitch.tv/<channel> "
           "(channel names are lowercase with no spaces, e.g. 'burnt peanut' -> burntpeanut). "
           "Some tools return pending: the user is shown Yes/No buttons; just restate the question briefly. "
@@ -619,7 +619,7 @@ def stt(path, key, lang):
     with open(path, "rb") as f:
         data = f.read()
     body, ctype = _multipart([("model", STT_MODEL), ("format", "true"), ("language", lang),
-                              ("keyterm", "Nova"), ("keyterm", "Twitch")], "ptt.wav", data)
+                              ("keyterm", "Pixel"), ("keyterm", "Twitch")], "ptt.wav", data)
     req = urllib.request.Request(API_BASE + "/stt", data=body, method="POST",
                                  headers={"Content-Type": ctype, "Authorization": "Bearer " + key})
     with urllib.request.urlopen(req, timeout=60) as r:
@@ -699,7 +699,7 @@ def voice_hush():   # stop speaking now (new press, mute)
     if p and p.poll() is None: p.terminate()
 
 def wake_word_hook():
-    """Reserved for a later wake word ("Nova"). Not implemented on purpose.
+    """Reserved for a later wake word ("Pixel"). Not implemented on purpose.
     A future detector (always-on, local-only, e.g. a small keyword model reading a
     pw-record stream that is never stored or sent) should call voice_start("wake")
     and signal the page through a GET /api/voice/events stream so it can show
