@@ -97,7 +97,10 @@ bindsym Mod1+Shift+n exec /usr/local/bin/grokbot-notify-dnd toggle
 bindsym Print exec /usr/local/bin/grokbot-capture full
 bindsym Shift+Print exec /usr/local/bin/grokbot-capture region
 # Korean input: fcitx5 (한/영, Shift+Space, Right Alt). Config /etc/xdg/fcitx5.
-exec fcitx5 -d --replace >>"$HOME/.local/share/grokbot/fcitx5.log" 2>&1
+# Opt-in: create ~/.config/grokbot/ime-enabled to start it. Off by default
+# because fcitx5 re-sends keys through a virtual keyboard, which makes
+# sway fire --release bindings (the Super toggle) twice.
+exec sh -c '[ -e "$HOME/.config/grokbot/ime-enabled" ] && exec fcitx5 -d --replace >>"$HOME/.local/share/grokbot/fcitx5.log" 2>&1'
 bindsym Mod1+Tab exec /usr/lib/grokbot/grokbot-alttab.py next
 bindsym Mod1+Shift+Tab exec /usr/lib/grokbot/grokbot-alttab.py prev
 # Close the focused window. Grok Bot is restarted by grokbot-kiosk.

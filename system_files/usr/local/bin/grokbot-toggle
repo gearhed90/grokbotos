@@ -1,0 +1,26 @@
+#!/bin/bash
+# Toggle between the Grok Bot app and the avatar (nova-shell).
+# Bound to a lone tap of the Super (Pi/Windows) key.
+set -euo pipefail
+# GROKBOT_APP_ID in app.conf points at the avatar on Pi builds, so the
+# desktop app id is fixed here.
+app_id="${GROKBOT_DESKTOP_APP_ID:-grok-bot}"
+avatar_id="nova-shell"
+for id in "$app_id" "$avatar_id"; do
+    [[ "$id" =~ ^[A-Za-z][A-Za-z0-9_.-]*$ ]] || { echo "grokbot-toggle: unsafe app id" >&2; exit 1; }
+done
+focused=$(swaymsg -t get_tree | python3 -c 'import json,sys
+def f(n):
+    if n.get("focused"): return n.get("app_id") or ""
+    for c in n.get("nodes",[])+n.get("floating_nodes",[]):
+        r=f(c)
+        if r is not None: return r
+print(f(json.load(sys.stdin)) or "")')
+if [[ "$focused" == "$app_id" ]]; then
+    target="$avatar_id"; other="$app_id"
+else
+    target="$app_id"; other="$avatar_id"
+fi
+swaymsg -q "[app_id=\"${other}\"] fullscreen disable" || true
+swaymsg -q "[app_id=\"${target}\"] focus"
+swaymsg -q "[app_id=\"${target}\"] fullscreen enable"
