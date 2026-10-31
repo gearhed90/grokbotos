@@ -15,7 +15,9 @@ Conflicts=final.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/bin/true
-ExecStop=-/usr/lib/grokbot/rpi5-sync-boot.sh
+# Run through bash: a lib_t script exec'd by systemd stays in init_t, which
+# SELinux forbids from creating files on the FAT (dosfs_t). bash runs as initrc_t.
+ExecStop=-/usr/bin/bash /usr/lib/grokbot/rpi5-sync-boot.sh
 TimeoutStopSec=5m
 
 [Install]

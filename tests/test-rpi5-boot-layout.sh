@@ -210,8 +210,8 @@ env RPI5_CMDLINE_LIB="${root}/build_files/rpi5-cmdline.sh" RPI5_BOOT_DIR="${sb}/
 assert_contains "${sb}/fat/cmdline.txt" "ostree=/ostree/boot.0/default/new/0"
 # Units: shutdown ordering and the boot-time path service use the new script.
 assert_contains build_files/rpi5/grokbot-rpi5-boot-sync.service "Before=ostree-finalize-staged.service"
-assert_contains build_files/rpi5/grokbot-rpi5-boot-sync.service "ExecStop=-/usr/lib/grokbot/rpi5-sync-boot.sh"
-assert_contains build_files/rpi5/grokbot-rpi5-cmdline.service "rpi5-sync-boot.sh"
+assert_contains build_files/rpi5/grokbot-rpi5-boot-sync.service "ExecStop=-/usr/bin/bash /usr/lib/grokbot/rpi5-sync-boot.sh"
+assert_contains build_files/rpi5/grokbot-rpi5-cmdline.service "ExecStart=-/usr/bin/bash /usr/lib/grokbot/rpi5-sync-boot.sh"
 assert_contains build_files/rpi5-prepare.sh "grokbot-rpi5-boot-sync.service"
 assert_contains build_files/rpi5-prepare.sh "KERNEL_RPI5_EVR=6.18.57-1.rpi5.fc44"
 echo "ok rpi5-sync-boot"
