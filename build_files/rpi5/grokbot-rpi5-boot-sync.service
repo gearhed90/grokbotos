@@ -1,0 +1,22 @@
+[Unit]
+Description=Copy the Raspberry Pi 5 boot files for the next bootc deployment onto FAT
+Documentation=file:///usr/lib/grokbot/rpi5-sync-boot.sh
+ConditionPathExists=/run/ostree-booted
+DefaultDependencies=no
+RequiresMountsFor=/sysroot /boot /boot/efi
+After=local-fs.target boot.mount boot-efi.mount
+# Units stop in reverse order: being Before= ostree-finalize-staged.service
+# means this ExecStop runs after `ostree admin finalize-staged` has written
+# the new boot entries, while /boot and /boot/efi are still mounted.
+Before=ostree-finalize-staged.service basic.target final.target
+Conflicts=final.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=-/usr/lib/grokbot/rpi5-sync-boot.sh
+TimeoutStopSec=5m
+
+[Install]
+WantedBy=multi-user.target

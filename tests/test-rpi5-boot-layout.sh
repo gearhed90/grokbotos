@@ -154,4 +154,65 @@ if grep -E '^[[:space:]]*kernel-rpi4( |\\|$)' build_files/rpi5-prepare.sh; then
     fail "prepare installs kernel-rpi4"
 fi
 
+
+# --- rpi5-sync-boot.sh: follow the default (highest version) BLS entry -------
+sb="${tmp}/syncboot"
+mkdir -p "${sb}/boot/loader/entries" "${sb}/fat/overlays" "${sb}/sysroot/ostree/boot.0/default/new" \
+    "${sb}/sysroot/ostree/deploy/default/deploy"
+for d in old.0 new.0; do
+    p="${sb}/sysroot/ostree/deploy/default/deploy/${d}/usr/lib/grokbot/rpi5-boot"
+    mkdir -p "${p}/overlays"
+    write_kernel "${p}/kernel_2712.img"
+    printf '%s\n' "$d" >> "${p}/kernel_2712.img"
+    printf 'initrd-%s\n' "$d" > "${p}/initramfs_2712"
+    printf 'dtb-%s\n' "$d" > "${p}/bcm2712-rpi-5-b.dtb"
+    printf 'ovl-%s\n' "$d" > "${p}/overlays/vc4-kms-v3d.dtbo"
+    printf 'kernel=kernel_2712.img\n# %s\n' "$d" > "${p}/config.txt"
+    printf 'unfilled\n' > "${p}/cmdline.txt"
+done
+ln -s ../../../deploy/default/deploy/new.0 "${sb}/sysroot/ostree/boot.0/default/new/0"
+mkdir -p "${sb}/sysroot/ostree/boot.0/default/old"
+ln -s ../../../deploy/default/deploy/old.0 "${sb}/sysroot/ostree/boot.0/default/old/0"
+cat > "${sb}/boot/loader/entries/ostree-2.conf" <<'EOS'
+title new
+version 2
+options root=UUID=11111111-2222-3333-4444-555555555555 rw ostree=/ostree/boot.0/default/new/0
+EOS
+cat > "${sb}/boot/loader/entries/ostree-1.conf" <<'EOS'
+title old
+version 1
+options root=UUID=11111111-2222-3333-4444-555555555555 rw ostree=/ostree/boot.0/default/old/0
+EOS
+touch -d '2020-01-01' "${sb}/boot/loader/entries/ostree-2.conf"   # mtime must not decide
+old_payload="${sb}/sysroot/ostree/deploy/default/deploy/old.0/usr/lib/grokbot/rpi5-boot"
+cp -r "${old_payload}/." "${sb}/fat/"
+printf 'kernel=kernel_2712.img\n# local tweak\n' > "${sb}/fat/config.txt"
+printf 'stale ostree=/ostree/boot.1/default/old/0\n' > "${sb}/fat/cmdline.txt"
+sync_env=(RPI5_CMDLINE_LIB="${root}/build_files/rpi5-cmdline.sh" RPI5_BOOT_DIR="${sb}/boot"
+    RPI5_FAT_DIR="${sb}/fat" RPI5_SYSROOT="${sb}/sysroot")
+env "${sync_env[@]}" bash "${root}/build_files/rpi5-sync-boot.sh" 2>"${sb}/log" || fail "rpi5-sync-boot.sh failed: $(cat "${sb}/log")"
+new_payload="${sb}/sysroot/ostree/deploy/default/deploy/new.0/usr/lib/grokbot/rpi5-boot"
+cmp -s "${new_payload}/kernel_2712.img" "${sb}/fat/kernel_2712.img" || fail "sync-boot: kernel not from the default deployment"
+cmp -s "${new_payload}/initramfs_2712" "${sb}/fat/initramfs_2712" || fail "sync-boot: initramfs not from the default deployment"
+cmp -s "${new_payload}/bcm2712-rpi-5-b.dtb" "${sb}/fat/bcm2712-rpi-5-b.dtb" || fail "sync-boot: dtb not updated"
+cmp -s "${new_payload}/overlays/vc4-kms-v3d.dtbo" "${sb}/fat/overlays/vc4-kms-v3d.dtbo" || fail "sync-boot: overlay not updated"
+assert_contains "${sb}/fat/cmdline.txt" "ostree=/ostree/boot.0/default/new/0"
+assert_contains "${sb}/fat/cmdline.txt" "rootwait"
+assert_contains "${sb}/fat/config.txt" "# local tweak"
+grep -q " 5 file(s) updated" "${sb}/log" || fail "sync-boot: expected 5 updated files: $(cat "${sb}/log")"
+ls "${sb}/fat"/*.new >/dev/null 2>&1 && fail "sync-boot left .new files"
+# Second run changes nothing.
+env "${sync_env[@]}" bash "${root}/build_files/rpi5-sync-boot.sh" 2>"${sb}/log2" || fail "second sync failed"
+assert_contains "${sb}/log2" "0 file(s) updated"
+# No FAT, no entries: exit 0 without touching anything.
+env RPI5_CMDLINE_LIB="${root}/build_files/rpi5-cmdline.sh" RPI5_BOOT_DIR="${sb}/none" RPI5_FAT_DIR="${sb}/fat" \
+    RPI5_SYSROOT="${sb}/sysroot" bash "${root}/build_files/rpi5-sync-boot.sh" 2>/dev/null || fail "sync-boot failed without entries"
+assert_contains "${sb}/fat/cmdline.txt" "ostree=/ostree/boot.0/default/new/0"
+# Units: shutdown ordering and the boot-time path service use the new script.
+assert_contains build_files/rpi5/grokbot-rpi5-boot-sync.service "Before=ostree-finalize-staged.service"
+assert_contains build_files/rpi5/grokbot-rpi5-boot-sync.service "ExecStop=-/usr/lib/grokbot/rpi5-sync-boot.sh"
+assert_contains build_files/rpi5/grokbot-rpi5-cmdline.service "rpi5-sync-boot.sh"
+assert_contains build_files/rpi5-prepare.sh "grokbot-rpi5-boot-sync.service"
+assert_contains build_files/rpi5-prepare.sh "KERNEL_RPI5_EVR=6.18.57-1.rpi5.fc44"
+echo "ok rpi5-sync-boot"
 echo "PASS test-rpi5-boot-layout.sh"

@@ -53,11 +53,14 @@ if [[ ${#to_remove[@]} -gt 0 ]]; then
     rpm -e --nodeps "${to_remove[@]}"
 fi
 
+# Pinned to the kernel the Pi already runs, so an in-place `bootc upgrade`
+# keeps the same kernel. Bump it on purpose (and check the copr still has it).
+KERNEL_RPI5_EVR=6.18.57-1.rpi5.fc44
 dnf5 install -y --disablerepo=fedora-cisco-openh264 \
-    kernel-rpi5 \
-    kernel-rpi5-core \
-    kernel-rpi5-modules \
-    kernel-rpi5-modules-extra \
+    "kernel-rpi5-${KERNEL_RPI5_EVR}" \
+    "kernel-rpi5-core-${KERNEL_RPI5_EVR}" \
+    "kernel-rpi5-modules-${KERNEL_RPI5_EVR}" \
+    "kernel-rpi5-modules-extra-${KERNEL_RPI5_EVR}" \
     bcm283x-firmware \
     bcm434xx-firmware \
     dracut
@@ -80,6 +83,10 @@ case "$kver" in
         ;;
 esac
 echo "kernel-rpi5 ${kver}"
+[[ "$kver" == "${KERNEL_RPI5_EVR}.aarch64" ]] || {
+    echo "expected kernel-rpi5 ${KERNEL_RPI5_EVR}, got ${kver}" >&2
+    exit 1
+}
 
 moddir="/usr/lib/modules/${kver}"
 if [[ ! -d "$moddir" && -d "/lib/modules/${kver}" ]]; then
@@ -209,7 +216,13 @@ install -D -m 0644 /ctx/rpi5/grokbot-rpi5-cmdline.service \
     /usr/lib/systemd/system/grokbot-rpi5-cmdline.service
 install -D -m 0644 /ctx/rpi5/grokbot-rpi5-cmdline.path \
     /usr/lib/systemd/system/grokbot-rpi5-cmdline.path
-systemctl enable grokbot-rpi5-cmdline.service grokbot-rpi5-cmdline.path
+# In-place updates: copy the next deployment's kernel, initramfs, dtbs,
+# overlays and cmdline onto FAT at shutdown, after ostree finalizes it.
+install -D -m 0755 /ctx/rpi5-sync-boot.sh /usr/lib/grokbot/rpi5-sync-boot.sh
+install -D -m 0644 /ctx/rpi5/grokbot-rpi5-boot-sync.service \
+    /usr/lib/systemd/system/grokbot-rpi5-boot-sync.service
+systemctl enable grokbot-rpi5-cmdline.service grokbot-rpi5-cmdline.path \
+    grokbot-rpi5-boot-sync.service
 
 if command -v lsinitrd >/dev/null 2>&1; then
     # Capture the listing first: with pipefail, grep -q exits early and
