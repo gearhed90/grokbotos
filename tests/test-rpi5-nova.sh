@@ -11,13 +11,13 @@ nova=build_files/rpi5/nova
 
 for f in avatar.py avatar_shapes.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py \
     nova-web-user.js grokbot-lock-keypad.py grokbot-nova grokbot-set-xai-key \
-    grokbot-admin-provision grokbot-admin-provision.service novad.service grokbot-lock.pam sway-rpi5-nova.conf; do
+    novad.service grokbot-lock.pam sway-rpi5-nova.conf; do
     assert_file "${nova}/${f}"
 done
 assert_file "build_files/rpi5/fonts/Nunito[wght].ttf"
 assert_file build_files/rpi5/fonts/OFL.txt
 python3 -m py_compile "${nova}"/*.py
-bash -n build_files/rpi5-nova.sh "${nova}/grokbot-nova" "${nova}/grokbot-set-xai-key" "${nova}/grokbot-admin-provision" build-pi-image.sh
+bash -n build_files/rpi5-nova.sh "${nova}/grokbot-nova" "${nova}/grokbot-set-xai-key" build-pi-image.sh
 
 # Containerfile runs the Nova step after the Pi kernel step and before lint.
 a=$(grep -n '^    /ctx/rpi5-prepare.sh' Containerfile.rpi5 | cut -d: -f1)
@@ -56,12 +56,12 @@ fi
 if find . -path ./.git -prune -o \( -name '*.nmconnection' -o -name 'xai_key' \) -print | grep -q .; then
     fail "a NetworkManager keyfile or key file is in the repo"
 fi
-# Admin account: default admin/password, expired so it must be changed at first login.
-assert_contains "${nova}/grokbot-admin-provision" 'user=admin'
-assert_contains "${nova}/grokbot-admin-provision" 'chage -d 0'
+# No built-in admin account (no default admin/password).
+[[ ! -e "${nova}/grokbot-admin-provision" ]] || fail "grokbot-admin-provision is back"
+grep -q 'grokbot-admin-provision' build_files/rpi5-nova.sh && fail "rpi5-nova.sh still installs grokbot-admin-provision"
+grep -q 'chpasswd' build_files/rpi5-nova.sh && fail "rpi5-nova.sh sets a password"
 assert_contains build_files/rpi5-nova.sh 'local-nova-sudo'
 git ls-files --error-unmatch "${nova}/local-nova-sudo" >/dev/null 2>&1 && fail "local-nova-sudo is committed"
-grep -lP '[\x{AC00}-\x{D7A3}]' "${nova}/grokbot-admin-provision" "${nova}/grokbot-admin-provision.service" && fail "Korean text in admin files"
 
 # grokbot-set-xai-key refuses to run without root.
 if bash "${nova}/grokbot-set-xai-key" </dev/null 2>/dev/null; then

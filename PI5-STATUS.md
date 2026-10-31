@@ -68,11 +68,13 @@ These were first made by hand on the card, then moved into the repo:
 
 xAI 키는 이미지에 들어 있지 않습니다. 관리자가 `sudo grokbot-set-xai-key`로 `/etc/grokbot/xai_key`(root:grokbot 0640)에 설정합니다. / The xAI key is not in the image. An admin sets it with `sudo grokbot-set-xai-key` into `/etc/grokbot/xai_key` (root:grokbot 0640).
 
-첫 부팅 때 tty1에서 `admin` 계정의 비밀번호를 정하라고 묻습니다. 기본 비밀번호는 없습니다. 비워 두면 계정은 잠긴 채로 남고 다음 부팅에서 다시 묻습니다. / On first boot, tty1 asks you to choose a password for the `admin` account. There is no default password. If left blank, the account stays locked and it asks again next boot.
+이미지에는 기본 관리자 계정이 없습니다(2026-10-30 제거). 관리자 계정은 소유자가 직접 만듭니다. / The image ships no built-in admin account (removed 2026-10-30). The owner creates admin accounts.
 
 RPM Fusion free의 libavcodec-freeworld로 브라우저 H.264/AAC 재생을 켭니다. 파일/노트/플레이어/시스템 앱은 기본 영어이며 버튼으로 한국어로 바꿀 수 있습니다. 글꼴은 Nunito(OFL)입니다. / libavcodec-freeworld from RPM Fusion free enables H.264/AAC in the browser. The files/notes/player/system apps default to English with a button to switch to Korean. The font is Nunito (OFL).
 
 업데이트 출처는 `ghcr.io/gearhed90/grokbotos-rpi5:latest`로 설정되지만, 그 이미지가 올라가기 전까지는 오프라인 아카이브로 업데이트합니다: `sudo bootc switch --transport oci-archive /path/grokbotos-rpi5.oci.tar`. / The update source is set to `ghcr.io/gearhed90/grokbotos-rpi5:latest`, but until that image is pushed, update from the offline archive: `sudo bootc switch --transport oci-archive /path/grokbotos-rpi5.oci.tar`.
+
+제자리 업데이트 / In-place updates: `bootc switch --transport oci-archive` or `bootc upgrade` stages the new deployment. At shutdown, after `ostree admin finalize-staged`, `grokbot-rpi5-boot-sync.service` runs `/usr/lib/grokbot/rpi5-sync-boot.sh`, which copies the new default deployment's kernel_2712.img, initramfs_2712, dtbs and overlays onto the FAT partition and rewrites cmdline.txt. `config.txt` on FAT is kept if it already exists. `grokbot-rpi5-cmdline.service` (boot, and on /boot/loader/entries changes such as `bootc rollback`) runs the same script. kernel-rpi5 is pinned in rpi5-prepare.sh (`KERNEL_RPI5_EVR`). The first switch from an image without this unit needs the sync run by hand before rebooting.
 
 웨이크 워드("Nova")는 미뤘습니다. 사전 학습된 모델이 없고 빌드 때 pip 휠이 필요합니다. novad의 `wake_word_hook`은 남아 있고 기본은 꺼짐입니다. / The wake word ("Nova") is deferred. There is no pretrained model, and it needs pip wheels at build time. novad keeps `wake_word_hook`, off by default.
 

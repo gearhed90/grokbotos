@@ -1,8 +1,8 @@
 #!/bin/bash
 # Raspberry Pi 5 image only (Containerfile.rpi5, after rpi5-prepare.sh).
 # Nova becomes the main screen: native GTK avatar app + novad, a touch keypad
-# lock screen, H.264 video for Firefox, English web apps, the admin
-# account (first-boot oneshot) and the Nunito font. See PI5-STATUS.md and docs/NOVA.md.
+# lock screen, H.264 video for Firefox, English web apps and the Nunito
+# font (no built-in admin account). See PI5-STATUS.md and docs/NOVA.md.
 # Never puts a key, password or Wi-Fi secret in the image.
 set -euo pipefail
 ctx=${GROKBOT_CTX:-/ctx}
@@ -64,11 +64,9 @@ screen_off = 300
 lock = 600
 CONF
 
-# --- admin account "admin" (default password "password", expired so the
-# first login must change it), optional local Nova sudo ---------------------------------
-install -m 0755 "${src}/grokbot-admin-provision" /usr/local/sbin/grokbot-admin-provision
-install -m 0644 "${src}/grokbot-admin-provision.service" /usr/lib/systemd/system/grokbot-admin-provision.service
-systemctl enable grokbot-admin-provision.service
+# --- no built-in admin account (removed 2026-10-30: a default
+# admin/password login is not shipped). Admin accounts are made by the
+# owner. Optional local Nova sudo ---------------------------------------------
 # Passwordless sudo for the grokbot (Nova) user is OFF by default. It is only
 # added for a local build that has the untracked, gitignored marker file
 # build_files/rpi5/nova/local-nova-sudo (the owner's own Pi).
