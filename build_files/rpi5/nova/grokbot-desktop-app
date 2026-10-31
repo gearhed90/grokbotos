@@ -1,0 +1,27 @@
+#!/bin/bash
+# Raspberry Pi 5: start the Grok Bot desktop app (app id grok-bot) once at
+# login, in the background, so Super can toggle to it right away. Nova
+# (nova-shell) stays in front. Run by sway `exec` (startup only, not reload).
+# Does nothing if the app is already running. No respawn: quitting the app
+# leaves it closed until the next login.
+set -u
+app_id="grok-bot"
+avatar_id="nova-shell"
+if pgrep -u "$(id -u)" -x grok-bot >/dev/null 2>&1; then
+    echo "grokbot-desktop-app: already running"
+    exit 0
+fi
+command -v grok-bot >/dev/null 2>&1 || { echo "grokbot-desktop-app: grok-bot not installed" >&2; exit 0; }
+echo "grokbot-desktop-app: launching $(date -Is)"
+setsid grok-bot >/dev/null 2>&1 < /dev/null &
+# Keep the avatar in front once the app window maps (up to 90 s).
+for _ in $(seq 1 90); do
+    if swaymsg -t get_tree 2>/dev/null | grep -q "\"app_id\": \"${app_id}\""; then
+        swaymsg -q "[app_id=\"${avatar_id}\"] focus" 2>/dev/null || true
+        swaymsg -q "[app_id=\"${avatar_id}\"] fullscreen enable" 2>/dev/null || true
+        exit 0
+    fi
+    sleep 1
+done
+echo "grokbot-desktop-app: no ${app_id} window after 90 s" >&2
+exit 0

@@ -32,6 +32,12 @@ assert_contains build_files/rpi5/sway-rpi5-dsi.conf "output DSI-2 transform 90"
 assert_contains build_files/rpi5/sway-rpi5-dsi.conf "input type:touch map_to_output DSI-2"
 grep -q 'map_to_output DSI-1' build_files/rpi5/sway-rpi5-dsi.conf && fail "touch mapped to DSI-1"
 assert_contains "${nova}/sway-rpi5-nova.conf" 'for_window [app_id="nova-shell"] inhibit_idle none'
+# Grok Bot desktop app starts once at login, behind Nova; no double launch.
+assert_file "${nova}/grokbot-desktop-app"
+bash -n "${nova}/grokbot-desktop-app"
+assert_contains "${nova}/sway-rpi5-nova.conf" 'exec /usr/local/bin/grokbot-desktop-app'
+assert_contains "${nova}/grokbot-desktop-app" 'pgrep -u "$(id -u)" -x grok-bot'
+assert_contains build_files/rpi5-nova.sh '/usr/local/bin/grokbot-desktop-app'
 
 # Kiosk starts Nova; the lock comes back at 10 minutes.
 assert_contains build_files/rpi5-nova.sh 'GROKBOT_EXEC="/usr/local/bin/grokbot-nova"'
