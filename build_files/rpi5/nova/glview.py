@@ -6,6 +6,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
 from avatar import Avatar
+import avatar_shapes as AS
 
 _gl = ctypes.CDLL("libGLESv2.so.2")
 def _f(name, res, *args):
@@ -26,6 +27,7 @@ glUseProgram = _f("glUseProgram", None, U)
 glGetUniformLocation = _f("glGetUniformLocation", I, U, ctypes.c_char_p)
 glUniform1f = _f("glUniform1f", None, I, F)
 glUniform2f = _f("glUniform2f", None, I, F, F)
+glUniform3f = _f("glUniform3f", None, I, F, F, F)
 glUniform4f = _f("glUniform4f", None, I, F, F, F, F)
 glUniform1fv = _f("glUniform1fv", None, I, I, ctypes.POINTER(F))
 glUniform4fv = _f("glUniform4fv", None, I, I, ctypes.POINTER(F))
@@ -47,7 +49,13 @@ precision highp float;
 uniform vec2 res;            // logical px
 uniform float pxs;           // device px per logical px
 uniform vec4 body;           // cx, cy, rot, scl
-uniform vec4 bsz;            // w, h, amp, ty
+uniform vec4 bsz;            // squash x, squash y, amp, ty
+uniform vec4 shp;            // body scale S, circR (typing), gradient top y, bottom y
+uniform float rmax;          // largest unit radius of the shape (early out)
+uniform float sf0;           // shape outline r(theta): Fourier series, harmonics 1..32
+uniform vec4 sf[16];         // (a_m, b_m, a_m+1, b_m+1)
+uniform vec3 bcol;           // body color
+uniform vec3 zcol;           // sleeping z color
 uniform vec4 glow;           // r0, r1, a0(.16gp), a1(.05gp)
 uniform vec2 gc;             // glow center
 uniform float w0c;
@@ -57,32 +65,39 @@ uniform vec4 esz;            // ew, ehh, arcAlpha, lineW
 uniform vec4 dots;           // gap, r, aL, aR
 uniform vec2 dotsS;          // scale L, R
 uniform vec4 zs[5];          // x, y, fs, alpha
-const vec3 G0 = vec3(20.0,195.0,112.0)/255.0;
 mat2 R(float a){ float c=cos(a), s=sin(a); return mat2(c,s,-s,c); }
 float aa(float d){ return clamp(0.5 - d*pxs, 0.0, 1.0); }
 float seg(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0); return length(pa-ba*h); }
-vec3 bodyCol(float v){ // v in 0..1 top->bottom
-  vec3 c1=vec3(19.0,188.0,108.0)/255.0, c2=vec3(18.0,178.0,102.0)/255.0, c3=vec3(17.0,170.0,97.0)/255.0;
-  if(v<0.55) return G0; if(v<0.7) return mix(G0,c1,(v-0.55)/0.15);
-  if(v<0.85) return mix(c1,c2,(v-0.7)/0.15); return mix(c2,c3,(v-0.85)/0.15); }
+vec3 bodyCol(float v){ // v in 0..1 top->bottom: the color darkens a little toward the bottom
+  float k = v<0.55 ? 1.0 : v<0.7 ? mix(1.0,0.965,(v-0.55)/0.15) : v<0.85 ? mix(0.965,0.913,(v-0.7)/0.15) : mix(0.913,0.87,(v-0.85)/0.15);
+  return bcol*k; }
 void main(){
   vec2 f = vec2(gl_FragCoord.x, res.y*pxs - gl_FragCoord.y)/pxs;
   // glow over black
   float gd = length(f-gc); float gt = clamp((gd-glow.x)/(glow.y-glow.x),0.0,1.0);
   float ga = gt<0.5 ? mix(glow.z,glow.w,gt*2.0) : mix(glow.w,0.0,(gt-0.5)*2.0);
-  vec3 col = G0*ga;
+  vec3 col = bcol*ga;
   // body local coords
   vec2 p = R(-body.z)*(f-body.xy)/body.w;
-  float w=bsz.x, h=bsz.y;
-  float r = min(w,h)*0.5; vec2 q = vec2(max(abs(p.x)-(w*0.5-r),0.0), max(abs(p.y)-(h*0.5-r),0.0));
-  float an = atan(p.y,p.x);
+  vec2 sq = p/bsz.xy; float l = length(sq);
+  float inB = 0.0;
+  if(l < max(shp.x*rmax, shp.y)*1.08 + bsz.z*3.0){
+  vec2 u = l>1e-4 ? sq/l : vec2(1.0,0.0), z = u;
+  float r = sf0, dr = 0.0, m = 1.0;
+  for(int k=0;k<16;k++){
+    r += sf[k].x*z.x + sf[k].y*z.y; dr += m*(sf[k].y*z.x - sf[k].x*z.y); z = vec2(z.x*u.x-z.y*u.y, z.x*u.y+z.y*u.x); m += 1.0;
+    r += sf[k].z*z.x + sf[k].w*z.y; dr += m*(sf[k].w*z.x - sf[k].z*z.y); z = vec2(z.x*u.x-z.y*u.y, z.x*u.y+z.y*u.x); m += 1.0;
+  }
+  float ty = bsz.w; float Rb = mix(shp.x*r, shp.y, ty), dR = shp.x*dr*(1.0-ty);
+  float an = atan(sq.y,sq.x);
   float wv = w0c + wf[0].x*cos(an)+wf[0].y*sin(an)+wf[0].z*cos(2.0*an)+wf[0].w*sin(2.0*an)
            + wf[1].x*cos(3.0*an)+wf[1].y*sin(3.0*an)+wf[1].z*cos(4.0*an)+wf[1].w*sin(4.0*an)
            + wf[2].x*cos(5.0*an)+wf[2].y*sin(5.0*an)+wf[2].z*cos(6.0*an)+wf[2].w*sin(6.0*an);
-  float d = length(q)-r - bsz.z*wv;
-  float inB = aa(d*body.w);
+  float d = (l - Rb - bsz.z*wv) / sqrt(1.0 + pow(dR/max(l,1e-3),2.0)) * min(bsz.x,bsz.y);
+  inB = aa(d*body.w);
+  }
   if(inB>0.0){
-    vec3 bc = bodyCol(clamp(p.y/h+0.5,0.0,1.0));
+    vec3 bc = bodyCol(clamp((p.y-shp.z)/max(shp.w-shp.z,1e-3),0.0,1.0));
     float ea = 0.0;
     for(int k=0;k<2;k++){
       vec2 e = R(-eye[k].z)*(p-eye[k].xy);
@@ -98,9 +113,9 @@ void main(){
   }
   if(dots.y>0.0){
     float dl = length(p-vec2(-dots.x,0.0))-dots.y*dotsS.x, dr = length(p-vec2(dots.x,0.0))-dots.y*dotsS.y;
-    col = mix(col, G0, dots.z*aa(dl*body.w)); col = mix(col, G0, dots.w*aa(dr*body.w));
+    col = mix(col, bcol, dots.z*aa(dl*body.w)); col = mix(col, bcol, dots.w*aa(dr*body.w));
   }
-  vec3 zc = vec3(110.0,231.0,183.0)/255.0;
+  vec3 zc = zcol;
   for(int k=0;k<5;k++){ if(zs[k].w<=0.0) continue;
     vec2 z = R(0.15)*(f-zs[k].xy)/zs[k].z;   // glyph space, baseline at y=0, rotated -0.15
     float xh=0.52, zw=0.46, lw=0.075;
@@ -131,17 +146,17 @@ class GLAvatar(Avatar):
         tSince = self.sT if st == "typing" else 0
         shrink = min(1, max(0, (tSince - .15) / .45)) if st == "typing" else 0; se = shrink * shrink * (3 - 2 * shrink)
         circR = h0 / 2 * (1 - .06 * ty) * (1 - se * .62)
-        w = (w0 + (circR * 2 - w0) * ty) * (1 + .015 * exhale); h = (h0 + (circR * 2 - h0) * ty) * G("sy") * (1 - .03 * exhale)
+        g = self.geom(h0, ty, circR, exhale); Sh = self.style["shape"]
         amp = h0 * .008 * (1 - ty); n1 = self.n1
         wob = [(n1(math.cos(a) * 1.5 + t * .6 + 10) + n1(math.sin(a) * 1.5 + t * .5 + 40) + .6 * n1(math.cos(a * 3) * 2 + math.sin(a * 2) + t * .9 + 70))
                for a in (i / 64 * 6.283 for i in range(64))] if amp else [0.0] * 64
         eA = max(0, 1 - ty * 2.2); lidS = lid * (1 - sl); rd = max(0, min(1, G("round")))
-        eS = 1 / max(.6, G("scl")) * (.75 if st == "looking" else 1)
+        eS = 1 / max(.6, G("scl")) * (.75 if st == "looking" else 1) * g["es"]
         ew = h0 * (.25 + .01 * rd) * eS; eh = h0 * (.46 - .2 * rd) * eS * max(lidS, .1); ehh = max(eh, 2 * Sc)
-        ex = h0 * (.25 + .02 * rd) * eS; ey = -h0 * .02
+        ex = h0 * (.25 + .02 * rd) * eS; ey = g["ecy"]
         openA = eA * (1 - max(0, sl - .35) / .2) if sl < .55 else 0
         arcA = eA * min(1, (sl - .35) / .2) if sl > .35 else 0
-        eyes = [(s * ex + G("lx") * h0 * .272, ey + G("ly") * h0 * .3, G("lean"), openA) for s in (-1, 1)]
+        eyes = [(g["ecx"] + s * ex + G("lx") * h0 * .272 * g["mv"], ey + G("ly") * h0 * .3 * g["mv"], G("lean"), openA) for s in (-1, 1)]
         dots = (0, 0, 0, 0); dS = (1, 1)
         if ty > .02:
             rs = h0 * .1 * min(1, ty * 1.3); gap = max(circR + rs + h0 * .08, h0 * .42) * min(1, ty)
@@ -157,13 +172,15 @@ class GLAvatar(Avatar):
         zs = []
         for b in self.zs[-5:]:
             a = (t - b) / 4.2
-            zs.append((cx + w0 * .38 + a * h0 * .35 + math.sin(a * 6) * h0 * .04, cy - h0 * .4 - a * h0 * .6, h0 * (.11 + .1 * a),
+            zs.append((cx + (w0 * .38 if Sh == "capsule" else g["half_w"] * .8) + a * h0 * .35 + math.sin(a * 6) * h0 * .04, cy - h0 * .4 - a * h0 * .6, h0 * (.11 + .1 * a),
                        math.sin(math.pi * min(1, a * 1.15)) * .85 * sl))
         zs += [(0, 0, 1, 0)] * (5 - len(zs))
         sy = G("sy")
-        return dict(body=(cx, cy + (1 - sy) * h0 * .5, G("rot"), G("scl")), bsz=(w, h, amp, ty),
-                    glow=(h0 * .45, w0 * .75, .16 * gp, .05 * gp), gc=(cx, cy), wob=wob, eyes=eyes,
-                    esz=(ew, ehh, arcA, h0 * .05), dots=dots, dotsS=dS, zs=zs)
+        r1 = w0 * .75 if Sh == "capsule" else max(w0 * .5, self.rmax * h0 * AS.SIZE * 1.5)
+        return dict(body=(cx, cy + (1 - sy) * h0 * .5, G("rot"), G("scl")), bsz=(g["sx"], g["sy"], amp, ty),
+                    shp=(g["S"], circR, g["ytop"], g["ybot"]), rmax=self.rmax, ser=self.ser, bcol=self.col, zcol=self.zcol,
+                    glow=(h0 * .45, r1, .16 * gp, .05 * gp), gc=(cx, cy), wob=wob, eyes=eyes,
+                    esz=(ew, ehh, arcA, h0 * .05 * min(1, g["es"] * 1.3)), dots=dots, dotsS=dS, zs=zs)
 
 class GLView(Gtk.GLArea):
     def __init__(self, av):
@@ -188,7 +205,7 @@ class GLView(Gtk.GLArea):
         except Exception as e:
             self.failed = str(e); return
         self.prog = p; self.u = {n: glGetUniformLocation(p, n.encode()) for n in
-                                 ("res", "pxs", "body", "bsz", "glow", "gc", "w0c", "wf", "eye", "esz", "dots", "dotsS", "zs")}
+                                 ("res", "pxs", "body", "bsz", "shp", "rmax", "sf0", "sf", "bcol", "zcol", "glow", "gc", "w0c", "wf", "eye", "esz", "dots", "dotsS", "zs")}
         if glGenVertexArrays:
             try: v = U(); glGenVertexArrays(1, ctypes.byref(v)); glBindVertexArray(v.value)
             except Exception: pass
@@ -201,7 +218,10 @@ class GLView(Gtk.GLArea):
         k = self.av.params(W, H); u = self.u
         glViewport(0, 0, W * s, H * s); glUseProgram(self.prog)
         glUniform2f(u["res"], W, H); glUniform1f(u["pxs"], s)
-        glUniform4f(u["body"], *k["body"]); glUniform4f(u["bsz"], *k["bsz"]); glUniform4f(u["glow"], *k["glow"])
+        glUniform4f(u["body"], *k["body"]); glUniform4f(u["bsz"], *k["bsz"]); glUniform4f(u["shp"], *k["shp"]); glUniform1f(u["rmax"], k["rmax"])
+        a0, co = k["ser"]; glUniform1f(u["sf0"], a0); glUniform4fv(u["sf"], 16, (F * 64)(*[x for ab in co for x in ab]))
+        glUniform3f(u["bcol"], *k["bcol"]); glUniform3f(u["zcol"], *k["zcol"])
+        glUniform4f(u["glow"], *k["glow"])
         glUniform2f(u["gc"], *k["gc"]); wb = k["wob"]; c = [sum(wb[i] * math.cos(2 * math.pi * m * i / 64) for i in range(64)) / 32 for m in range(7)]
         sn = [sum(wb[i] * math.sin(2 * math.pi * m * i / 64) for i in range(64)) / 32 for m in range(7)]
         glUniform1f(u["w0c"], c[0] / 2); glUniform4fv(u["wf"], 3, (F * 12)(*[x for m in range(1, 7) for x in (c[m], sn[m])]))

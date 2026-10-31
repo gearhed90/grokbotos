@@ -9,6 +9,8 @@ sudo grokbot-set-xai-key), else ~/.config/grokbot/xai_key (mode 600). Never logg
 import json, os, re, shutil, stat, subprocess, sys, threading, time, urllib.request, urllib.error
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import avatar_shapes   # avatar shape/color choice (~/.config/grokbot/avatar.json); nova_native watches the file
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get("NOVA_PORT", "8765"))
@@ -149,7 +151,7 @@ def rpc(method, params=None, timeout=60):
     return r.get("result", {})
 
 def audit(tool, args, outcome, via="direct"):
-    safe = {k: v for k, v in (args or {}).items() if k in ("ssid", "name", "action", "percent", "change", "muted", "event", "secs", "chars")}
+    safe = {k: v for k, v in (args or {}).items() if k in ("ssid", "name", "action", "percent", "change", "muted", "event", "secs", "chars", "shape", "color")}
     log("AUDIT", json.dumps({"tool": tool, "args": safe, "via": via, "outcome": outcome}))
 
 def run_ro(argv, timeout=6):
@@ -398,6 +400,11 @@ def call_tool(name, a):
                 else:
                     r = make_pending("wifi_connect", {"ssid": ssid}, "Switch WiFi to %s%s?" % (ssid, "" if net["saved"] else " (open network)"),
                                      lambda: (rpc("network.wifi.connect", {"ssid": ssid}, timeout=60), "Connected to %s." % ssid)[1])
+        elif name == "set_avatar":
+            shape, color = a.get("shape"), a.get("color")
+            if shape is None and color is None: raise ValueError("give shape and/or color")
+            c = avatar_shapes.save(shape=shape, color=color)
+            r = {"ok": True, "result": "Avatar is now a %s %s." % (c["color"], c["shape"])}
         elif name == "power":
             act = a.get("action")
             m = {"lock": ("lock", "Lock the screen?", "Locking."), "restart": ("reboot", "Restart the Pi?", "Restarting."),
@@ -435,6 +442,8 @@ def tool_schema():
         f("wifi_status", "List WiFi networks in range: connected one, which are saved or open.", {}),
         f("wifi_connect", "Switch to a saved or open WiFi network by name. Takes no password. Asks the user first.",
           {"ssid": {"type": "string", "maxLength": 32}}, ["ssid"]),
+        f("set_avatar", "Change how you (the on-screen avatar) look: shape and/or color.",
+          {"shape": {"type": "string", "enum": avatar_shapes.SHAPE_IDS}, "color": {"type": "string", "enum": avatar_shapes.COLOR_IDS}}),
         f("power", "Lock the screen, restart or shut down. Asks the user first.", {"action": {"type": "string", "enum": ["lock", "restart", "shutdown"]}}, ["action"]),
     ]
 
@@ -725,6 +734,8 @@ class H(BaseHTTPRequestHandler):
             self._json({"ok": True, "key": key_present(), "model": MODEL, "dry_run": DRY_RUN})
         elif self.path == "/api/voice/status":
             self._json(voice_status())
+        elif self.path == "/api/avatar":
+            self._json({**avatar_shapes.load(), "shapes": avatar_shapes.SHAPE_IDS, "colors": avatar_shapes.COLOR_IDS})
         else:
             self.send_error(404)
     def do_POST(self):
@@ -744,6 +755,17 @@ class H(BaseHTTPRequestHandler):
             except (ValueError, KeyError, TypeError):
                 return self.send_error(400)
             return self._json(confirm(pid, yes))
+        if self.path == "/api/avatar":
+            if "application/json" not in self.headers.get("Content-Type", ""): return self.send_error(415)
+            n = int(self.headers.get("Content-Length", "0") or 0)
+            if n > 1024: return self.send_error(413)
+            try:
+                b = json.loads(self.rfile.read(n) or b"{}")
+                if not isinstance(b, dict): raise ValueError
+                c = avatar_shapes.save(shape=b.get("shape"), color=b.get("color"))
+            except ValueError:
+                return self.send_error(400)
+            audit("avatar", c, "ok"); return self._json(c)
         if self.path.startswith("/api/voice/"):
             if "application/json" not in self.headers.get("Content-Type", ""): return self.send_error(415)
             n = int(self.headers.get("Content-Length", "0") or 0)

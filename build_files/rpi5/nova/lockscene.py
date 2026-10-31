@@ -4,6 +4,7 @@ grokbot-lock-keypad puts it on a session-lock surface. Based on nova-shell/lock.
 import math, time
 import cairo
 from avatar import Avatar
+import avatar_shapes
 
 KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "del", "0", "ok"]
 MAX_DOTS = 12
@@ -12,7 +13,7 @@ FONT = "Nunito"
 
 class LockScene:
     def __init__(self, rng=None):
-        self.av = Avatar(layout={"cx": .25, "cy": .52, "h": .36}, rng=rng)
+        self.av = Avatar(layout={"cx": .25, "cy": .52, "h": .36}, rng=rng, style=avatar_shapes.load())
         self.av.set_state("sleeping")
         self.av.simulate(3.0)
         self.n = 0              # typed characters (the secret lives in the window, not here)

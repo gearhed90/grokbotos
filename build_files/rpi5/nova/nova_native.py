@@ -11,6 +11,7 @@ from gi.repository import Gtk, Gdk
 import cairo
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from avatar import Avatar
+import avatar_shapes as AS
 
 NET_ERR = "I can't reach my helper service right now (novad)."
 CSS = b"""
@@ -32,6 +33,15 @@ button.vb { min-width: 42px; min-height: 42px; padding: 0; border-radius: 21px; 
   background: rgba(20,24,22,.7); background-image: none; color: #d1fae5; box-shadow: none; }
 button.vb.off { opacity: .35; }
 button.vb.on { background: #14C370; color: #04140b; border-color: #14C370; }
+button#look { min-width: 52px; min-height: 52px; padding: 0; border-radius: 26px; border: 1px solid rgba(255,255,255,.14);
+  background: rgba(20,24,22,.55); background-image: none; box-shadow: none; opacity: .7; }
+#picker { background: rgba(0,0,0,.94); }
+#picker label.ttl { color: #fff; font-size: 26px; font-weight: 700; }
+#picker label.sub { color: rgba(255,255,255,.55); font-size: 16px; }
+#picker button.pick { padding: 0; border: 0; border-radius: 22px; background: transparent; background-image: none; box-shadow: none; }
+#picker button.pick:hover, #picker button.pick:active { background: rgba(255,255,255,.06); }
+#picker button#done { font-size: 20px; min-width: 160px; padding: 12px 26px; border-radius: 26px; background: rgba(255,255,255,.12);
+  background-image: none; color: #fff; border: 1px solid rgba(255,255,255,.25); box-shadow: none; text-shadow: none; }
 """
 
 class Fader:
@@ -65,10 +75,39 @@ def icon_draw(kind, get_state):
                 cr.arc(12, 12, 4.95, -0.785, 0.785); cr.stroke(); cr.arc(12, 12, 9.2, -0.785, 0.785); cr.stroke()
     return draw
 
+def draw_shape_thumb(cr, W, H, shape, color, ring=False):
+    """A still avatar (shape, color, eyes) for the picker grid."""
+    s = min(W, H) * .27; cx, cy = W / 2, H / 2
+    if shape == "capsule": s = min(W, H) * .5 / (2 * AS.CAPSULE_H) * .62
+    if ring:
+        cr.set_source_rgba(1, 1, 1, .9); cr.set_line_width(3)
+        cr.arc(cx, cy, min(W, H) * .47, 0, 6.2832); cr.stroke()
+    col = AS.color_rgb(color); pts = AS.outline(shape, 120)
+    for i, (x, y, _) in enumerate(pts): (cr.line_to if i else cr.move_to)(cx + x * s, cy + y * s)
+    cr.close_path(); cr.set_source_rgb(*col); cr.fill()
+    dx, dy, es = AS.EYES.get(shape, (0, 0, 1))
+    h0 = s / AS.SIZE if shape != "capsule" else s * 2 * AS.CAPSULE_H
+    if shape != "capsule": es *= AS.EYE_K
+    ew, eh, ex = h0 * .25 * es, h0 * .46 * es, h0 * .25 * es
+    for sd in (-1, 1):
+        x, y = cx + dx * s + sd * ex, cy + dy * s
+        cr.new_path(); r = ew / 2
+        cr.arc(x, y - eh / 2 + r, r, 3.1416, 0); cr.arc(x, y + eh / 2 - r, r, 0, 3.1416); cr.close_path()
+        cr.set_source_rgb(0, 0, 0); cr.fill()
+
+def draw_swatch(cr, W, H, color, ring=False):
+    cx, cy, r = W / 2, H / 2, min(W, H) * .32
+    if ring:
+        cr.set_source_rgba(1, 1, 1, .95); cr.set_line_width(3); cr.arc(cx, cy, r + 7, 0, 6.2832); cr.stroke()
+    cr.arc(cx, cy, r, 0, 6.2832); cr.set_source_rgb(*AS.color_rgb(color)); cr.fill_preserve()
+    cr.set_source_rgba(1, 1, 1, .18); cr.set_line_width(1); cr.stroke()
+
 class Nova:
     def __init__(self, a):
         self.a, self.base, self.live = a, a.base.rstrip("/"), not a.offline
-        self.av = Avatar(); self.dpr = a.dpr
+        self.style = AS.load()
+        if a.shape or a.color: self.style = AS.clean({**self.style, **({"shape": a.shape} if a.shape else {}), **({"color": a.color} if a.color else {})})
+        self.av = Avatar(style=self.style); self.dpr = a.dpr
         if a.blink is not None: self.av.forceBlink = a.blink
         self.busy, self.pend, self.pendT, self.tms = False, None, 0, []
         self.V = dict(mic=False, speaker=False, muted=False, cap=30, rec=False, speaking=False, downAt=0, tap=False, capT=0, noteT=0)
@@ -81,7 +120,7 @@ class Nova:
         ov = Gtk.Overlay(); w.add(ov)
         if a.renderer == "gl":
             from glview import GLView, GLAvatar
-            self.av = GLAvatar(); self.da = GLView(self.av); self.redraw = self.da.queue_render
+            self.av = GLAvatar(style=self.style); self.da = GLView(self.av); self.redraw = self.da.queue_render
             if a.blink is not None: self.av.forceBlink = a.blink
         else:
             self.da = Gtk.DrawingArea(); self.da.connect("draw", self.on_draw); self.redraw = self.da.queue_draw
@@ -113,9 +152,19 @@ class Nova:
         ov.add_overlay(bar)
         self.vnote = Gtk.Label(name="vnote", halign=Gtk.Align.CENTER, valign=Gtk.Align.END); self.fv = Fader(self.vnote, .6)
         ov.add_overlay(self.vnote); ov.set_overlay_pass_through(self.vnote, True)
+        # look picker: a small button top-right opens a grid of shapes and a row of colors
+        self.look = Gtk.Button(name="look", halign=Gtk.Align.END, valign=Gtk.Align.START, margin_top=16, margin_end=16)
+        self.look.set_can_focus(False); self.look.set_tooltip_text("Change my look")
+        ld = Gtk.DrawingArea(); ld.set_size_request(30, 30)
+        ld.connect("draw", lambda w, cr: draw_shape_thumb(cr, w.get_allocated_width(), w.get_allocated_height(),
+                                                         self.style["shape"], self.style["color"]) or False)
+        self.look.add(ld); self.look_icon = ld
+        self.look.connect("clicked", lambda *_: self.open_picker()); ov.add_overlay(self.look)
+        self.picker = self._build_picker(); ov.add_overlay(self.picker)
+        self.cfg_mtime = self._cfg_mtime(); GLib.timeout_add_seconds(2, self._watch_cfg)
         w.connect("size-allocate", self.on_size)
         w.connect("key-press-event", self.on_key); w.connect("key-release-event", self.on_key_up)
-        w.show_all(); self.mute.hide(); self.mic.hide()
+        w.show_all(); self.mute.hide(); self.mic.hide(); self.picker.hide()
         if a.renderer == "gl":
             print("renderer gl:", getattr(self.da, "info", None), "failed:", self.da.failed, file=sys.stderr, flush=True)
             if self.da.failed: os.execv(sys.executable, [sys.executable] + sys.argv + ["--renderer", "cairo"])
@@ -127,6 +176,7 @@ class Nova:
         w.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.TOUCH_MASK | Gdk.EventMask.KEY_PRESS_MASK)
         for sig in ("key-press-event", "button-press-event", "touch-event"): w.connect(sig, self.on_activity)
         GLib.timeout_add_seconds(5, self.doze_check)
+        if a.picker: self.open_picker()
         if a.state: self.av.set_state(a.state)
         if a.sim: self.av.simulate(a.sim)
         if a.confirm:
@@ -143,6 +193,56 @@ class Nova:
     def _vbtn(self, kind, st):
         b = Gtk.Button(); b.get_style_context().add_class("vb"); b.set_can_focus(False)
         d = Gtk.DrawingArea(); d.set_size_request(20, 20); d.connect("draw", icon_draw(kind, st)); b.add(d); return b
+
+    # ---------- look picker (shape + color, saved to ~/.config/grokbot/avatar.json) ----------
+    def _build_picker(self):
+        eb = Gtk.EventBox(name="picker", visible_window=True)
+        eb.connect("button-press-event", lambda w, e: (self.close_picker(), True)[1] if e.window == w.get_window() else False)
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        t = Gtk.Label(label="Choose my look"); t.get_style_context().add_class("ttl"); col.add(t)
+        sub = Gtk.Label(label="Tap a shape and a color"); sub.get_style_context().add_class("sub"); col.add(sub)
+        grid = Gtk.Grid(column_spacing=8, row_spacing=8, halign=Gtk.Align.CENTER, margin_top=8)
+        self.pick_shapes, self.pick_colors = {}, {}
+        for i, (sid, label) in enumerate(AS.SHAPES):
+            b = self._pick_btn(104, lambda w, cr, sid=sid: draw_shape_thumb(cr, w.get_allocated_width(), w.get_allocated_height(),
+                               sid, self.style["color"], sid == self.style["shape"]) or False)
+            b.set_tooltip_text(label); b.connect("clicked", lambda _b, sid=sid: self.set_look(shape=sid))
+            grid.attach(b, i % 5, i // 5, 1, 1); self.pick_shapes[sid] = b
+        col.add(grid)
+        row = Gtk.Box(spacing=2, halign=Gtk.Align.CENTER, margin_top=10)
+        for cid, _hex in AS.COLORS:
+            b = self._pick_btn(60, lambda w, cr, cid=cid: draw_swatch(cr, w.get_allocated_width(), w.get_allocated_height(),
+                               cid, cid == self.style["color"]) or False)
+            b.set_tooltip_text(cid.title()); b.connect("clicked", lambda _b, cid=cid: self.set_look(color=cid))
+            row.add(b); self.pick_colors[cid] = b
+        col.add(row)
+        done = Gtk.Button(label="Done", name="done", halign=Gtk.Align.CENTER, margin_top=14); done.set_can_focus(False)
+        done.connect("clicked", lambda *_: self.close_picker()); col.add(done)
+        eb.add(col); return eb
+    def _pick_btn(self, size, draw):
+        b = Gtk.Button(); b.get_style_context().add_class("pick"); b.set_can_focus(False)
+        d = Gtk.DrawingArea(); d.set_size_request(size, size); d.connect("draw", draw); b.add(d); return b
+    def open_picker(self):
+        self.picker.show_all(); self.look.hide()
+    def close_picker(self):
+        self.picker.hide(); self.look.show(); self.inp.grab_focus_without_selecting()
+    def apply_look(self, st):
+        self.style = AS.clean(st); self.av.set_style(self.style)
+        self.picker.queue_draw(); self.look_icon.queue_draw(); self.redraw()
+    def set_look(self, shape=None, color=None):
+        try: st = AS.save(shape=shape, color=color)
+        except (OSError, ValueError) as e:
+            print("avatar.json:", e, file=sys.stderr, flush=True)
+            st = {**self.style, **({"shape": shape} if shape else {}), **({"color": color} if color else {})}
+        self.apply_look(st); self.cfg_mtime = self._cfg_mtime()
+    def _cfg_mtime(self):
+        try: return os.stat(AS.CONFIG).st_mtime_ns
+        except OSError: return None
+    def _watch_cfg(self):   # novad (POST /api/avatar, the set_avatar tool) writes the file; pick it up
+        m = self._cfg_mtime()
+        if m != self.cfg_mtime:
+            self.cfg_mtime = m; self.apply_look(AS.load())
+        return True
 
     # ---------- layout / rendering ----------
     def on_size(self, w, alloc):
@@ -266,6 +366,9 @@ class Nova:
     # ---------- keys ----------
     def on_key(self, w, e):
         k = Gdk.keyval_name(e.keyval)
+        if self.picker.get_visible():
+            if k in ("Escape", "Return", "KP_Enter"): self.close_picker()
+            return True
         if self.pend and k in ("Return", "KP_Enter"): self.answer(True); return True
         if self.pend and k == "Escape": self.answer(False); return True
         if k == "Escape" and self.V["rec"]: self.V["tap"] = False; self.stop_listen(True); return True
@@ -360,6 +463,9 @@ def main():
     p.add_argument("--renderer", choices=["gl", "cairo"], default=os.environ.get("NOVA_RENDERER", "gl"))
     p.add_argument("--state"); p.add_argument("--sim", type=float); p.add_argument("--blink", type=float)
     p.add_argument("--confirm"); p.add_argument("--reply"); p.add_argument("--q"); p.add_argument("--mic", choices=["on", "off", "none"])
+    p.add_argument("--shape", choices=AS.SHAPE_IDS, help="show this shape (not saved)")
+    p.add_argument("--color", choices=AS.COLOR_IDS, help="show this color (not saved)")
+    p.add_argument("--picker", action="store_true", help="open the look picker at startup")
     p.add_argument("--ask", help="type this prompt at startup (self-test)")
     p.add_argument("--quit-after", type=float, help="exit after N seconds and print frames drawn (tests)")
     a = p.parse_args()

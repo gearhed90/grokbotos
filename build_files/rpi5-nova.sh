@@ -28,7 +28,7 @@ rpm -q libavcodec-freeworld gtk4-layer-shell >/dev/null
 
 # --- Nova app + novad -----------------------------------------------------
 install -d -m 0755 "$nova"
-for f in avatar.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py nova-web-user.js; do
+for f in avatar.py avatar_shapes.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py nova-web-user.js; do
     install -m 0644 "${src}/${f}" "${nova}/${f}"
 done
 install -m 0755 "${src}/grokbot-lock-keypad.py" "${nova}/grokbot-lock-keypad.py"

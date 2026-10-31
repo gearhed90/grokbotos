@@ -9,7 +9,7 @@ source "${root}/tests/assert.sh"
 cd "$root"
 nova=build_files/rpi5/nova
 
-for f in avatar.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py \
+for f in avatar.py avatar_shapes.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py \
     nova-web-user.js grokbot-lock-keypad.py grokbot-nova grokbot-set-xai-key \
     grokbot-admin-provision grokbot-admin-provision.service novad.service grokbot-lock.pam sway-rpi5-nova.conf; do
     assert_file "${nova}/${f}"

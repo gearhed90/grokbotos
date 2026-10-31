@@ -10,7 +10,8 @@ os.makedirs(T + "/thermal/thermal_zone0"); open(T + "/thermal/thermal_zone0/temp
 key = T + "/key"; open(key, "w").write("sk-test"); os.chmod(key, 0o600)
 env = dict(os.environ, NOVA_API_BASE="http://127.0.0.1:8799/v1", NOVA_DRY_RUN="1", NOVA_KEY_FILE=key,
            GROKBOT_API_SOCK=SOCK, NOVA_SYS_APPS=T + "/webapps", NOVA_USER_APPS=T + "/none",
-           NOVA_THERMAL=T + "/thermal", NOVA_TEST_SAVED="Home,Saved5G", NOVA_CONFIRM_TTL="2")
+           NOVA_THERMAL=T + "/thermal", NOVA_TEST_SAVED="Home,Saved5G", NOVA_CONFIRM_TTL="2",
+           NOVA_AVATAR_CFG=T + "/cfg/avatar.json")
 gl = open(T + "/gbd.log", "w"); nl = open(T + "/novad.log", "w")
 ps = [subprocess.Popen([sys.executable, HERE + "/mock_xai.py"]),
       subprocess.Popen([sys.executable, HERE + "/mock_grokbotd.py", SOCK], stdout=gl),
@@ -70,6 +71,13 @@ try:
     check("confirm bad Origin 403", post("/api/confirm", {"id": "x", "yes": True}, {"Origin": "http://evil.com"}) == "HTTP 403")
     check("confirm bad Host 403", post("/api/confirm", {"id": "x", "yes": True}, {"Host": "evil.com:8765"}) == "HTTP 403")
     check("confirm oversize 413", post("/api/confirm", {"id": "x" * 2000, "yes": True}) == "HTTP 413")
+    g = json.loads(urllib.request.urlopen(B + "/api/avatar").read())
+    check("GET /api/avatar default + lists", g["shape"] == "capsule" and g["color"] == "green" and len(g["shapes"]) == 13 and len(g["colors"]) == 11, g)
+    a = post("/api/avatar", {"shape": "star", "color": "blue"})
+    check("POST /api/avatar saves", json.loads(a) == {"shape": "star", "color": "blue"} and json.load(open(T + "/cfg/avatar.json"))["shape"] == "star", a)
+    check("POST /api/avatar bad shape 400", post("/api/avatar", {"shape": "pumpkin"}) == "HTTP 400")
+    check("POST /api/avatar bad Origin 403", post("/api/avatar", {"shape": "circle"}, {"Origin": "http://evil.com"}) == "HTTP 403")
+    r = tool("set_avatar", {"shape": "hexagon"}); check("set_avatar tool", "blue hexagon" in r.get("reply", ""), r)
 finally:
     for p in ps: p.terminate()
     time.sleep(.3); gl.close(); nl.close()
