@@ -78,6 +78,8 @@ RPM Fusion free의 libavcodec-freeworld로 브라우저 H.264/AAC 재생을 켭�
 
 웨이크 워드("Nova")는 미뤘습니다. 사전 학습된 모델이 없고 빌드 때 pip 휠이 필요합니다. novad의 `wake_word_hook`은 남아 있고 기본은 꺼짐입니다. / The wake word ("Nova") is deferred. There is no pretrained model, and it needs pip wheels at build time. novad keeps `wake_word_hook`, off by default.
 
+`vcgencmd`(예: `vcgencmd get_throttled`)가 들어갑니다. raspberrypi/utils의 고정 커밋(`rpi5-build-vcgencmd.sh`)에서 별도 빌드 단계로 컴파일하며, 컴파일러는 이미지에 들어가지 않습니다. `/dev/vcio`는 video 그룹에 열리고 grokbot은 video 그룹에 속합니다. / `vcgencmd` is included (for example `vcgencmd get_throttled`). It is compiled in a separate build stage from a pinned raspberrypi/utils commit (`rpi5-build-vcgencmd.sh`); no compiler ships in the image. `/dev/vcio` is opened to the video group, and grokbot is in video (usermod at build, plus `/usr/lib/sysusers.d/grokbot-video.conf` for in-place updates).
+
 빌드: Alpha에서 `sudo /home/gearhed/grokbotos-rpi5/build-pi-image.sh`. 결과는 `/data/grokbotos-build/`에 저장됩니다. WiFi 연결 파일은 빌드 때 이전 이미지에서 복사하며 저장소에는 없습니다. / Build: on Alpha, `sudo /home/gearhed/grokbotos-rpi5/build-pi-image.sh`. Output goes to `/data/grokbotos-build/`. The WiFi connection file is copied from the old image at build time and is not in the repo.
 
 테스트: `bash tests/run-tests.sh` (Nova 단위, 모의 xAI, 음성 테스트 포함). Pi 실기기와 GTK4 화면에서는 아직 테스트하지 않았습니다. / Tests: `bash tests/run-tests.sh` (includes Nova unit, mock-xAI and voice tests). Not yet tested on the Pi or on a real GTK4 screen.

@@ -1,0 +1,4 @@
+# vcgencmd talks to the VideoCore firmware through /dev/vcio (or
+# /dev/vcio_gencmd on newer kernels). Root-only by default; let the video
+# group use it so the grokbot account can run vcgencmd get_throttled.
+KERNEL=="vcio|vcio_gencmd", GROUP="video", MODE="0660"

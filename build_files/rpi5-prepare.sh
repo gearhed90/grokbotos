@@ -210,6 +210,14 @@ sed -i 's/^dock = on$/dock = off/' /etc/grokbot/desktop.conf
 grep -q '^dock = off$' /etc/grokbot/desktop.conf || { echo "dock default not set" >&2; exit 1; }
 install -m 0644 /ctx/rpi5/cmdline.txt "${stage}/cmdline.txt"
 
+# vcgencmd (built in its own stage, see rpi5-build-vcgencmd.sh): /dev/vcio
+# for the video group, and grokbot in video. usermod covers fresh flashes;
+# the sysusers line covers in-place updates, where /etc/group is machine-local.
+install -D -m 0644 /ctx/rpi5/60-grokbot-vcio.rules /usr/lib/udev/rules.d/60-grokbot-vcio.rules
+install -D -m 0644 /ctx/rpi5/grokbot-video.sysusers /usr/lib/sysusers.d/grokbot-video.conf
+getent group video >/dev/null || { echo "no video group in the base image" >&2; exit 1; }
+[[ " $(id -nG grokbot) " == *" video "* ]] || usermod -aG video grokbot
+
 install -D -m 0755 /ctx/rpi5-sync-cmdline.sh /usr/lib/grokbot/rpi5-sync-cmdline.sh
 install -D -m 0644 /ctx/rpi5-cmdline.sh /usr/lib/grokbot/rpi5-cmdline.sh
 install -D -m 0644 /ctx/rpi5/grokbot-rpi5-cmdline.service \
