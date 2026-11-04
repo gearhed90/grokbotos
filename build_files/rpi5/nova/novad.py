@@ -181,6 +181,7 @@ def installed_apps():
     except OSError:
         pass
     apps["firefox"] = "firefox"
+    apps["onshape_pad"] = "nova-cadpad"   # Onshape button pad (cadpad.py)
     apps.pop("nova-shell", None)
     return apps
 
@@ -190,7 +191,12 @@ def t_open_app(name):
     apps = installed_apps(); n = str(name).strip().lower()
     if n not in apps:
         return {"ok": False, "error": "app not allowed", "allowed": sorted(apps)}
-    launch(["firefox", "--new-window"] if n == "firefox" else ["/usr/local/bin/grokbot-webapp", n])
+    if n == "firefox":
+        launch(["firefox", "--new-window"])
+    elif n == "onshape_pad":
+        launch([sys.executable, os.path.join(HERE, "cadpad.py"), "--fullscreen"])
+    else:
+        launch(["/usr/local/bin/grokbot-webapp", n])
     return {"ok": True, "opened": n}
 
 def close_target(name):
@@ -448,7 +454,7 @@ def tool_schema():
     ]
 
 SYSTEM = ("You are Pixel, the assistant built into Zack's Grok Bot OS on a Raspberry Pi touchscreen. "
-          "Act on requests using your tools. For streamers on Twitch open https://www.twitch.tv/<channel> "
+          "Act on requests using your tools. The onshape_pad app is Zack's touch button pad for Onshape on his PC. For streamers on Twitch open https://www.twitch.tv/<channel> "
           "(channel names are lowercase with no spaces, e.g. 'burnt peanut' -> burntpeanut). "
           "Some tools return pending: the user is shown Yes/No buttons; just restate the question briefly. "
           "Never ask for, repeat or accept a WiFi password: tell the user to enter it in Settings. "
@@ -823,7 +829,7 @@ def watch_focus():
                         ev = json.loads(line)
                     except Exception:
                         continue
-                    if ev.get("change") == "close" and (ev.get("container") or {}).get("app_id") == "nova-web":
+                    if ev.get("change") == "close" and (ev.get("container") or {}).get("app_id") in ("nova-web", "nova-cadpad"):
                         time.sleep(0.3)
                         subprocess.run(["swaymsg", "-q", '[app_id="nova-shell"] focus, fullscreen enable'],
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

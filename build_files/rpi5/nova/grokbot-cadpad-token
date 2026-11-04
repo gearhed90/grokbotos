@@ -1,0 +1,17 @@
+#!/bin/bash
+# Save the Onshape pad token for this user (no sudo). Reads it from stdin so it
+# never lands in shell history or argv. From Alpha, for example:
+#   ssh grokbot@<pi-ip> grokbot-cadpad-token < ~/.config/nova/onshape-pad/token
+# Writes ~/.config/grokbot/cadpad.token (0600). Prints nothing secret.
+set -euo pipefail
+(( EUID != 0 )) || { echo "run as the grokbot user, not root" >&2; exit 1; }
+IFS= read -r tok || true
+tok=${tok//[[:space:]]/}
+[[ $tok =~ ^[0-9a-f]{64}$ ]] || { echo "that does not look like a pad token (64 hex characters)" >&2; exit 1; }
+dir="${HOME}/.config/grokbot"
+install -d -m 0700 "$dir"
+umask 077
+printf '%s\n' "$tok" >"${dir}/cadpad.token.tmp"
+chmod 0600 "${dir}/cadpad.token.tmp"
+mv -f "${dir}/cadpad.token.tmp" "${dir}/cadpad.token"
+echo "saved ${dir}/cadpad.token"

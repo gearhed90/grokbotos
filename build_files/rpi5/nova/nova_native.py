@@ -35,6 +35,8 @@ button.vb.off { opacity: .35; }
 button.vb.on { background: #14C370; color: #04140b; border-color: #14C370; }
 button#look { min-width: 52px; min-height: 52px; padding: 0; border-radius: 26px; border: 1px solid rgba(255,255,255,.14);
   background: rgba(20,24,22,.55); background-image: none; box-shadow: none; opacity: .7; }
+button#pad { min-width: 52px; min-height: 52px; padding: 0 10px; border-radius: 26px; border: 1px solid rgba(255,255,255,.14);
+  background: rgba(20,24,22,.55); background-image: none; box-shadow: none; opacity: .7; color: #d1fae5; font-size: 15px; font-weight: 700; }
 #picker { background: rgba(0,0,0,.94); }
 #picker label.ttl { color: #fff; font-size: 26px; font-weight: 700; }
 #picker label.sub { color: rgba(255,255,255,.55); font-size: 16px; }
@@ -160,6 +162,10 @@ class Nova:
                                                          self.style["shape"], self.style["color"]) or False)
         self.look.add(ld); self.look_icon = ld
         self.look.connect("clicked", lambda *_: self.open_picker()); ov.add_overlay(self.look)
+        # Onshape pad: a second corner button (top-left) opens cadpad.py (app_id nova-cadpad)
+        self.pad = Gtk.Button(name="pad", label="CAD", halign=Gtk.Align.START, valign=Gtk.Align.START, margin_top=16, margin_start=16)
+        self.pad.set_can_focus(False); self.pad.set_tooltip_text("Onshape pad")
+        self.pad.connect("clicked", lambda *_: self.open_pad()); ov.add_overlay(self.pad)
         self.picker = self._build_picker(); ov.add_overlay(self.picker)
         self.cfg_mtime = self._cfg_mtime(); GLib.timeout_add_seconds(2, self._watch_cfg)
         w.connect("size-allocate", self.on_size)
@@ -222,10 +228,15 @@ class Nova:
     def _pick_btn(self, size, draw):
         b = Gtk.Button(); b.get_style_context().add_class("pick"); b.set_can_focus(False)
         d = Gtk.DrawingArea(); d.set_size_request(size, size); d.connect("draw", draw); b.add(d); return b
+    def open_pad(self):
+        if self.a.offline: return
+        import subprocess
+        subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cadpad.py"), "--fullscreen"],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     def open_picker(self):
-        self.picker.show_all(); self.look.hide()
+        self.picker.show_all(); self.look.hide(); self.pad.hide()
     def close_picker(self):
-        self.picker.hide(); self.look.show(); self.inp.grab_focus_without_selecting()
+        self.picker.hide(); self.look.show(); self.pad.show(); self.inp.grab_focus_without_selecting()
     def apply_look(self, st):
         self.style = AS.clean(st); self.av.set_style(self.style)
         self.picker.queue_draw(); self.look_icon.queue_draw(); self.redraw()

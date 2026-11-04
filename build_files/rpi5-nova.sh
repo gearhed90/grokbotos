@@ -28,13 +28,23 @@ rpm -q libavcodec-freeworld gtk4-layer-shell >/dev/null
 
 # --- Nova app + novad -----------------------------------------------------
 install -d -m 0755 "$nova"
-for f in avatar.py avatar_shapes.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py nova-web-user.js; do
+for f in avatar.py avatar_shapes.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py cadpad.py nova-web-user.js; do
     install -m 0644 "${src}/${f}" "${nova}/${f}"
 done
 install -m 0755 "${src}/grokbot-lock-keypad.py" "${nova}/grokbot-lock-keypad.py"
 ln -sf "${nova}/grokbot-lock-keypad.py" /usr/local/bin/grokbot-lock-keypad
 install -m 0755 "${src}/grokbot-nova" /usr/local/bin/grokbot-nova
 install -m 0755 "${src}/grokbot-desktop-app" /usr/local/bin/grokbot-desktop-app
+install -m 0755 "${src}/grokbot-cadpad-token" /usr/local/bin/grokbot-cadpad-token
+# Onshape pad (cadpad.py -> onshape-pad-helper on the CAD PC over the LAN).
+# Host and port only; the shared token is never in the image (each user saves
+# it with grokbot-cadpad-token into ~/.config/grokbot/cadpad.token, 0600).
+install -d -m 0755 /etc/grokbot
+cat >/etc/grokbot/cadpad.conf <<'CONF'
+# Onshape pad target (onshape-pad-helper). Override in ~/.config/grokbot/cadpad.conf.
+HOST=192.168.12.126
+PORT=8790
+CONF
 install -d -m 0755 /usr/local/sbin
 install -m 0755 "${src}/grokbot-set-xai-key" /usr/local/sbin/grokbot-set-xai-key
 install -m 0644 "${src}/grokbot-lock.pam" /etc/pam.d/grokbot-lock

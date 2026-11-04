@@ -1,0 +1,15 @@
+[Unit]
+Description=Onshape pad helper (grokbotos touch panel -> Onshape shortcuts, LAN only)
+After=graphical-session.target network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 %h/.local/bin/onshape-pad-helper
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=%h/.Xauthority
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

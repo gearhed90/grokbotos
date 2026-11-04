@@ -10,14 +10,14 @@ cd "$root"
 nova=build_files/rpi5/nova
 
 for f in avatar.py avatar_shapes.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py \
-    nova-web-user.js grokbot-lock-keypad.py grokbot-nova grokbot-set-xai-key \
+    nova-web-user.js grokbot-lock-keypad.py grokbot-nova grokbot-set-xai-key cadpad.py grokbot-cadpad-token \
     novad.service grokbot-lock.pam sway-rpi5-nova.conf; do
     assert_file "${nova}/${f}"
 done
 assert_file "build_files/rpi5/fonts/Nunito[wght].ttf"
 assert_file build_files/rpi5/fonts/OFL.txt
 python3 -m py_compile "${nova}"/*.py
-bash -n build_files/rpi5-nova.sh "${nova}/grokbot-nova" "${nova}/grokbot-set-xai-key" build-pi-image.sh
+bash -n build_files/rpi5-nova.sh "${nova}/grokbot-nova" "${nova}/grokbot-set-xai-key" "${nova}/grokbot-cadpad-token" build-pi-image.sh
 
 # Containerfile runs the Nova step after the Pi kernel step and before lint.
 a=$(grep -n '^    /ctx/rpi5-prepare.sh' Containerfile.rpi5 | cut -d: -f1)
@@ -38,6 +38,18 @@ bash -n "${nova}/grokbot-desktop-app"
 assert_contains "${nova}/sway-rpi5-nova.conf" 'exec /usr/local/bin/grokbot-desktop-app'
 assert_contains "${nova}/grokbot-desktop-app" 'pgrep -u "$(id -u)" -x grok-bot'
 assert_contains build_files/rpi5-nova.sh '/usr/local/bin/grokbot-desktop-app'
+
+# Onshape pad: installed, fullscreen rule, LAN target defaults, token never in the image.
+assert_contains build_files/rpi5-nova.sh 'cadpad.py'
+assert_contains build_files/rpi5-nova.sh '/etc/grokbot/cadpad.conf'
+assert_contains build_files/rpi5-nova.sh 'HOST=192.168.12.126'
+assert_contains "${nova}/sway-rpi5-nova.conf" 'for_window [app_id="nova-cadpad"] fullscreen enable'
+if find . -path ./.git -prune -o \( -name 'cadpad.token' -o -name 'token' \) -print | grep -q .; then
+    fail "a pad token file is in the repo"
+fi
+if printf 'not-a-token\n' | bash "${nova}/grokbot-cadpad-token" >/dev/null 2>&1; then
+    fail "grokbot-cadpad-token accepted a bad token"
+fi
 
 # Kiosk starts Nova; the lock comes back at 10 minutes.
 assert_contains build_files/rpi5-nova.sh 'GROKBOT_EXEC="/usr/local/bin/grokbot-nova"'
@@ -82,4 +94,5 @@ grep -qE '^[[:space:]]*(source|\.)[[:space:]]' build-pi-image.sh && fail "build 
 python3 tests/nova/test_units.py
 python3 tests/nova/run_tests.py
 python3 tests/nova/run_voice_tests.py
+python3 tests/nova/test_cadpad.py
 echo "ok test-rpi5-nova"
