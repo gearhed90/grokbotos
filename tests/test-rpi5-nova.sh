@@ -93,6 +93,7 @@ grep -qE '^[[:space:]]*(source|\.)[[:space:]]' build-pi-image.sh && fail "build 
 
 python3 tests/nova/test_units.py
 python3 tests/nova/run_tests.py
+python3 tests/nova/test_vad.py
 python3 tests/nova/run_voice_tests.py
 python3 tests/nova/test_cadpad.py
 echo "ok test-rpi5-nova"

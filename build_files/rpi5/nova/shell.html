@@ -23,7 +23,7 @@ background:rgba(20,24,22,.6);color:#fff;font-size:20px;outline:none;background:r
 </style></head><body><canvas id="c"></canvas>
 <div id="bar"><div id="reply"></div><div id="echo"></div><div id="cf"><button id="yes">Yes<small>Enter</small></button><button id="no">No<small>Esc</small></button></div><div style="position:relative"><input id="in" placeholder="Ask Pixel…" autocomplete="off"><div id="vb">
 <button id="mute" hidden title="Spoken replies"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path class="w" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="x" d="M16 9l6 6M22 9l-6 6" style="display:none"/></svg></button>
-<button id="mic" hidden title="Hold to talk (or hold Space)"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button></div></div></div><div id="vnote"></div>
+<button id="mic" hidden title="Tap to talk (or hold Space)"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button></div></div></div><div id="vnote"></div>
 <script>
 (()=>{
 const cv=document.getElementById('c'),ctx=cv.getContext('2d');
@@ -171,33 +171,50 @@ if(inp)inp.addEventListener('keydown',e=>{if(e.key!=='Enter'||!inp.value.trim()|
  if(live){ask(q);return}
  const seq=[['thinking',0],['looking',1500],['working',4300],['typing',7300],['idle',9300]];
  tms=seq.map(([s,d])=>setTimeout(()=>{setAvatarState(s);if(s==='idle')echo.style.opacity=0},d));});
-// ---------- voice (step 6): push-to-talk, recorded by novad with pw-record ----------
+// ---------- voice (step 6): tap to talk, recorded by novad with pw-record ----------
+// novad ends the take by itself when you stop talking (end of speech), on a second tap,
+// or at the cap. The page long-polls /api/voice/wait for that; results carry the take's
+// sid so a tap racing the auto stop is handled once.
 const mic=document.getElementById('mic'),mute=document.getElementById('mute'),vnote=document.getElementById('vnote');
-const V={mic:false,speaker:false,muted:false,cap:30,rec:false,speaking:false,downAt:0,tap:false,capT:0,noteT:0};
+const V={mic:false,speaker:false,muted:false,cap:30,rec:false,speaking:false,downAt:0,tap:false,capT:0,noteT:0,sid:null,handled:null};
 function note(t,ms){vnote.textContent=t;vnote.style.opacity=1;clearTimeout(V.noteT);V.noteT=setTimeout(()=>vnote.style.opacity=0,ms||3500);}
 function paintMute(){mute.querySelector('.w').style.display=V.muted?'none':'';mute.querySelector('.x').style.display=V.muted?'':'none';mute.title=V.muted?'Spoken replies off':'Spoken replies on';}
 function vpost(p,b){return fetch('/api/voice/'+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(r=>r.json());}
 let firstStatus=true;
 async function vstatus(){try{const s=await (await fetch('/api/voice/status')).json();
   const had=V.mic;V.mic=s.mic;V.speaker=s.speaker;V.muted=s.muted;V.cap=s.cap_s||30;
-  mic.hidden=false;mic.classList.toggle('off',!V.mic);mic.title=V.mic?'Hold to talk (or hold Space)':'No microphone found';
+  mic.hidden=false;mic.classList.toggle('off',!V.mic);mic.title=V.mic?'Tap to talk (or hold Space)':'No microphone found';
   mute.hidden=!V.speaker;paintMute();
   if(!V.mic&&(firstStatus||had))note('No microphone found',4000);else if(V.mic&&!had&&!firstStatus)note('Microphone connected',2500);
   firstStatus=false;}catch(e){}}
 async function startListen(){if(V.rec||busy)return;if(!V.mic){note('No microphone found');return;}
- V.rec=true;mic.classList.add('on');tms.forEach(clearTimeout);rep.style.opacity=0;setAvatarState('listening');
+ V.rec=true;V.tap=false;V.sid=null;mic.classList.add('on');tms.forEach(clearTimeout);rep.style.opacity=0;setAvatarState('listening');
  const r=await vpost('start').catch(()=>({error:'net'}));
  if(r.error){V.rec=false;mic.classList.remove('on');setAvatarState('idle');if(r.error==='nomic'){V.mic=false;mic.classList.add('off')}note(r.text||'Voice is unavailable.');return;}
- clearTimeout(V.capT);V.capT=setTimeout(()=>stopListen(false,true),(r.cap_s||V.cap)*1000);}
+ const sid=V.sid=r.sid||null;
+ clearTimeout(V.capT);V.capT=setTimeout(()=>stopListen(false,true),((r.cap_s||V.cap)+3)*1000);   // backstop; novad ends the take at the cap
+ if(!V.rec){vpost('stop',{cancel:true}).catch(()=>{});return;}   // released before start answered: drop an orphaned take
+ if(!sid)return;
+ // recording stopped by itself (end of speech / cap): show 'thinking' while it transcribes
+ vpost('wait',{sid,until:'ended'}).then(e=>{if(e.ended&&V.sid===sid&&V.rec&&V.handled!==sid){V.rec=false;clearTimeout(V.capT);mic.classList.remove('on');setAvatarState('thinking');}}).catch(()=>{});
+ vpost('wait',{sid}).then(res=>finishListen(sid,res)).catch(()=>{});}
 async function stopListen(cancel,capped){if(!V.rec)return;V.rec=false;clearTimeout(V.capT);mic.classList.remove('on');
+ const sid=V.sid;if(cancel&&sid)V.handled=sid;
  setAvatarState(cancel?'idle':'thinking');const r=await vpost('stop',{cancel:!!cancel}).catch(()=>({error:'net',text:"I can't reach my helper service right now (novad)."}));
- if(cancel)return;if(r.error){setAvatarState('idle');note(r.text||"I didn't catch that.");return;}
+ if(cancel)return;
+ if(r.error==='idle'&&sid){if(V.handled!==sid&&!V.rec)setAvatarState('idle');return;}   // the auto stop already delivered it
+ finishListen(r.sid||sid,r,capped);}
+function finishListen(sid,r,capped){
+ if(sid){if(V.handled===sid||(V.sid&&V.sid!==sid))return;V.handled=sid;}   // once per take; ignore stale takes
+ if(V.rec){V.rec=false;clearTimeout(V.capT);mic.classList.remove('on');}
+ if(r.cancelled)return;
+ if(r.error){setAvatarState('idle');note(r.text||"I didn't catch that.");return;}
  if(capped||r.capped)note('Stopped at '+Math.round(V.cap)+' seconds',2500);
  if(pend&&r.intent){echo.textContent=r.transcript;echo.style.opacity=.45;answer(r.intent==='yes');return;}
  if(pend){setAvatarState('idle');note('Say yes or no, or tap a button.');return;}
  inp.value=r.transcript;echo.textContent=r.transcript;echo.style.opacity=.45;   // shown in the bar, then sent as normal
  setTimeout(()=>{inp.value='';ask(r.transcript,'voice')},450);}
-// mic button: hold to talk, or tap once to start and tap again to stop
+// mic button: tap once and talk (it sends when you stop talking; tap again to send early), or hold to talk
 mic.addEventListener('pointerdown',e=>{e.preventDefault();if(V.rec&&V.tap){V.tap=false;stopListen();return;}V.downAt=performance.now();startListen();});
 mic.addEventListener('pointerup',()=>{if(!V.rec)return;if(performance.now()-V.downAt<350)V.tap=true;else stopListen();});
 mic.addEventListener('pointercancel',()=>{if(V.rec&&!V.tap)stopListen()});

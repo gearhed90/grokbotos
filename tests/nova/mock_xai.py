@@ -14,6 +14,7 @@ class H(BaseHTTPRequestHandler):
             wav=raw.split(b'Content-Type: audio/wav\r\n\r\n',1)[1].rsplit(b'\r\n--',1)[0]
             w=wave.open(io.BytesIO(wav)); dur=w.getnframes()/w.getframerate()
             assert w.getnchannels()==1 and w.getframerate()==16000
+            if os.environ.get('MOCK_STT_LOG'): open(os.environ['MOCK_STT_LOG'],'a').write('STT %.1f\n'%dur)
             nf=os.environ.get('MOCK_STT_NEXT'); text=open(nf).read() if nf and os.path.exists(nf) else 'hello'
             return self._send(json.dumps({"text":text,"language":"en","duration":round(dur,2),"words":[]}).encode(),'application/json')
         if self.path.endswith('/tts'):

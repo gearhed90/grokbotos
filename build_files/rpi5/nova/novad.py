@@ -151,7 +151,7 @@ def rpc(method, params=None, timeout=60):
     return r.get("result", {})
 
 def audit(tool, args, outcome, via="direct"):
-    safe = {k: v for k, v in (args or {}).items() if k in ("ssid", "name", "action", "percent", "change", "muted", "event", "secs", "chars", "shape", "color")}
+    safe = {k: v for k, v in (args or {}).items() if k in ("ssid", "name", "action", "percent", "change", "muted", "event", "secs", "chars", "shape", "color", "end")}
     log("AUDIT", json.dumps({"tool": tool, "args": safe, "via": via, "outcome": outcome}))
 
 def run_ro(argv, timeout=6):
@@ -525,8 +525,9 @@ def handle_prompt(prompt, emit):
 # ---------- voice (plan step 6) ----------
 # Push-to-talk is recorded server-side with pw-record (PipeWire, already in the image),
 # so the kiosk Firefox never needs a mic permission prompt. Audio exists only between
-# /api/voice/start and /api/voice/stop, lives in $XDG_RUNTIME_DIR (tmpfs, mode 700),
-# and is deleted right after transcription. Transcripts are never logged, only lengths.
+# /api/voice/start and the end of the take (tap, end of speech, or the cap), lives in
+# $XDG_RUNTIME_DIR (tmpfs, mode 700), and is deleted right after transcription.
+# Transcripts are never logged, only lengths.
 import shlex, signal, tempfile
 VOICE_CFG = os.path.expanduser(os.environ.get("NOVA_VOICE_CFG", "~/.config/grokbot/nova-voice.json"))
 STT_MODEL = os.environ.get("NOVA_STT_MODEL", "grok-voice-transcribe-2.0")
@@ -534,8 +535,14 @@ REC_CMD = os.environ.get("NOVA_REC_CMD", "pw-record --rate 16000 --channels 1 --
 PLAY_CMD = os.environ.get("NOVA_PLAY_CMD", "pw-play {in}")
 REC_CAP = float(os.environ.get("NOVA_REC_CAP", "30"))      # seconds, hard limit per press
 SPEAK_MAX = 600                                             # chars sent to TTS per reply
+# End-of-speech (auto stop): env sets the defaults, nova-voice.json can override them.
+VAD_DEFAULTS = {"auto_stop": os.environ.get("NOVA_VAD", "1") != "0",
+                "silence_s": float(os.environ.get("NOVA_VAD_SILENCE", "1.2")),     # pause that ends a take
+                "no_speech_s": float(os.environ.get("NOVA_VAD_NO_SPEECH", "7")),   # give up if nothing said
+                "speech_rms": float(os.environ.get("NOVA_VAD_MIN_RMS", "200"))}    # quietest frame counted as speech (s16 RMS)
 VOICE_DEFAULTS = {"muted": False, "voice_id": "eve", "language": "en",
-                  "wake_word": None}   # wake_word: reserved hook, see wake_word_hook()
+                  "wake_word": None,   # wake_word: reserved hook, see wake_word_hook()
+                  **VAD_DEFAULTS}
 YES_RE = re.compile(r"^\W*(yes|yeah|yep|yup|sure|ok|okay|do it|go ahead|confirm|please do)\b", re.I)
 NO_RE = re.compile(r"^\W*(no|nope|nah|cancel|don'?t|stop|never ?mind)\b", re.I)
 
@@ -571,10 +578,19 @@ def _wpctl_real(target):
     out = p.stdout.lower()
     return p.returncode == 0 and "node.name" in out and "auto_null" not in out and "dummy" not in out
 
+def vad_params(c=None):
+    c = c or voice_cfg()
+    def num(k, lo, hi):
+        try: return min(hi, max(lo, float(c[k])))
+        except (KeyError, TypeError, ValueError): return VAD_DEFAULTS[k]
+    return {"auto_stop": c.get("auto_stop") is not False, "silence_s": num("silence_s", 0.4, 5),
+            "no_speech_s": num("no_speech_s", 2, 30), "speech_rms": num("speech_rms", 20, 8000)}
+
 def voice_status():
-    c = voice_cfg()
+    c = voice_cfg(); s = SESS["cur"]
     return {"mic": _wpctl_real("SOURCE"), "speaker": _wpctl_real("SINK"), "muted": bool(c["muted"]),
-            "recording": REC["proc"] is not None, "cap_s": REC_CAP, "wake_word": None}
+            "recording": bool(s and not s.finishing), "cap_s": REC_CAP, "wake_word": None,
+            "auto_stop": vad_params(c)["auto_stop"]}
 
 def _spool():
     d = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir(), "nova-voice")
@@ -587,7 +603,85 @@ def _rm(p):
     except OSError:
         pass
 
-REC = {"proc": None, "path": None, "t0": 0, "timer": None, "capped": False}
+# ---------- end-of-speech detection ----------
+# A tap starts a take; a watcher thread reads the WAV pw-record is writing (tmpfs) and
+# ends the take once speech has been followed by `silence_s` of quiet. It only looks at
+# frame energies (RMS per 100 ms); nothing extra is stored or logged. Tapping again still
+# stops early, and REC_CAP still ends any take.
+import array
+VAD_FRAME_S = 0.1
+
+def _rms(frame):
+    a = array.array("h"); a.frombytes(frame[:len(frame) & ~1])
+    if sys.byteorder == "big": a.byteswap()
+    return (sum(x * x for x in a) / len(a)) ** 0.5 if a else 0.0
+
+class Vad:
+    """Energy end-of-speech detector for 16-bit mono PCM, fed in any chunk sizes.
+    feed() returns None, "silence" (speech then a pause) or "nospeech".
+    Noise floor: starts at the first frame, drops to any quieter frame at once and
+    drifts slowly toward non-speech frames, so talking right away still works.
+    Speech: RMS >= max(3 x floor, speech_rms); quiet: RMS < max(2 x floor, 0.6 x speech_rms).
+    A take counts as heard after 3 speech frames (~0.3 s, so clicks don't count)."""
+    CALIB = 3
+    def __init__(self, rate=16000, silence_s=1.2, no_speech_s=7.0, speech_rms=200.0):
+        self.nbytes = 2 * max(1, int(rate * VAD_FRAME_S)); self.buf = b""
+        self.need_quiet = max(1, round(silence_s / VAD_FRAME_S))
+        self.max_frames = max(self.CALIB + 1, round(no_speech_s / VAD_FRAME_S))
+        self.min_rms = float(speech_rms)
+        self.frames = self.voiced = self.quiet = 0; self.floor = None; self.heard = False
+    def feed(self, data):
+        self.buf += data
+        while len(self.buf) >= self.nbytes:
+            fr, self.buf = self.buf[:self.nbytes], self.buf[self.nbytes:]
+            out = self.frame(_rms(fr))
+            if out: return out
+        return None
+    def frame(self, r):
+        self.frames += 1
+        if self.floor is None: self.floor = max(r, 1.0)
+        on = max(3 * self.floor, self.min_rms); off = max(2 * self.floor, 0.6 * self.min_rms)
+        if r < self.floor: self.floor = max(r, 1.0)
+        elif r < on: self.floor += (r - self.floor) * 0.05
+        if self.frames > self.CALIB:
+            if r >= on:
+                self.voiced += 1; self.quiet = 0
+                if self.voiced >= 3: self.heard = True
+            elif r < off:
+                self.quiet += 1
+            else:
+                self.quiet = 0
+        if self.heard and self.quiet >= self.need_quiet: return "silence"
+        if not self.heard and self.frames >= self.max_frames: return "nospeech"
+        return None
+
+def _wav_layout(head):
+    """(data_offset, rate) once the WAV header incl. the 'data' chunk start is in `head`,
+    None if more bytes are needed, False if it is not 16-bit mono PCM WAV."""
+    if len(head) < 12: return None
+    if head[:4] not in (b"RIFF", b"RF64") or head[8:12] != b"WAVE": return False
+    pos, rate, fmt_ok = 12, 16000, None
+    while pos + 8 <= len(head):
+        cid, size = head[pos:pos + 4], int.from_bytes(head[pos + 4:pos + 8], "little")
+        if cid == b"fmt ":
+            if pos + 24 > len(head): return None
+            ch = int.from_bytes(head[pos + 10:pos + 12], "little"); rate = int.from_bytes(head[pos + 12:pos + 16], "little")
+            bits = int.from_bytes(head[pos + 22:pos + 24], "little"); fmt_ok = ch == 1 and bits == 16 and rate > 0
+        elif cid == b"data":
+            return (pos + 8, rate) if fmt_ok else False
+        if size > 1 << 20: return False
+        pos += 8 + size + (size & 1)
+    return None if len(head) < 8192 else False
+
+class _Take:
+    def __init__(self, proc, path, vad):
+        import secrets
+        self.sid = secrets.token_hex(6); self.proc, self.path, self.vad = proc, path, vad
+        self.t0 = time.time(); self.timer = None; self.finishing = False; self.reason = None
+        self.secs = 0.0; self.result = None; self.claimed = False
+        self.ended = threading.Event(); self.done = threading.Event()
+
+SESS = {"cur": None}   # the current (or last) take
 rlock = threading.Lock()
 
 def _stop_proc(p):
@@ -596,18 +690,38 @@ def _stop_proc(p):
         try: p.wait(timeout=2)
         except subprocess.TimeoutExpired: p.kill(); p.wait()
 
-def _cap_hit():
-    with rlock:
-        if REC["proc"] is not None:
-            REC["capped"] = True
-            _stop_proc(REC["proc"])
-            log("voice: %.0fs cap reached, recording stopped" % REC_CAP)
+def _watch(t):
+    """End-of-speech watcher: tails t.path and calls _finish(t, ...) on a verdict."""
+    head, v = b"", None
+    try:
+        f = open(t.path, "rb")
+    except OSError:
+        return
+    with f:
+        while not t.finishing:
+            time.sleep(0.05)
+            chunk = f.read()
+            if not chunk:
+                if t.proc.poll() is not None: return   # recorder died; tap or cap ends it
+                continue
+            if v is None:
+                head += chunk; lay = _wav_layout(head)
+                if lay is None: continue
+                if lay is False:
+                    log("voice: recorder output is not 16-bit mono WAV, auto stop off for this take"); return
+                off, rate = lay; p = t.vad
+                v = Vad(rate, p["silence_s"], p["no_speech_s"], p["speech_rms"]); chunk, head = head[off:], b""
+            out = v.feed(chunk)
+            if out:
+                _finish(t, out); return
 
 def voice_start(source="ptt"):
     if not _wpctl_real("SOURCE"):
         return {"error": "nomic", "text": "No microphone found."}
+    vp = vad_params()
     with rlock:
-        if REC["proc"] is not None:
+        cur = SESS["cur"]
+        if cur is not None and not cur.finishing:
             return {"error": "busy", "text": "Already listening."}
         fd, path = tempfile.mkstemp(suffix=".wav", dir=_spool()); os.close(fd)
         argv = [a.replace("{out}", path) for a in shlex.split(REC_CMD)]
@@ -615,10 +729,13 @@ def voice_start(source="ptt"):
             p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError:
             _rm(path); return {"error": "nomic", "text": "No microphone found."}
-        t = threading.Timer(REC_CAP, _cap_hit); t.daemon = True; t.start()
-        REC.update(proc=p, path=path, t0=time.time(), timer=t, capped=False)
+        t = _Take(p, path, vp)
+        t.timer = threading.Timer(REC_CAP, _finish, (t, "cap")); t.timer.daemon = True; t.timer.start()
+        SESS["cur"] = t
+    if vp["auto_stop"]:
+        threading.Thread(target=_watch, args=(t,), daemon=True).start()
     audit("voice", {"event": "listen"}, "start", via=source)
-    return {"ok": True, "cap_s": REC_CAP}
+    return {"ok": True, "cap_s": REC_CAP, "sid": t.sid, "auto": vp["auto_stop"], "silence_s": vp["silence_s"]}
 
 def _multipart(fields, fname, data):
     import secrets
@@ -640,17 +757,13 @@ def stt(path, key, lang):
     with urllib.request.urlopen(req, timeout=60) as r:
         return (json.load(r).get("text") or "").strip()
 
-def voice_stop(cancel=False):
-    with rlock:
-        p, path, t0, capped = REC["proc"], REC["path"], REC["t0"], REC["capped"]
-        if p is None:
-            return {"error": "idle", "text": "I wasn't listening."}
-        REC["timer"].cancel(); _stop_proc(p)
-        REC.update(proc=None, path=None, timer=None)
-    secs = round(min(time.time() - t0, REC_CAP), 1)
+def _transcribe(path, secs, capped, reason):
     try:
-        if cancel:
+        if reason == "cancel":
             audit("voice", {"event": "listen", "secs": secs}, "cancelled"); return {"ok": True, "cancelled": True}
+        if reason == "nospeech":                 # nothing above the noise floor: skip the API call
+            audit("voice", {"event": "listen", "secs": secs, "end": reason}, "no speech")
+            return {"error": "empty", "text": "I didn't catch that."}
         if os.path.getsize(path) <= 44 or secs < 0.3:
             audit("voice", {"event": "listen", "secs": secs}, "too short")
             return {"error": "empty", "text": "I didn't catch that."}
@@ -667,12 +780,59 @@ def voice_stop(cancel=False):
             audit("voice", {"event": "stt", "secs": secs}, "error " + type(e).__name__)
             return {"error": "net", "text": "I couldn't reach xAI to hear that."}
         intent = "yes" if YES_RE.match(text) else "no" if NO_RE.match(text) else None
-        audit("voice", {"event": "stt", "secs": secs, "chars": len(text)}, "ok" + (" (capped)" if capped else ""))
+        audit("voice", {"event": "stt", "secs": secs, "chars": len(text), "end": reason}, "ok" + (" (capped)" if capped else ""))
         if not text:
             return {"error": "empty", "text": "I didn't catch that."}
         return {"transcript": text, "intent": intent, "secs": secs, "capped": capped}
     finally:
-        _rm(path)                                # audio never outlives the request
+        _rm(path)                                # audio never outlives the take
+
+def _finish(t, reason):
+    """End take `t` exactly once (tap, cancel, cap, silence, nospeech) and return its result.
+    A second caller (e.g. a tap racing the auto stop) waits for the first one's result."""
+    with rlock:
+        owner = not t.finishing
+        if owner: t.finishing = True; t.reason = reason
+    if not owner:
+        t.done.wait(REC_CAP + 120)
+        return t.result or {"error": "busy", "text": "Still working on that."}
+    try:
+        if t.timer: t.timer.cancel()
+        _stop_proc(t.proc)
+        t.secs = round(min(time.time() - t.t0, REC_CAP), 1)
+        if reason in ("silence", "nospeech", "cap"):
+            log("voice: take ended by %s after %.1fs" % (reason, t.secs))
+        t.ended.set()
+        r = _transcribe(t.path, t.secs, reason == "cap", reason)
+    except Exception as e:                       # never leave a waiter hanging
+        log("voice: finish error", type(e).__name__); _rm(t.path)
+        r = {"error": "net", "text": "Something went wrong with the recording."}
+    t.result = dict(r, sid=t.sid, end=reason); t.ended.set(); t.done.set()
+    return t.result
+
+def voice_stop(cancel=False):
+    """Tap/release/Esc. Idempotent: if the take already ended by itself, returns that
+    result (once); afterwards 'idle'."""
+    t = SESS["cur"]
+    if t is None or (t.done.is_set() and t.claimed):
+        return {"error": "idle", "text": "I wasn't listening."}
+    r = _finish(t, "cancel" if cancel else "tap")
+    t.claimed = True
+    return r
+
+def voice_wait(sid, until=None):
+    """Long poll for the page. until="ended": returns when recording stops (so the page can
+    switch to 'thinking'); otherwise returns the take's final result, same shape as stop."""
+    t = SESS["cur"]
+    if t is None or (sid and t.sid != sid):
+        return {"error": "idle", "text": "I wasn't listening.", "sid": sid}
+    if until == "ended":
+        t.ended.wait(REC_CAP + 5)
+        return {"sid": t.sid, "ended": t.ended.is_set(), "end": t.reason}
+    if not t.done.wait(REC_CAP + 120):
+        return {"error": "net", "text": "That took too long.", "sid": t.sid}
+    t.claimed = True
+    return t.result
 
 def tts(text, key, c):
     body = json.dumps({"text": text, "voice_id": c["voice_id"], "language": c["language"],
@@ -718,8 +878,9 @@ def wake_word_hook():
     A future detector (always-on, local-only, e.g. a small keyword model reading a
     pw-record stream that is never stored or sent) should call voice_start("wake")
     and signal the page through a GET /api/voice/events stream so it can show
-    'listening' and later call /api/voice/stop on silence (xAI streaming STT's
-    speech_final). Enabled only when nova-voice.json has "wake_word": "nova"."""
+    'listening'; the take then ends on its own via the end-of-speech watcher and the
+    page picks up the result with /api/voice/wait. Enabled only when nova-voice.json
+    has "wake_word": "nova"."""
     return None
 
 # ---------- http ----------
@@ -784,6 +945,7 @@ class H(BaseHTTPRequestHandler):
             v = self.path[len("/api/voice/"):]
             if v == "start": voice_hush(); return self._json(voice_start())
             if v == "stop": return self._json(voice_stop(cancel=b.get("cancel") is True))
+            if v == "wait": return self._json(voice_wait(str(b.get("sid", ""))[:64], until=b.get("until")))
             if v == "speak": return self._json(voice_speak(str(b.get("text", ""))))
             if v == "hush": voice_hush(); return self._json({"ok": True})
             if v == "mute":
