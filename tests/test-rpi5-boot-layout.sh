@@ -76,6 +76,17 @@ line=$(rpi5_cmdline_from_bls "${tmp}/bls2")
 count=$(grep -o 'console=serial0,115200' <<< "$line" | wc -l)
 [[ "$count" -eq 1 ]] || fail "serial console duplicated: ${line}"
 
+# bootc-image-builder's console=ttyS0 is the Pi 5 Bluetooth UART: dropped
+mkdir -p "${tmp}/bls3"
+cat > "${tmp}/bls3/entry.conf" <<'EOF2'
+options root=UUID=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee rw console=tty0 console=ttyS0 ostree=/ostree/boot.0/default/abc/0
+EOF2
+line=$(rpi5_cmdline_from_bls "${tmp}/bls3")
+if grep -q 'ttyS' <<< "$line"; then
+    fail "console=ttyS0 kept on the Bluetooth UART: ${line}"
+fi
+grep -q 'console=tty0' <<< "$line" || fail "console=tty0 was dropped: ${line}"
+
 mkdir -p "${tmp}/fat3"
 rm -f "${payload}/kernel_2712.img"
 if rpi5_install_boot "$payload" "${tmp}/fat3" "$blsdir"; then

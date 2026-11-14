@@ -77,7 +77,7 @@ rpi5_default_bls() {
 }
 
 # Linux cmdline for the Pi EEPROM, taken from a bootc BLS entry.
-# Drops Pi 4 kernel paths. Refuses a missing root= and /dev/mmcblk*.
+# Drops Pi 4 kernel paths and console=ttyS* (the Bluetooth UART). Refuses a missing root= and /dev/mmcblk*.
 rpi5_cmdline_from_bls() {
     local src="$1"
     local options token joined
@@ -92,6 +92,14 @@ rpi5_cmdline_from_bls() {
     for token in "${tokens[@]}"; do
         case "$token" in
             *kernel8.img* | kernel=* | /efi/*)
+                continue
+                ;;
+            # bootc-image-builder adds console=ttyS0 for generic boards. On
+            # the Pi 5 the only 8250 port (ttyS0) is the BCM7271 UART wired
+            # to the Bluetooth chip, so a console there writes kernel log
+            # text into the HCI link and the controller never initialises
+            # ("command 0xfc18 tx timeout", "Reset failed (-110)").
+            console=ttyS*)
                 continue
                 ;;
         esac
