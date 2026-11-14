@@ -22,6 +22,7 @@ Real `cmdline.txt` as seen in `/proc/cmdline` (firmware prefix first, then ours)
 ```
 
 Bluetooth (2026-11-13): bootc-image-builder puts `console=ttyS0` in the BLS options. On the Pi 5 the only 8250 port, ttyS0, is the BCM7271 UART at 0x107d50c000 that carries HCI to the CYW43455 Bluetooth half, so the kernel console wrote log text into the Bluetooth link and every boot ended in `hci0: command 0xfc18 tx timeout` / `BCM: Reset failed (-110)` and "No default controller". `rpi5_cmdline_from_bls` now drops `console=ttyS*` when it writes `cmdline.txt` (the BLS entry may still list it; the Pi firmware boots from `cmdline.txt`). The serial console stays on `serial0` (RP1 UART0, ttyAMA0, GPIO 14/15).
+An in-place update from an image older than 10ac03b needs two reboots: the shutdown sync still runs the old booted image's script (keeps `console=ttyS0`), and the new image's boot-time `grokbot-rpi5-cmdline.service` then rewrites `cmdline.txt` without it, so Bluetooth comes up from the second boot on (seen on the Pi 2026-11-13).
 
 ## Fixes in dfbe8e3
 
