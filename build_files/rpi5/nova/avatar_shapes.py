@@ -1,4 +1,4 @@
-"""Avatar shapes and colors for the Pi avatar (Pixel), shared by the renderers, novad and the picker.
+"""Avatar shapes and colors for the Pi avatar (Cypher), shared by the renderers, novad and the picker.
 Pure Python (no cairo/GTK). Every shape is star-shaped around its center, so it is stored as a
 polar radius r(theta) and reduced to a short Fourier series: the cairo renderer traces it and the
 GL shader evaluates it per pixel, so both draw the same outline. Units: the radius of a circle of

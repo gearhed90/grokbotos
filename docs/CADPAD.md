@@ -11,7 +11,7 @@ power only and is not used.
   Status dot: green = helper up and Onshape open, yellow = helper up but Onshape closed, red = no token,
   can't reach the PC, or auth refused. Buttons marked "…" have no Onshape default shortcut and use
   Onshape's tool search (Alt+C, name, Enter).
-- Open it with the **CAD** button (top-left of the Nova screen) or by asking Pixel to open
+- Open it with the **CAD** button (top-left of the Nova screen) or by asking Cypher to open
   `onshape_pad` (novad `open_app`). ✕ Close returns to Nova.
 - Target: `/etc/grokbot/cadpad.conf` (`HOST=192.168.12.126`, `PORT=8790`); a user can override in
   `~/.config/grokbot/cadpad.conf`.
