@@ -114,7 +114,7 @@ def load_limits(path=None):
     for a, spec in L["actions"].items():
         if not isinstance(spec, dict) or "phase" not in spec:
             raise ConfigError("action %s lacks a phase" % a)
-    parse_hhmm(L["quiet_hours"][0]); parse_hhmm(L["quiet_hours"][1])
+    L["_quiet_nights"] = quiet_nights(L["quiet_hours"])
     return L
 
 def clamp(v, lo, hi):
@@ -142,11 +142,45 @@ def parse_hhmm(s):
         raise ConfigError("bad time " + s)
     return h * 60 + m
 
+DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+def quiet_nights(q):
+    """Quiet-hours schedule -> {day: (start_min, end_min) or None}, keyed by the day the
+    night STARTS on (a 23:00-06:00 window on "fri" is Friday 11 PM to Saturday 6 AM).
+      ["23:00", "06:00"]                              every night
+      {"default": ["23:00", "06:00"], "nights": {"fri": null, "sat": null}}
+                                                      per-night override; null = no quiet hours"""
+    if isinstance(q, list):
+        q = {"default": q}
+    if not isinstance(q, dict):
+        raise ConfigError("quiet_hours must be a list or an object")
+    def win(w):
+        if w is None:
+            return None
+        if not (isinstance(w, list) and len(w) == 2):
+            raise ConfigError("a quiet-hours window is [\"HH:MM\", \"HH:MM\"] or null")
+        return (parse_hhmm(w[0]), parse_hhmm(w[1]))
+    default = win(q.get("default"))
+    nights = q.get("nights") or {}
+    if not isinstance(nights, dict) or any(k not in DAYS for k in nights):
+        raise ConfigError("quiet_hours.nights keys must be mon..sun")
+    return {d: (win(nights[d]) if d in nights else default) for d in DAYS}
+
 def in_quiet_hours(L, t=None):
+    sched = L.get("_quiet_nights") or quiet_nights(L["quiet_hours"])
     lt = time.localtime(t)
     now = lt.tm_hour * 60 + lt.tm_min
-    a, b = parse_hhmm(L["quiet_hours"][0]), parse_hhmm(L["quiet_hours"][1])
-    return (a <= now < b) if a <= b else (now >= a or now < b)
+    today, yesterday = DAYS[lt.tm_wday], DAYS[(lt.tm_wday - 1) % 7]
+    w = sched[today]
+    if w:
+        a, b = w
+        if a <= b and a <= now < b: return True
+        if a > b and now >= a: return True          # tonight's window, before midnight
+    w = sched[yesterday]
+    if w:
+        a, b = w
+        if a > b and now < b: return True           # last night's window, after midnight
+    return False
 
 # ---------- drives and mood ----------
 def new_state():

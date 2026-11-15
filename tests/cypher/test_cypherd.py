@@ -67,7 +67,8 @@ C = importlib.util.module_from_spec(spec); spec.loader.exec_module(C)
 shipped = C.load_limits(os.path.join(SRC, "cypher-limits.json"))
 check("shipped limits load", shipped["phase_max"] == 1 and shipped["tick_s"] == 45)
 check("v1 actions are exactly none/journal/note/avatar", sorted(C.allowed_actions(shipped)) == ["journal_thought", "none", "set_avatar_color", "show_note"])
-check("quiet hours 11 PM to 6 AM", shipped["quiet_hours"] == ["23:00", "06:00"])
+check("quiet hours 11 PM to 6 AM, off Friday and Saturday nights",
+      shipped["quiet_hours"] == {"default": ["23:00", "06:00"], "nights": {"fri": None, "sat": None}})
 check("hosted backup capped at $0.50/day", shipped["brain"]["hosted_backup"]["daily_budget_usd"] == 0.5)
 check("primary brain is the Alpha proxy on 8090", shipped["brain"]["primary_url"] == "http://192.168.12.126:8090")
 sys.path.insert(0, NOVA)
@@ -108,13 +109,27 @@ check("drives stay inside 0..1", d["boredom"] == 1.0 and d["social"] == 0.0)
 check("mood: high boredom -> restless", C.mood({"energy": .6, "curiosity": .3, "social": .3, "boredom": .8, "focus": .4})["label"] == "restless")
 check("mood: low energy -> drained", C.mood({"energy": .1, "curiosity": .9, "social": .3, "boredom": .8, "focus": .4})["label"] == "drained")
 
-# ---- quiet hours ----
-def at(h, m=0):
-    return time.mktime((2026, 11, 15, h, m, 0, 0, 0, -1))
-check("23:30 is quiet", C.in_quiet_hours(L, at(23, 30)))
-check("05:59 is quiet", C.in_quiet_hours(L, at(5, 59)))
-check("06:00 is not quiet", not C.in_quiet_hours(L, at(6, 0)))
-check("14:00 is not quiet", not C.in_quiet_hours(L, at(14)))
+# ---- quiet hours: weekdays only (nights keyed by the day they start) ----
+def at(h, m=0, day=15):
+    return time.mktime((2026, 11, day, h, m, 0, 0, 0, -1))    # Nov 15 2026 is a Sunday
+Q = lambda day, h, m=0: C.in_quiet_hours(L, at(h, m, day))
+check("Mon 23:30 quiet", Q(16, 23, 30))
+check("Tue 05:59 quiet (Monday night)", Q(17, 5, 59))
+check("Tue 06:00 not quiet", not Q(17, 6, 0))
+check("Mon 14:00 not quiet", not Q(16, 14))
+check("Fri 05:00 quiet (Thursday night)", Q(20, 5, 0))
+check("Fri 22:59 not quiet", not Q(20, 22, 59))
+check("Fri 23:30 not quiet (Friday night off)", not Q(20, 23, 30))
+check("Sat 03:00 not quiet (Friday night off)", not Q(21, 3, 0))
+check("Sat 23:30 not quiet (Saturday night off)", not Q(21, 23, 30))
+check("Sun 05:59 not quiet (Saturday night off)", not Q(22, 5, 59))
+check("Sun 23:30 quiet (Sunday night is a school night)", Q(22, 23, 30))
+check("Mon 05:59 quiet (Sunday night)", Q(23, 5, 59))
+Llist = dict(L, quiet_hours=["23:00", "06:00"]); Llist.pop("_quiet_nights", None)
+check("plain list form still means every night", C.in_quiet_hours(Llist, at(23, 30, 20)))
+for badq in ({"default": ["25:00", "06:00"]}, {"nights": {"funday": None}}, "23-06", {"default": ["23:00"]}):
+    try: C.quiet_nights(badq); check("bad schedule refused: %r" % (badq,), False)
+    except (C.ConfigError, ValueError): check("bad schedule refused: %r" % (badq,), True)
 
 # ---- reply parsing ----
 check("plain JSON parses", C.parse_choice('{"action":"none"}')["action"] == "none")

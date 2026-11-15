@@ -6,7 +6,8 @@
   "tick_s_bounds": [30, 300],
   "heartbeat_s": 600,
   "drift_bounds_per_hour": [-0.2, 0.2],
-  "quiet_hours": ["23:00", "06:00"],
+  "_quiet_hours_comment": "Keyed by the night it starts on. Weekdays 11 PM-6 AM; Friday and Saturday nights have none (Zack, Nov 15). null = no quiet hours that night.",
+  "quiet_hours": {"default": ["23:00", "06:00"], "nights": {"fri": null, "sat": null}},
   "brain": {
     "primary_url": "http://192.168.12.126:8090",
     "timeout_s": 25,
