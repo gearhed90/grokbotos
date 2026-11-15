@@ -10,7 +10,7 @@ Cypher is the Raspberry Pi 5 running grokbotos, and the always-running mind on i
 | Locked limits | `/etc/grokbot/cypher-limits.json` (root-owned; cypherd re-reads it each tick and exits with 78 if it is missing, invalid or writable by others) |
 | Seed persona | `/usr/share/grokbot/cypher/persona.md` (a copy in `~/.config/cypher/persona.md` wins) |
 | Proxy token | `/etc/grokbot/cypher-brain-token` (root:grokbot 0640), saved with `sudo grokbot-set-cypher-token < file`; never in the image |
-| CLI | `grokbot-cypher status / journal -n N / mute / unmute / pause MIN / resume / stop / start / memories / prefs / ntfy-test / requests / inbox / ntfy-qr / panels [show|hide]` |
+| CLI | `grokbot-cypher status / journal -n N / mute / unmute / pause MIN / resume / stop / start / memories / prefs / ntfy-test / requests / inbox / ntfy-qr / panels [show|hide] / grid / tuning [approve\|deny\|revert N] / limits [set ACTION KEY N\|none]` |
 | HUD panels | `/usr/share/grokbot/cypher/cypher_panels.py`, drawn around the avatar by the avatar app (Super+C hides/shows), reading `~/.local/state/cypher/dash.json` |
 | Conversations | the avatar (typed or voice) via novad + `/usr/share/grokbot/nova/cypher_link.py`, spooled to `~/.local/state/cypher/talk-spool.jsonl` (0600) and journaled by cypherd |
 | Journal | `~/.local/share/cypher/journal/YYYY-MM-DD.jsonl` (0600) |
@@ -83,10 +83,26 @@ What glances and look-ups find goes into the journal (`found`), the next few pro
 
 **Internal names kept.** novad, `nova_native.py`, the `nova-shell` app_id, `NOVA_*` variables, `nova-voice.json` and the grokbotd client name stay, because the sway rules, the Super toggle, the focus watcher and grokbotd permissions key on them. None of them is shown to the user.
 
+## Phase 5 (Nov 15 2026, build 11)
+
+**Quiet hours, spelled out.** Every prompt (Alpha, the local 3B and the hosted backup get the same one) now says `quiet hours: YES` or `quiet hours: NO right now` with the schedule in words: 11 PM-6 AM on Sunday to Thursday nights, none on Friday and Saturday nights. It also says that "the quiet hours of the grid" in the persona is a feeling, not this schedule; the local model had been mixing the two up on weekends.
+
+**message_zack** defaults are now 3 an hour with no daily cap (`per_day: null`), still never in quiet hours.
+
+**Limits command.** `grokbot-cypher limits` shows the locked caps and quiet hours; `grokbot-cypher limits set ACTION per_hour|per_day|per_week N|none` changes one cap through `sudo grokbot-set-cypher-limit`. That helper checks the value against `LIMIT_BOUNDS` in cypherd (for example message_zack per_hour 0-10 and per_day 0-50 or `none`; account caps can only go down and never be `none`), runs cypherd's own validator on the whole file, and replaces `/etc/grokbot/cypher-limits.json` atomically (root:root 0644). cypherd re-reads the file every loop, so the change is live without a restart, and journals `limits_changed`. Cypher cannot run it (cypherd has NoNewPrivileges) and its self-tuning never writes that file.
+
+**Stricter request_account.** The service must be the website's plain domain with a known TLD (`github.com`, `pinos.world`): no scheme, path, port, `@`, spaces or bare IPs. A request counts only when the Alpha brain or the hosted backup chose it (conversations on the avatar use the hosted model); the local 3B fallback is refused and the refusal is journaled.
+
+**Gridwatch.** `check_grid` (phase 5, deck only, 4 an hour / 30 a day) is a read-only report: whether Alpha answers, the brain proxy's health, who holds the lease (the mind), when Alpha's standby last thought, the camera feed status with the last events (first names only), and the latest commit on each branch listed in `grid.repos` (the public GitHub API, no token). The report comes back next tick as something Cypher found; it eases boredom and curiosity, so keeping track of the grid while Zack is away needs no accounts. cypherd also refreshes it every 10 minutes for the **GRID REPORT** panel on the right of the HUD. Everything goes through `dash_text`, so no IPs, links or tokens reach the screen or the journal. `grokbot-cypher grid [--refresh]` prints it.
+
+**Self-tuning (proposals only).** At the nightly sleep, when the Alpha brain or the hosted backup answers, Cypher may propose one small tuning (at most 1 a day, 3 a week, 3 waiting): drift per drive (+-0.02 a step, inside the locked drift bounds), effect weights per drive (0.5-1.5, +-0.1), leanings toward or away from actions (-1..1, +-0.25; never message_zack or request_account), and soft caps that can only be lower than the locked ones (journal, notes, color, glances, look-ups, grid checks). Anything else (message or account caps, quiet hours, approvals, secrets, the limits file) is refused and listed. A proposal is saved to `~/.local/share/cypher/tuning/proposals.json` (0600) with before/after, the reason and its revert; it is journaled (`tuning_proposed`), shown on the HUD ("waiting on you: tuning #N") and sent to the phone once quiet hours are over. **Nothing applies until Zack approves through Nova**: `grokbot-cypher tuning approve N` writes it to `~/.config/cypher/tunables.json` (only if the values have not moved since), `tuning deny N` refuses it, `tuning revert N` undoes an approved one; pending proposals expire after 7 days. Phone replies and on-screen words never count, and the local 3B cannot propose. With tuning on, the sleep no longer changes drift by itself.
+
+**Panel clock** is in Eastern time (America/New_York, `CYPHER_TZ`) from the avatar app; the deck's system clock stays UTC.
+
 ## Not yet
 
 Wake word, self-improvement, dock meters, the lock-screen/boot theme, visiting Pino. See the design page for the plan.
 
 ## Tests
 
-`python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py` and `test_cypher_one_mind.py` (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, camfeed and a two-process failover test (`test_failover_e2e.py`) live with the Alpha code in `~/nova-projects/cypher/tests`.
+`python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py`, `test_cypher_one_mind.py` and `test_cypherd_phase5.py` (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, camfeed and a two-process failover test (`test_failover_e2e.py`) live with the Alpha code in `~/nova-projects/cypher/tests`.

@@ -20,6 +20,13 @@
   grokbot-cypher ntfy-qr [--text]  show the phone topic as a QR code (a terminal on Cypher's own
                                    screen only; refuses over SSH or a pipe)
   grokbot-cypher panels [show|hide] hide or show the HUD panels around the avatar (same as Super+C)
+  grokbot-cypher grid [--refresh]  the gridwatch report (read-only: Alpha, proxy, mind, cameras, repo)
+  grokbot-cypher tuning            Cypher's self-tuning proposals
+  grokbot-cypher tuning approve|deny|revert N
+                                   apply, refuse or undo proposal N (Nova, only after Zack says so)
+  grokbot-cypher limits [show]     the locked caps and quiet hours
+  grokbot-cypher limits set ACTION per_hour|per_day|per_week N|none
+                                   change one cap (sudo; live at cypherd's next loop, no restart)
 """
 import json, os, subprocess, sys, time
 E = os.environ.get
@@ -112,12 +119,20 @@ def main(argv):
         except (OSError, ValueError): mem = []
         for m in mem[-20:]: print("%s  %s" % (m.get("day", ""), m.get("text", "")))
         if not mem: print("no memories yet (Cypher sleeps at 4 AM)")
+    elif cmd == "limits" and len(argv) > 2 and argv[2] == "set":
+        if len(argv) != 6:
+            print("usage: grokbot-cypher limits set ACTION per_hour|per_day|per_week N|none"); return 2
+        helper = E("CYPHER_SET_LIMIT", "/usr/local/sbin/grokbot-set-cypher-limit")
+        pre = [] if E("CYPHER_NO_SUDO") == "1" else ["sudo"]
+        return subprocess.run([*pre, helper, *argv[3:6]]).returncode
     elif cmd == "panels":
         return subprocess.run([E("CYPHER_PANELS_TOGGLE", "/usr/local/bin/grokbot-cypher-panels"), *argv[2:]]).returncode
-    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests", "inbox", "ntfy-qr"):
+    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests", "inbox", "ntfy-qr", "tuning", "grid", "limits"):
         if cmd == "prefs" and len(argv) > 3 and argv[2] == "rollback":
             args = ["prefs-rollback", argv[3]]
-        elif cmd in ("requests", "inbox", "ntfy-qr"):
+        elif cmd == "limits":
+            args = ["limits"]
+        elif cmd in ("requests", "inbox", "ntfy-qr", "tuning", "grid"):
             args = [cmd, *argv[2:]]
         else:
             args = [cmd]

@@ -57,6 +57,7 @@ T = tempfile.mkdtemp(); TOKEN = "k" * 40
 with open(os.path.join(T, "token"), "w") as f: f.write(TOKEN)
 os.chmod(os.path.join(T, "token"), 0o600)
 limits_src = json.load(open(os.path.join(SRC, "cypher-limits.json")))
+limits_src["tuning"]["enabled"] = False      # phase 2 sleep: direct drift steps (phase 5 turns them into proposals)
 def write_limits(name="limits.json", **over):
     L = json.loads(json.dumps(limits_src))
     L["brain"]["primary_urls"] = ["http://127.0.0.1:%d" % ports["px"]]; L["brain"]["primary_url"] = L["brain"]["primary_urls"][0]
@@ -84,7 +85,7 @@ L = D.current_limits(D.new_state())
 
 # ---- shipped phase-2 limits ----
 S = D.load_limits(os.path.join(SRC, "cypher-limits.json"))
-check("phase 2 unlocked (shipped at phase 4)", S["phase_max"] == 4)
+check("phase 2 unlocked (shipped at phase 5)", S["phase_max"] == 5)
 check("failover, camera, sleep, local all on", all(D.phase_on(S, b) for b in ("failover", "camera", "sleep", "local")))
 check("local model is loopback only", S["brain"]["local"]["url"].startswith("http://127.0.0.1:"))
 check("deck addresses: LAN and tailnet", S["failover"]["deck_addrs"] == ["192.168.12.71:22", "100.72.32.17:22"])
@@ -223,7 +224,7 @@ check("same epoch -> no second catch-up", not any(c[1] == "/sync/state" for c in
 PX["pushed"].clear(); D._OUTBOX[:] = [{"ts": "2026-11-15T03:20:00-0500", "tick": 501}]
 D.sync_push(L, std)
 sp = [b for b in PX["pushed"] if "state" in b]
-check("deck pushes its state with epoch and its limits", sp and sp[0]["epoch"] == 7 and sp[0]["holder"] == "cypher" and sp[0]["state"]["limits"]["phase_max"] == 4, sp)
+check("deck pushes its state with epoch and its limits", sp and sp[0]["epoch"] == 7 and sp[0]["holder"] == "cypher" and sp[0]["state"]["limits"]["phase_max"] == 5, sp)
 check("deck pushes its journal outbox, then clears it", any("entries" in b for b in PX["pushed"]) and D._OUTBOX == [])
 PX["calls"].clear(); D.release(L, std, handoff=False)
 rl = [c[2] for c in PX["calls"] if c[1] == "/lease"]

@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""grokbot-set-cypher-limit - change one cap in Cypher's locked limits (root only).
+
+  sudo grokbot-set-cypher-limit ACTION per_hour|per_day|per_week N|none
+
+Usually run through `grokbot-cypher limits set ...`. Checks the value against
+cypherd's LIMIT_BOUNDS (e.g. message_zack per_hour 0..10, per_day 0..50 or none;
+account caps can only be lowered), validates the whole file with cypherd's own
+validator, and replaces /etc/grokbot/cypher-limits.json atomically (root:root 0644).
+cypherd re-reads the file every loop, so the change is live without a restart.
+Cypher itself can never run this (cypherd runs with NoNewPrivileges, and its
+self-tuning only writes its own tunables)."""
+import importlib.util, json, os, sys, tempfile
+E = os.environ.get
+DEST = E("GROKBOT_CYPHER_LIMITS_FILE", "/etc/grokbot/cypher-limits.json")
+LIB = E("CYPHER_LIB", "/usr/share/grokbot/cypher")
+
+def die(msg, code=2):
+    print("grokbot-set-cypher-limit: " + msg, file=sys.stderr); sys.exit(code)
+
+def main(argv):
+    if len(argv) != 4:
+        die("usage: sudo grokbot-set-cypher-limit ACTION per_hour|per_day|per_week N|none")
+    if os.geteuid() != 0 and E("GROKBOT_CYPHER_LIMITS_NOROOT") != "1":   # tests point DEST at a temp file
+        die("run with sudo")
+    action, key, raw = argv[1], argv[2], argv[3].strip().lower()
+    os.environ.setdefault("CYPHER_LIMITS", DEST)
+    spec = importlib.util.spec_from_file_location("cypherd_lib", os.path.join(LIB, "cypherd.py"))
+    C = importlib.util.module_from_spec(spec); spec.loader.exec_module(C)
+    bounds = C.LIMIT_BOUNDS.get(action)
+    if bounds is None:
+        die("no settable caps for %r (settable: %s)" % (action[:30], ", ".join(sorted(C.LIMIT_BOUNDS))))
+    if key not in bounds:
+        die("%s has no settable %r (settable: %s)" % (action, key[:20], ", ".join(bounds)))
+    if raw in ("none", "null", "unlimited"):
+        if key != "per_day" or action in C.NO_NONE:
+            die("only per_day can be 'none', and never for %s" % ", ".join(C.NO_NONE))
+        value = None
+    else:
+        if not raw.isdigit():
+            die("value must be a whole number or 'none'")
+        value = int(raw)
+        lo, hi = bounds[key]
+        if not lo <= value <= hi:
+            die("%s %s must be %d..%d%s" % (action, key, lo, hi, " or none" if key == "per_day" and action not in C.NO_NONE else ""))
+    try:
+        with open(DEST) as f:
+            L = json.load(f)
+    except (OSError, ValueError) as e:
+        die("cannot read %s: %s" % (DEST, type(e).__name__), 1)
+    if action not in L.get("actions", {}):
+        die("%s is not in %s" % (action, DEST), 1)
+    before = L["actions"][action].get(key, "unset")
+    L["actions"][action][key] = value
+    try:
+        C.validate_limits(json.loads(json.dumps(L)))
+    except Exception as e:
+        die("the result would not be valid: %s" % e, 1)
+    d = os.path.dirname(DEST) or "."
+    fd, tmp = tempfile.mkstemp(prefix=".cypher-limits.", dir=d)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(L, f, indent=2); f.write("\n")
+        os.chmod(tmp, 0o644)
+        if os.geteuid() == 0:
+            os.chown(tmp, 0, 0)
+        os.replace(tmp, DEST)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    fmt = lambda v: "none" if v is None else str(v)
+    print("%s %s: %s -> %s (cypherd picks it up at its next loop)" % (action, key, fmt(before), fmt(value)))
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

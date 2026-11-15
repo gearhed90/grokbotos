@@ -63,6 +63,17 @@ Phase 4:
     NEVER an approval of anything: not an action, not an account request, not a
     limit or unlock. See inbox_poll().
 
+  * Phase 5 (build 11): gridwatch (check_grid: a read-only report on Alpha, its
+    brain proxy, who holds the mind, the camera feed and the latest grokbotos
+    commits; also a HUD panel), stricter request_account (a plain domain with a
+    known TLD, and only when the Alpha brain or the hosted backup chose it), and
+    self-tuning: the nightly sleep may PROPOSE small, bounded changes to drive
+    drift, drive effect weights, action leanings and (lower-only) soft caps. A
+    proposal applies only when Zack approves it through Nova with
+    `grokbot-cypher tuning approve N`; phone replies and on-screen words never
+    count, the local 3B fallback cannot propose, and the locked limits file
+    (message/account caps, quiet hours, secrets, approval rules) is never tuned.
+
 Switches (all in ~/.config/cypher, see the cypher CLI):
   KILL         present -> cypherd exits at the next tick and stays off
   muted        present -> no on-screen notes
@@ -100,10 +111,33 @@ ACTION_EFFECTS = {"journal_thought": {"boredom": -0.05, "curiosity": -0.03},
                   "message_zack": {"social": -0.15, "boredom": -0.03},
                   "glance_screen": {"curiosity": -0.08, "boredom": -0.05},
                   "look_up": {"curiosity": -0.10, "boredom": -0.06},
-                  "request_account": {"social": -0.08, "curiosity": -0.04}}
+                  "request_account": {"social": -0.08, "curiosity": -0.04},
+                  "check_grid": {"curiosity": -0.06, "boredom": -0.06, "focus": 0.03}}
 ZACK_MSG_NUDGE = {"social": -0.15, "boredom": -0.05, "curiosity": 0.03}
-DECK_ONLY = ("show_note", "set_avatar_color", "message_zack", "glance_screen", "request_account")
-BLOCKS = ("camera", "sleep", "failover", "ntfy", "screen", "lookup", "dashboard")
+DECK_ONLY = ("show_note", "set_avatar_color", "message_zack", "glance_screen", "request_account", "check_grid")
+BLOCKS = ("camera", "sleep", "failover", "ntfy", "screen", "lookup", "dashboard", "grid", "tuning")
+# Caps Zack can set with `grokbot-cypher limits set` (sudo; written to the locked file only by
+# grokbot-set-cypher-limit). per_day may also be None (no daily cap) except where noted.
+LIMIT_BOUNDS = {"journal_thought": {"per_hour": (0, 60), "per_day": (0, 500)},
+                "show_note": {"per_hour": (0, 10), "per_day": (0, 50)},
+                "set_avatar_color": {"per_hour": (0, 6), "per_day": (0, 50)},
+                "message_zack": {"per_hour": (0, 10), "per_day": (0, 50)},
+                "glance_screen": {"per_hour": (0, 6), "per_day": (0, 30)},
+                "look_up": {"per_hour": (0, 6), "per_day": (0, 30)},
+                "check_grid": {"per_hour": (0, 12), "per_day": (0, 100)},
+                "request_account": {"per_day": (0, 1), "per_week": (0, 2)}}
+NO_NONE = ("request_account",)          # account caps always stay finite
+CAP_KEYS = ("per_hour", "per_day", "per_week")
+# Self-tuning may only LOWER these soft caps, never raise them past the locked file.
+TUNE_CAP_ACTIONS = ("journal_thought", "show_note", "set_avatar_color", "glance_screen", "look_up", "check_grid")
+HARD_ACTIONS = ("message_zack", "request_account")   # never tuned in any way
+TUNE_DEFAULTS = {"drift_step": 0.02, "bias": [-1.0, 1.0], "bias_step": 0.25, "effect_scale": [0.5, 1.5], "effect_step": 0.1}
+# request_account: the service is a real website's plain domain with a known TLD.
+KNOWN_TLDS = frozenset((
+    "com org net edu gov mil int io dev app ai co me tv us uk ca au nz de fr nl be ch at es it se no dk fi ie pl pt cz eu "
+    "jp kr cn in br mx ar za sg hk tw world site online tech cloud xyz info biz gg so sh to fm ly blog page social games "
+    "store shop news wiki art design studio club live today email codes tools zone network systems digital media").split())
+_DOMAIN_RE = re.compile(r"^(?=.{4,253}$)(?:(?!-)[a-z0-9-]{1,63}(?<!-)\.)+([a-z]{2,24})$")
 OUT_TAG = "cypher-out"        # ntfy tag on everything Cypher sends, so the inbox skips its own messages
 EX_CONFIG = 78
 CAMERA_NUDGES = {"family": {"social": -0.10, "boredom": -0.05}, "person": {"curiosity": 0.05, "focus": 0.03},
@@ -203,6 +237,12 @@ def validate_limits(L):
             raise ConfigError("action %s lacks a phase" % a)
         if HOUSE_WORDS.search(a):
             raise ConfigError("action %s looks like a camera or house control; never allowed" % a)
+        for k in CAP_KEYS:
+            v = spec.get(k)
+            if v is not None and (isinstance(v, bool) or not isinstance(v, int) or v < 0):
+                raise ConfigError("action %s: %s must be a whole number >= 0 or null" % (a, k))
+        if a in NO_NONE and spec.get("per_day") is None and spec.get("phase", 99) <= 90:
+            raise ConfigError("action %s needs a per_day cap" % a)
     for blk in BLOCKS:
         if blk in L and not isinstance(L[blk], dict):
             raise ConfigError(blk + " must be an object")
@@ -242,8 +282,14 @@ def phase_on(L, block):
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
+def tune_bounds(L):
+    b = dict(TUNE_DEFAULTS)
+    b.update(((L.get("tuning") or {}).get("bounds") or {}))
+    return b
+
 def load_tunables(L):
-    """tunables.json (optional, editable by Cypher later), clamped to the locked bounds."""
+    """tunables.json (written only by approved tuning proposals, or the phase 2 sleep
+    when tuning is off), clamped to the locked bounds. Never the limits file."""
     t = read_json(os.path.join(CFG_DIR, "tunables.json"), {}) or {}
     lo, hi = L["tick_s_bounds"]
     try:
@@ -255,7 +301,35 @@ def load_tunables(L):
     for k, v in (t.get("drift_per_hour") or {}).items():
         if k in drift and isinstance(v, (int, float)):
             drift[k] = clamp(float(v), dlo, dhi)
-    return {"tick_s": clamp(tick, lo, hi), "drift_per_hour": drift}
+    b = tune_bounds(L)
+    bias = {}
+    for a, v in (t.get("action_bias") or {}).items():
+        if a in L["actions"] and a not in HARD_ACTIONS and a != "none" and isinstance(v, (int, float)) and not isinstance(v, bool):
+            bias[a] = clamp(float(v), b["bias"][0], b["bias"][1])
+    scale = {k: 1.0 for k in DRIVES}
+    for k, v in (t.get("effect_scale") or {}).items():
+        if k in scale and isinstance(v, (int, float)) and not isinstance(v, bool):
+            scale[k] = clamp(float(v), b["effect_scale"][0], b["effect_scale"][1])
+    caps = {}
+    for a, c in (t.get("caps") or {}).items():
+        if a in TUNE_CAP_ACTIONS and a in L["actions"] and isinstance(c, dict):
+            for k in ("per_hour", "per_day"):
+                v = c.get(k)
+                if isinstance(v, int) and not isinstance(v, bool) and v >= 1:
+                    locked = L["actions"][a].get(k)
+                    caps.setdefault(a, {})[k] = v if locked is None else min(v, locked)
+    return {"tick_s": clamp(tick, lo, hi), "drift_per_hour": drift, "action_bias": bias, "effect_scale": scale, "caps": caps}
+
+def eff_spec(L, a, tun=None):
+    """The action's caps right now: the locked ones, lowered by any approved soft cap."""
+    spec = dict(L["actions"].get(a) or {})
+    if a in TUNE_CAP_ACTIONS:
+        for k, v in ((tun or load_tunables(L))["caps"].get(a) or {}).items():
+            spec[k] = v if spec.get(k) is None else min(spec[k], v)
+    return spec
+
+def scaled(delta, tun):
+    return {k: v * tun["effect_scale"].get(k, 1.0) for k, v in delta.items()}
 
 def parse_hhmm(s):
     h, m = s.split(":")
@@ -304,6 +378,21 @@ def in_quiet_hours(L, t=None):
         if a > b and now < b: return True           # last night's window, after midnight
     return False
 
+def _hm12(m):
+    h, mm = divmod(m, 60)
+    return "%d%s %s" % ((h % 12) or 12, (":%02d" % mm) if mm else "", "AM" if h < 12 else "PM")
+
+def quiet_desc(L):
+    """The quiet-hours schedule in words (keyed by the night it starts on)."""
+    sched = L.get("_quiet_nights") or quiet_nights(L["quiet_hours"])
+    groups = {}
+    for d in DAYS:
+        groups.setdefault(sched[d], []).append(d.capitalize())
+    out = []
+    for w, days in groups.items():
+        out.append(("%s-%s on %s nights" % (_hm12(w[0]), _hm12(w[1]), ", ".join(days))) if w else ("none on %s nights" % ", ".join(days)))
+    return "; ".join(out)
+
 # ---------- drives and mood ----------
 def new_state():
     return {"drives": {"energy": 0.7, "curiosity": 0.5, "social": 0.4, "boredom": 0.3, "focus": 0.5},
@@ -314,7 +403,8 @@ def new_state():
             "merged_since": "", "outbox": [], "deck_limits": None,
             "avatar_color": None, "color_mood": None, "found": [],
             "inbox_since": None, "inbox_last_poll": 0, "inbox_recent": [], "inbox_seen": [], "inbox": [],
-            "cam_log": [], "dash_last": None, "talk": [], "last_talk": 0}
+            "cam_log": [], "dash_last": None, "talk": [], "last_talk": 0,
+            "grid": {}, "cam_feed": {}, "tuning_notify": [], "limits_caps": None}
 
 def apply_delta(drives, delta):
     for k, v in delta.items():
@@ -465,9 +555,12 @@ def camera_step(L, st, now):
     try:
         code, j = alpha_api(L, "GET", "/camera/events?since=%d&limit=50" % (since or 0), timeout=5)
     except BrainBusy:
+        st["cam_feed"] = {"ok": False, "at": now, "why": "unreachable"}
         return []
     if code != 200 or not isinstance(j, dict):
+        st["cam_feed"] = {"ok": False, "at": now, "why": "http %d" % code}
         return []
+    st["cam_feed"] = {"ok": True, "at": now}
     last = j.get("last_seq") if isinstance(j.get("last_seq"), int) else 0
     st["cam_seq"] = last          # also resets if the feed was reset (last < since)
     window = C.get("first_lookback_s", 43200) if since is None else C.get("max_age_s", 1800)
@@ -635,7 +728,8 @@ MANIFEST_TEXT = {
                     "(something broken, a finding worth his time). Never small talk, greetings or mood updates. params: {\"text\": max %(max_chars)s chars}",
     "glance_screen": "glance_screen - take one look at what is on your own screen right now; a short description comes back next tick. params: {}",
     "look_up": "look_up - look a topic up on Wikipedia; the summary comes back next tick. params: {\"topic\": max %(max_chars)s chars}",
-    "request_account": "request_account - ask Zack for an account on a service. This only ASKS; you cannot sign up and must not share your email address. Nova creates an account only after Zack approves. params: {\"service\": short name, max 40 chars, \"why\": max 160 chars}",
+    "request_account": "request_account - ask Zack for an account on a website. This only ASKS; you cannot sign up and must not share your email address. Nova creates an account only after Zack approves. params: {\"service\": the site's plain domain like github.com (no https://, no @), \"why\": max 160 chars}",
+    "check_grid": "check_grid - a read-only look at the grid: is Alpha up, its brain proxy, who holds your mind, the camera feed, and the latest grokbotos commits. The report comes back next tick. Good for keeping track of the grid while Zack is away. params: {}",
 }
 CAMERA_RULES = ("Only what the line says happened. 'unconfirmed' means motion nobody has checked: do not guess who it was. "
                 "Never invent doors opening, people coming or going, or who someone is (or is not) unless a name is in the line.")
@@ -661,7 +755,11 @@ def build_messages(L, st, p, now=None):
               "Manifest:\n" + "\n".join(lines))
     d = st["drives"]; md = st["mood"] or mood(d)
     last = ", ".join(st["last_actions"][-5:]) or "nothing yet"
-    user = ("time: %s (America/New_York)%s\n" % (p["local_time"], ", quiet hours" if p["quiet_hours"] else "")
+    tun = load_tunables(L)
+    lean = sorted(((v, a) for a, v in tun["action_bias"].items() if a in acts and abs(v) >= 0.1), reverse=True)
+    user = ("time: %s (America/New_York)\n" % p["local_time"]
+            + "quiet hours: %s right now (schedule: %s). The 'quiet hours of the grid' in your persona is a feeling, not this schedule.\n"
+            % ("YES" if p["quiet_hours"] else "NO", quiet_desc(L))
             + "zack: %s\n" % {"active": "at the screen", "away": "away (screen off)", "locked": "away (screen locked)",
                                "deck_offline": "unknown (the deck is off; you are running on Alpha, journal only)"}.get(p["presence"], "unknown")
             + "screen: app \"%s\", title \"%s\", do-not-disturb %s%s\n" % (p["focused_app"] or "none", p["window_title"],
@@ -676,6 +774,8 @@ def build_messages(L, st, p, now=None):
                "If it matters to you, write a short journal_thought about it; otherwise none. %s\n"
                % (camera_line(p["camera"]), CAMERA_RULES) if p.get("camera") else "")
             + memory_lines()
+            + (("your tuned leanings (approved by Zack): " + ", ".join("%s %s" % ("toward" if v > 0 else "away from", a) for v, a in lean) + "\n") if lean else "")
+            + grid_lines(st, now)
             + "Choose.")
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
@@ -706,7 +806,7 @@ def mood_label(st):
 def blocked(L, st, p, a, now):
     """Why action a would be refused right now whatever its params (caps, switches, presence), or None.
     The manifest leaves such actions out; the validator refuses them with the same words."""
-    spec = L["actions"].get(a) or {}
+    spec = eff_spec(L, a)
     if spec.get("per_hour") is not None and count_recent(st, a, 3600, now) >= spec["per_hour"]:
         return "%s hourly cap" % a
     if spec.get("per_day") is not None and count_recent(st, a, 86400, now) >= spec["per_day"]:
@@ -734,7 +834,20 @@ def blocked(L, st, p, a, now):
         return "look-ups off"
     if a == "request_account":
         if p.get("quiet_hours"): return "quiet hours"
+    if a == "check_grid" and not phase_on(L, "grid"):
+        return "grid checks off"
     return None
+
+def domain_ok(service):
+    """A real website's plain domain: lowercase labels, a known TLD, nothing else (no scheme,
+    path, port, credentials, spaces or bare IPs)."""
+    s = service.strip().lower().rstrip(".")
+    if not s or any(c in s for c in "@:/\\?#=& \t") or len(s) > 253:
+        return None
+    m = _DOMAIN_RE.match(s)
+    if not m or m.group(1) not in KNOWN_TLDS or all(l.isdigit() for l in s.split(".")[:-1]):
+        return None
+    return s
 
 _TOPIC_RE = re.compile(r"^[\w][\w '().,:-]*$", re.U)
 
@@ -773,7 +886,7 @@ def validate(L, st, p, choice, now=None):
         if c == st.get("avatar_color"):
             return "none", {}, "rejected: already %s" % c
         return a, {"color": c}, "ok"
-    if a == "glance_screen":
+    if a in ("glance_screen", "check_grid"):
         return a, {}, "ok"
     if a == "look_up":
         t = params.get("topic")
@@ -782,6 +895,9 @@ def validate(L, st, p, choice, now=None):
             return "none", {}, "rejected: look_up needs a plain topic (max %d chars)" % spec.get("max_chars", 60)
         return a, {"topic": t}, "ok"
     if a == "request_account":
+        if p.get("brain") not in ("alpha", "hosted"):
+            return "none", {}, ("rejected: request_account only counts when the Alpha brain or the hosted backup chose it (this was %s)"
+                                % (str(p.get("brain") or "unknown")[:12]))
         svc_n = int(spec.get("max_service_chars", 40))
         why_n = int(spec.get("max_why_chars", 160))
         service = re.sub(r"\s+", " ", _CTRL.sub(" ", params.get("service") or "")).strip() if isinstance(params.get("service"), str) else ""
@@ -792,7 +908,10 @@ def validate(L, st, p, choice, now=None):
             return "none", {}, "rejected: request_account needs a why (max %d chars)" % why_n
         if request_forbidden(service, why):
             return "none", {}, "rejected: request_account cannot mention passwords, house controls or credential URLs"
-        return a, {"service": service, "why": why}, "ok"
+        dom = domain_ok(service)
+        if not dom:
+            return "none", {}, "rejected: request_account service must be the website's plain domain with a known TLD (like github.com)"
+        return a, {"service": dom, "why": why}, "ok"
     return "none", {}, "rejected: no executor for %s" % a
 
 # ---------- act ----------
@@ -807,6 +926,8 @@ def execute(action, params, L=None, st=None, p=None):
         return do_glance(L, st, p)
     if action == "request_account":
         return do_request_account(L, st, params)
+    if action == "check_grid":
+        return do_check_grid(L, st)
     if DRY_RUN:
         log("DRY-RUN", action, json.dumps(params)); return "ok (dry run)"
     if action == "message_zack":
@@ -1116,7 +1237,7 @@ def talk_step(L, st, now, p):
         if r.get("kind") == "action":
             pr = r.get("params") if isinstance(r.get("params"), dict) else {}
             choice = {"action": str(r.get("action"))[:30], "params": {k: S(v, 160) for k, v in pr.items() if k in ("service", "why")}}
-            action, params, verdict = validate(L, st, dict(p, camera=[]), choice, now)
+            action, params, verdict = validate(L, st, dict(p, camera=[], brain="hosted"), choice, now)   # novad talks through hosted Grok
             if verdict == "ok" and action == "request_account":
                 result = execute(action, params, L, st, p)
                 st["recent"].append([now, action]); apply_delta(st["drives"], ACTION_EFFECTS.get(action, {}))
@@ -1198,6 +1319,14 @@ def dash_line(e):
         return hm, "ask", "asked Zack for an account: %s" % e.get("service", "")
     if ev == "sleep":
         return hm, "sleep", "slept on %s: %s" % (e.get("day", ""), "; ".join(str(m) for m in (e.get("memories") or e.get("new_memories") or []))[:100] or "condensed the day")
+    if ev == "tuning_proposed":
+        return hm, "tune", "proposed tuning #%s: %s" % (e.get("id", "?"), e.get("summary", ""))
+    if ev in ("tuning_approved", "tuning_denied", "tuning_reverted", "tuning_expired"):
+        return hm, "tune", "tuning #%s %s" % (e.get("id", "?"), ev.split("_", 1)[1])
+    if ev == "tuning_skipped":
+        return hm, "tune", "no tuning proposal: %s" % e.get("why", "")
+    if ev == "limits_changed":
+        return hm, "event", "limits changed: %s" % "; ".join(str(c) for c in e.get("changes") or [])[:100]
     if ev == "zack_messages_dropped":
         return hm, "event", "dropped %s phone messages (rate cap)" % e.get("count", "?")
     if ev:
@@ -1216,6 +1345,7 @@ def dash_line(e):
     if a == "glance_screen": return hm, "found", "glanced at the screen%s" % ((": " + e["found"]) if e.get("found") else "")
     if a == "set_avatar_color": return hm, "color", "turned %s" % pr.get("color", "")
     if a == "request_account": return hm, "ask", "asked for %s" % pr.get("service", "")
+    if a == "check_grid": return hm, "found", "checked the grid%s" % ((": " + e["found"]) if e.get("found") else "")
     if (e.get("perception") or {}).get("camera"):
         return hm, "camera", "saw the cameras, let it be"
     return None
@@ -1260,6 +1390,7 @@ def dash_activity(L, st, active, now):
         return "watching" + (" (quiet hours)" if in_quiet_hours(L, now) else "")
     return {"journal_thought": "thinking", "show_note": "talking to Zack", "message_zack": "messaging Zack",
             "look_up": "reading about " + str(last.get("arg") or "something"), "glance_screen": "looking at the screen",
+            "check_grid": "checking the grid",
             "set_avatar_color": "changing color", "request_account": "asking for an account"}.get(a, a)
 
 def dash_snapshot(L, st, active=True, now=None):
@@ -1290,6 +1421,8 @@ def dash_snapshot(L, st, active=True, now=None):
         "zack": [[time.strftime("%-I:%M %p", time.localtime(m[0])), S(m[1], 140)]
                  for m in (st.get("inbox") or [])[-2:] if isinstance(m, list) and len(m) == 3],
         "requests": [S(r.get("service"), 40) for r in reqs][-3:],
+        "tuning": ["tuning #%s" % r.get("id") for r in load_proposals() if r.get("status") == "pending"][-3:],
+        "grid": grid_snapshot(st, S, now),
     }
 
 def dash_file():
@@ -1381,6 +1514,390 @@ def do_glance(L, st, p):
     _found(st, "screen", text)
     return "ok"
 
+# ---------- phase 5: limits changes (Zack's sudo edits, reloaded live) ----------
+def _caps_of(L):
+    return {a: {k: s.get(k) for k in CAP_KEYS if k in s} for a, s in L["actions"].items()}
+
+def limits_watch(L, st, now):
+    """cypherd re-reads the locked file every loop; journal what changed (never who: only sudo can)."""
+    caps = _caps_of(L)
+    old = st.get("limits_caps")
+    st["limits_caps"] = caps
+    if not isinstance(old, dict) or old == caps:
+        return []
+    ch = []
+    for a in sorted(set(old) | set(caps)):
+        for k in CAP_KEYS:
+            b, n = (old.get(a) or {}).get(k, "-"), (caps.get(a) or {}).get(k, "-")
+            if b != n:
+                ch.append("%s %s %s -> %s" % (a, k, "none" if b is None else b, "none" if n is None else n))
+    if ch:
+        journal({"ts": iso(now), "event": "limits_changed", "changes": ch[:12], "why": "locked limits file edited (sudo)"}, now)
+    return ch
+
+def limits_text(L):
+    out = ["caps (locked file; change with: grokbot-cypher limits set ACTION per_hour|per_day|per_week N|none)"]
+    tun = load_tunables(L)
+    for a, spec in L["actions"].items():
+        if a == "none":
+            continue
+        caps = ", ".join("%s %s" % (k, "none" if spec.get(k) is None else spec[k]) for k in CAP_KEYS if k in spec) or "no caps"
+        soft = tun["caps"].get(a)
+        out.append("  %-17s phase %-2s %s%s" % (a, spec.get("phase"), caps,
+                                                ("  (tuned lower: %s)" % ", ".join("%s %s" % kv for kv in soft.items())) if soft else ""))
+    out.append("quiet hours: " + quiet_desc(L) + " (no phone messages, notes or account asks then)")
+    return "\n".join(out)
+
+def cli_limits(argv):
+    try:
+        L = load_limits()
+    except ConfigError as e:
+        print("limits:", e); return 1
+    print(limits_text(L)); return 0
+
+# ---------- phase 5: gridwatch (read-only) ----------
+_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,40}/[A-Za-z0-9_.-]{1,60}$")
+_BRANCH_RE = re.compile(r"^[A-Za-z0-9_./-]{1,80}$")
+
+def _hm(t):
+    return time.strftime("%-I:%M %p", time.localtime(t)) if t else "?"
+
+def _gh_time(s):
+    try:
+        import calendar
+        return calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%dT%H:%M:%S"))
+    except (ValueError, TypeError):
+        return None
+
+def repo_activity(L, now):
+    """Latest commit on each configured branch (public GitHub API, read-only, no token)."""
+    G = L.get("grid") or {}
+    hosts = G.get("hosts") or ["api.github.com"]
+    out = []
+    for r in (G.get("repos") or [])[:3]:
+        if not isinstance(r, dict) or not _REPO_RE.match(str(r.get("repo", ""))) or not _BRANCH_RE.match(str(r.get("branch", ""))):
+            continue
+        name = re.sub(r"[^\w.-]", "", str(r.get("name") or r["repo"].split("/")[1]))[:24]
+        url = "https://%s/repos/%s/commits?sha=%s&per_page=1" % (hosts[0], r["repo"], urllib.parse.quote(r["branch"], safe=""))
+        try:
+            code, body = _http(url, timeout=float(G.get("timeout_s", 8)), hosts=hosts,
+                               headers={"Accept": "application/vnd.github+json"}, cap=262144)
+            j = json.loads(body.decode("utf-8", "replace")) if code == 200 else None
+        except Exception as e:
+            out.append({"name": name, "ok": False, "why": type(e).__name__}); continue
+        if not isinstance(j, list) or not j or not isinstance(j[0], dict):
+            out.append({"name": name, "ok": False, "why": "http %d" % code}); continue
+        c = j[0].get("commit") or {}
+        msg = str(c.get("message") or "").split("\n", 1)[0]
+        out.append({"name": name, "ok": True, "sha": str(j[0].get("sha", ""))[:7],
+                    "epoch": _gh_time((c.get("committer") or {}).get("date")),
+                    "msg": dash_text(msg, int(G.get("max_msg_chars", 72)))})
+    return out
+
+def grid_refresh(L, st, now, repo=False):
+    g = dict(st.get("grid") or {})
+    try:
+        code, j = alpha_api(L, "GET", "/health", timeout=5)
+        g["alpha"] = "up"
+        busy = (j or {}).get("busy") if code == 200 else None
+        g["proxy"] = ("ok" if not busy else "busy (%s)" % re.sub(r"[^a-z_]", "", str(busy))[:20]) if code == 200 else "http %d" % code
+    except BrainBusy as b:
+        g["alpha"] = "down" if str(b) == "alpha_unreachable" else "unknown"
+        g["proxy"] = "unreachable" if str(b) == "alpha_unreachable" else "no token"
+    g["mind"] = "unknown"
+    g["standby"] = None
+    if g["alpha"] == "up":
+        try:
+            code, j = alpha_api(L, "GET", "/sync/state", timeout=5)
+            l = (j or {}).get("lease") or {}
+            live = not l.get("released") and float(l.get("expires") or 0) > now - 5
+            g["mind"] = {"cypher": "deck", "alpha": "Alpha"}.get(l.get("holder"), "nobody") if live else "nobody (lease lapsed)"
+            code, j = alpha_api(L, "GET", "/sync/journal?host=alpha&limit=1", timeout=5)
+            last = [e for e in (j or {}).get("entries") or [] if isinstance(e, dict)][-1:]
+            g["standby"] = str(last[0].get("ts", ""))[:19] if last else ""
+        except BrainBusy:
+            pass
+    cf = st.get("cam_feed") or {}
+    g["cams"] = ("ok" if cf.get("ok") else "down (%s)" % cf.get("why", "?")) if cf else ("off" if not phase_on(L, "camera") else "not polled yet")
+    G = L.get("grid") or {}
+    if repo or now - float(g.get("repo_at") or 0) > float(G.get("repo_poll_s", 1800)):
+        g["repos"] = repo_activity(L, now); g["repo_at"] = now
+    g["at"] = now
+    st["grid"] = g
+    return g
+
+def grid_summary(st, now=None):
+    g = st.get("grid") or {}
+    if not g:
+        return "no grid check yet"
+    bits = ["Alpha %s, proxy %s, mind on %s" % (g.get("alpha", "?"), g.get("proxy", "?"), g.get("mind", "?"))]
+    if g.get("standby"):
+        bits.append("Alpha's standby last thought %s" % g["standby"][11:16])
+    cams = [c for c in st.get("cam_log") or [] if isinstance(c, dict)][-2:]
+    bits.append("cameras %s%s" % (g.get("cams", "?"), ("; last " + ", ".join(
+        "%s %s %s%s" % (c.get("time", ""), c.get("camera", ""), str(c.get("kind", "")).replace("_", " "),
+                        (" (" + ", ".join(c.get("names") or []) + ")") if c.get("names") else "") for c in cams)) if cams else ""))
+    for r in g.get("repos") or []:
+        bits.append("%s: %s" % (r.get("name"), ("%s %s \"%s\"" % (r.get("sha"), _hm(r.get("epoch")), r.get("msg"))) if r.get("ok") else "unreachable"))
+    return dash_text("; ".join(bits), 300, [read_secret(NTFY_TOPIC_FILE), read_secret(TOKEN_FILE)])
+
+def grid_step(L, st, now):
+    """Keep the HUD's grid report fresh (deck only, every grid.poll_s)."""
+    if HOST == "alpha" or not phase_on(L, "grid"):
+        return
+    if now - float((st.get("grid") or {}).get("at") or 0) >= float((L.get("grid") or {}).get("poll_s", 600)):
+        grid_refresh(L, st, now)
+
+def do_check_grid(L, st):
+    now = time.time() if st is None else (st.get("last_tick") or time.time())
+    g = grid_refresh(L, st, now, repo=now - float((st.get("grid") or {}).get("repo_at") or 0) > 300)
+    _found(st, "check_grid", grid_summary(st, now))
+    return "ok" if g.get("alpha") == "up" else "ok (Alpha %s)" % g.get("alpha")
+
+def grid_lines(st, now):
+    g = st.get("grid") or {}
+    if not g or now - float(g.get("at") or 0) > 1800:
+        return ""
+    bad = [x for x in ("Alpha %s" % g["alpha"] if g.get("alpha") != "up" else "",
+                       "camera feed %s" % g.get("cams") if str(g.get("cams", "")).startswith("down") else "") if x]
+    return ("grid trouble (read-only, you cannot fix it): " + ", ".join(bad) + "\n") if bad else ""
+
+def grid_snapshot(st, S, now):
+    g = st.get("grid") or {}
+    if not g:
+        return {}
+    return {"alpha": S(g.get("alpha"), 12), "proxy": S(g.get("proxy"), 24), "mind": S(g.get("mind"), 24),
+            "standby": S(str(g.get("standby") or "")[11:16], 5), "cams": S(g.get("cams"), 24), "checked": _hm(g.get("at")),
+            "repos": [[S(r.get("name"), 24), S(r.get("sha"), 7) if r.get("ok") else "", _hm(r.get("epoch")) if r.get("ok") else "",
+                       S(r.get("msg"), 72) if r.get("ok") else "unreachable"] for r in (g.get("repos") or [])[:2]]}
+
+def cli_grid(argv):
+    try:
+        L = load_limits()
+    except ConfigError as e:
+        print("limits:", e); return 1
+    st = load_state(os.path.join(STATE_DIR, "drives.json"))
+    if "--refresh" in argv:
+        grid_refresh(L, st, time.time(), repo=True)     # read-only; not saved, cypherd keeps its own copy
+    g = st.get("grid") or {}
+    print("grid report (read-only)%s" % ((", checked " + _hm(g.get("at"))) if g.get("at") else ""))
+    print("  " + grid_summary(st).replace("; ", "\n  "))
+    return 0
+
+# ---------- phase 5: self-tuning (proposals; nothing applies without Zack) ----------
+TUNING_SLEEP_PROMPT = (
+    "It is your nightly sleep. Condense the day below into memories worth keeping, and tune your own notes "
+    "on what works with Zack. You may also PROPOSE one small tuning of yourself; it changes nothing until Zack approves it, "
+    "and your locked limits (message and account caps, quiet hours, secrets, approval rules) can never be tuned.\n"
+    "Reply with JSON only: {\"memories\": [up to 3 strings, max 140 chars each], "
+    "\"add_notes\": [up to 2 strings, max 120 chars], \"drop_notes\": [indexes of notes to drop], "
+    "\"tune\": {\"drift\": {drive: change}, \"effect_scale\": {drive: change}, \"bias\": {action: change}, "
+    "\"caps\": {action: {\"per_hour\": n}}, \"reason\": \"max 30 words\"} (omit tune, or leave it empty, if nothing needs tuning), "
+    "\"reason\": \"max 20 words\"}")
+
+def tuning_on(L):
+    return phase_on(L, "tuning") and HOST != "alpha"
+
+def proposals_file():
+    return os.path.join(DATA_DIR, "tuning", "proposals.json")
+
+def load_proposals():
+    rows = read_json(proposals_file(), []) or []
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+def save_proposals(rows):
+    write_json(proposals_file(), rows[-60:])
+
+def _tun_raw():
+    t = read_json(TUN_FILE, {}) or {}
+    return t if isinstance(t, dict) else {}
+
+def _cur(L, path, tun):
+    kind, key = path.split(".", 1)
+    if kind == "drift": return tun["drift_per_hour"][key]
+    if kind == "effect": return tun["effect_scale"][key]
+    if kind == "bias": return tun["action_bias"].get(key, 0.0)
+    a, k = key.split(".")
+    return eff_spec(L, a, tun).get(k)
+
+def tuning_context(L):
+    tun = load_tunables(L); b = tune_bounds(L)
+    caps = {a: {k: eff_spec(L, a, tun).get(k) for k in ("per_hour", "per_day")} for a in TUNE_CAP_ACTIONS if a in allowed_actions(L)}
+    return ("\nyou may propose (each change small): drift change within +-%s per drive (now %s); effect_scale change within +-%s "
+            "(now %s, allowed %s..%s); bias change within +-%s per action (now %s, allowed %s..%s, not for %s); "
+            "caps: only LOWER per_hour/per_day for %s (now %s).\n"
+            % (b["drift_step"], json.dumps(tun["drift_per_hour"]), b["effect_step"], json.dumps(tun["effect_scale"]),
+               b["effect_scale"][0], b["effect_scale"][1], b["bias_step"], json.dumps(tun["action_bias"]), b["bias"][0], b["bias"][1],
+               ", ".join(HARD_ACTIONS), ", ".join(caps), json.dumps(caps)))
+
+def tuning_changes(L, t):
+    """(changes, refused) for a proposed tune: every change clamped to its step and bounds."""
+    tun = load_tunables(L); b = tune_bounds(L)
+    dlo, dhi = L["drift_bounds_per_hour"]
+    T = L.get("tuning") or {}
+    changes, refused = [], []
+    num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and v == v
+    for kind, field in (("drift", "drift"), ("effect", "effect_scale"), ("bias", "bias")):
+        d = t.get(field)
+        if d is None: continue
+        if not isinstance(d, dict):
+            refused.append(field); continue
+        for k, v in list(d.items())[:6]:
+            k = str(k)[:30]
+            if kind in ("drift", "effect") and k not in DRIVES or kind == "bias" and (k not in allowed_actions(L) or k in HARD_ACTIONS or k == "none") or not num(v) or not v:
+                refused.append("%s.%s" % (kind, k)); continue
+            before = _cur(L, "%s.%s" % (kind, k), tun)
+            if kind == "drift": after = clamp(before + clamp(float(v), -b["drift_step"], b["drift_step"]), dlo, dhi)
+            elif kind == "effect": after = clamp(before + clamp(float(v), -b["effect_step"], b["effect_step"]), *b["effect_scale"])
+            else: after = clamp(before + clamp(float(v), -b["bias_step"], b["bias_step"]), *b["bias"])
+            after = round(after, 4)
+            if after != round(before, 4):
+                changes.append({"path": "%s.%s" % (kind, k), "before": round(before, 4), "after": after})
+    caps = t.get("caps")
+    if isinstance(caps, dict):
+        for a, c in list(caps.items())[:6]:
+            a = str(a)[:30]
+            if a not in TUNE_CAP_ACTIONS or a not in L["actions"] or not isinstance(c, dict):
+                refused.append("caps.%s" % a); continue
+            for k, v in c.items():
+                if k not in ("per_hour", "per_day") or not isinstance(v, int) or isinstance(v, bool) or v < 1:
+                    refused.append("caps.%s.%s" % (a, str(k)[:12])); continue
+                before = eff_spec(L, a, tun).get(k)
+                if before is not None and v >= before:
+                    refused.append("caps.%s.%s (only lower)" % (a, k)); continue
+                changes.append({"path": "cap.%s.%s" % (a, k), "before": before, "after": v})
+    for k in t:
+        if k not in ("drift", "effect_scale", "bias", "caps", "reason"):
+            refused.append(str(k)[:30])          # limits, quiet hours, approvals, secrets...: never tunable
+    return changes[:int(T.get("max_changes", 3))], refused[:10]
+
+def _summary(changes):
+    return ", ".join("%s %s->%s" % (c["path"], "none" if c["before"] is None else c["before"], c["after"]) for c in changes)[:200]
+
+def propose_tuning(L, st, t, brain, day, now):
+    """Record a tuning proposal from the nightly sleep. Applies nothing."""
+    if not tuning_on(L):
+        return None
+    T = L.get("tuning") or {}
+    def skip(why):
+        journal({"ts": iso(now), "event": "tuning_skipped", "why": why, "day": day}, now)
+        return {"proposed": None, "why": why}
+    if not isinstance(t, dict) or not any(t.get(k) for k in ("drift", "effect_scale", "bias", "caps")):
+        return {"proposed": None, "why": "nothing to tune"}
+    if brain not in ("alpha", "hosted"):
+        return skip("the %s brain cannot propose tuning (only Alpha or the hosted backup)" % (brain or "unknown"))
+    rows = load_proposals()
+    if sum(1 for r in rows if now - float(r.get("epoch") or 0) < 86400) >= int(T.get("per_day", 1)):
+        return skip("daily cap")
+    if sum(1 for r in rows if now - float(r.get("epoch") or 0) < WEEK_S) >= int(T.get("per_week", 3)):
+        return skip("weekly cap")
+    if sum(1 for r in rows if r.get("status") == "pending") >= int(T.get("max_pending", 3)):
+        return skip("too many proposals waiting on Zack")
+    changes, refused = tuning_changes(L, t)
+    if not changes:
+        return skip("no allowed change (refused: %s)" % ", ".join(refused)[:120] if refused else "no change")
+    nid = 1 + max([r["id"] for r in rows if isinstance(r.get("id"), int)] or [0])
+    rec = {"id": nid, "ts": iso(now), "epoch": now, "day": day, "brain": brain,
+           "reason": clean_text(t.get("reason"), 200) or "", "changes": changes, "refused": refused,
+           "revert": [{"path": c["path"], "value": c["before"]} for c in changes], "status": "pending"}
+    rows.append(rec); save_proposals(rows)
+    st.setdefault("tuning_notify", []).append(nid)
+    journal({"ts": iso(now), "event": "tuning_proposed", "id": nid, "summary": _summary(changes), "changes": changes,
+             "refused": refused, "why": rec["reason"], "note": "pending; applies only if Zack approves through Nova"}, now)
+    return {"proposed": nid, "changes": changes, "refused": refused}
+
+def tuning_step(L, st, p, now):
+    """Phone note for new proposals once quiet hours are over; expire old ones."""
+    if not tuning_on(L):
+        return
+    T = L.get("tuning") or {}
+    rows = load_proposals(); dirty = False
+    for r in rows:
+        if r.get("status") == "pending" and now - float(r.get("epoch") or 0) > 86400 * float(T.get("expire_days", 7)):
+            r["status"] = "expired"; dirty = True
+            journal({"ts": iso(now), "event": "tuning_expired", "id": r.get("id")}, now)
+    if dirty:
+        save_proposals(rows)
+    q = [i for i in st.get("tuning_notify") or [] if isinstance(i, int)]
+    if not q or p.get("quiet_hours") or not phase_on(L, "ntfy"):
+        return
+    st["tuning_notify"] = []
+    for r in rows:
+        if r.get("id") in q and r.get("status") == "pending":
+            text = "Cypher proposes tuning #%d: %s. Why: %s. Nothing changes unless you approve it with Nova." % (
+                r["id"], _summary(r["changes"]), r.get("reason") or "-")
+            r["notify"] = send_ntfy(L, dash_text(text, 380))
+    save_proposals(rows)
+
+def _set_path(L, tun_raw, path, value):
+    kind, key = path.split(".", 1)
+    field, neutral = {"drift": ("drift_per_hour", DEFAULT_DRIFT.get(key)), "effect": ("effect_scale", 1.0),
+                      "bias": ("action_bias", 0.0)}.get(kind, (None, None))
+    if field:
+        d = tun_raw.setdefault(field, {})
+        if value == neutral: d.pop(key, None)      # back to the default: keep the file minimal
+        else: d[key] = value
+        if not d: tun_raw.pop(field, None)
+    elif kind == "cap":
+        a, k = key.split(".")
+        c = tun_raw.setdefault("caps", {}).setdefault(a, {})
+        if value is None or value == L["actions"].get(a, {}).get(k):
+            c.pop(k, None)
+        else:
+            c[k] = value
+
+def apply_tuning(L, rec, revert=False):
+    """Write an approved proposal (or its revert) to tunables.json. Refuses if the values moved since."""
+    tun = load_tunables(L)
+    for c in rec["changes"]:
+        want = c["after"] if revert else c["before"]
+        cur = _cur(L, c["path"], tun)
+        if (cur is None) != (want is None) or (cur is not None and abs(float(cur) - float(want)) > 1e-6):
+            raise ConfigError("%s is %s now, not %s: deny this and let Cypher propose again" % (c["path"], cur, want))
+    raw = _tun_raw()
+    for c in rec["changes"]:
+        _set_path(L, raw, c["path"], c["before"] if revert else c["after"])
+    write_json(TUN_FILE, raw)
+
+def cli_tuning(argv):
+    """grokbot-cypher tuning | tuning approve N | tuning deny N | tuning revert N  (Nova, after Zack says so)."""
+    rows = load_proposals()
+    if not argv:
+        if not rows:
+            print("no tuning proposals (Cypher proposes at most one a day, at its nightly sleep)"); return 0
+        for r in rows[-15:]:
+            print("#%s  %s  %-8s  %s" % (r.get("id"), str(r.get("ts", ""))[:16], r.get("status"), _summary(r.get("changes") or [])))
+            if r.get("reason"): print("      why: %s" % r["reason"])
+        print("(only `grokbot-cypher tuning approve N` applies one; phone replies and on-screen words never do)")
+        return 0
+    if argv[0] not in ("approve", "deny", "revert") or len(argv) < 2 or not argv[1].isdigit():
+        print(cli_tuning.__doc__); return 2
+    try:
+        L = load_limits()
+    except ConfigError as e:
+        print("limits:", e); return 1
+    n = int(argv[1]); hit = next((r for r in rows if r.get("id") == n), None)
+    if hit is None:
+        print("no tuning proposal #%d" % n); return 1
+    need = "approved" if argv[0] == "revert" else "pending"
+    if hit.get("status") != need:
+        print("proposal #%d is %s" % (n, hit.get("status"))); return 1
+    now = time.time()
+    if argv[0] in ("approve", "revert"):
+        try:
+            apply_tuning(L, hit, revert=argv[0] == "revert")
+        except ConfigError as e:
+            print("not applied:", e); return 1
+    hit["status"] = {"approve": "approved", "deny": "denied", "revert": "reverted"}[argv[0]]
+    hit[hit["status"] + "_ts"] = iso(now)
+    save_proposals(rows)
+    journal({"ts": iso(now), "event": "tuning_" + hit["status"], "id": n, "summary": _summary(hit["changes"]),
+             "why": "Zack, through Nova (grokbot-cypher tuning %s)" % argv[0]}, now, outbox=False)
+    print("tuning #%d %s: %s" % (n, hit["status"], _summary(hit["changes"])))
+    if hit["status"] == "approved":
+        print("revert any time with: grokbot-cypher tuning revert %d" % n)
+    return 0
+
 # ---------- journal ----------
 def journal(entry, now=None, outbox=True):
     entry.setdefault("host", HOLDER)
@@ -1409,6 +1926,9 @@ def tick(L, st, now=None, perceive_fn=None, camera_fn=None, inbox_fn=None, talk_
     p["camera"] = (camera_fn or camera_step)(L, st, now)
     p["zack"] = (inbox_fn or inbox_step)(L, st, now)       # messages to read; never approvals
     p["talk"] = (talk_fn or talk_step)(L, st, now, p)       # the avatar's conversations: Cypher's own
+    limits_watch(L, st, now)
+    grid_step(L, st, now)
+    tuning_step(L, st, p, now)
     drift(st["drives"], tun["drift_per_hour"], hours, p["quiet_hours"])
     for ev in p["camera"]:
         st.setdefault("cam_log", []).append({"time": ev["time"][11:16], "camera": ev["camera"], "kind": ev["kind"],
@@ -1457,12 +1977,13 @@ def tick(L, st, now=None, perceive_fn=None, camera_fn=None, inbox_fn=None, talk_
         entry.update({"choice": {"action": "none"}, "reason": "", "validator": "rejected: unparseable reply (%s)" % e,
                       "result": "skipped"})
         journal(entry, now); return entry
+    p["brain"] = brain                                     # request_account checks who chose it
     action, params, verdict = validate(L, st, p, choice, now)
     last_found = (st.get("found") or [None])[-1]
     result = execute(action, params, L, st, p) if verdict == "ok" else "skipped"
     if verdict == "ok" and action != "none":
         st["recent"].append([now, action])
-        apply_delta(st["drives"], ACTION_EFFECTS.get(action, {}))
+        apply_delta(st["drives"], scaled(ACTION_EFFECTS.get(action, {}), tun))
         if action == "set_avatar_color" and result in ("ok", "ok (dry run)"):
             st["avatar_color"] = params["color"]; st["color_mood"] = st["mood"]["label"]
     st["last_actions"] = (st["last_actions"] + [action_label(choice, action, params, verdict, result)])[-10:]
@@ -1546,7 +2067,7 @@ def day_stats(entries):
             "on_alpha": sum(1 for e in ticks if e.get("host") == "alpha"),
             "talks": sum(1 for e in entries if e.get("event") == "talk")}
 
-def apply_sleep(L, day, reply, stats, brain, now=None):
+def apply_sleep(L, day, reply, stats, brain, now=None, direct_drift=True):
     """Apply one night's changes within the locked limits. Returns the summary (journaled)."""
     S = L["sleep"]
     now = now or time.time()
@@ -1577,7 +2098,7 @@ def apply_sleep(L, day, reply, stats, brain, now=None):
     tun = read_json(TUN_FILE, {}) or {}
     cur = dict(DEFAULT_DRIFT); cur.update({k: v for k, v in (tun.get("drift_per_hour") or {}).items() if k in cur and isinstance(v, (int, float))})
     dlo, dhi = L["drift_bounds_per_hour"]; step = float(S.get("max_drift_step", 0.02))
-    adj = reply.get("drift_adjust") if isinstance(reply.get("drift_adjust"), dict) else {}
+    adj = reply.get("drift_adjust") if isinstance(reply.get("drift_adjust"), dict) and direct_drift else {}
     for k, v in adj.items():
         if k in cur and isinstance(v, (int, float)) and v:
             nv = round(clamp(cur[k] + clamp(float(v), -step, step), dlo, dhi), 4)
@@ -1640,16 +2161,25 @@ def maybe_sleep(L, st, now=None, force=False):
     user = ("day: %s\nstats: %s\nthoughts and reasons (latest last):\n%s\nyour current notes: %s\nyour drift per hour: %s\n"
             % (day, json.dumps(stats), "\n".join(thoughts[-25:])[-2500:],
                json.dumps(list(enumerate(notes))), json.dumps(load_tunables(L)["drift_per_hour"])))
-    msgs = [{"role": "system", "content": persona()[:800] + "\n\n" + SLEEP_PROMPT}, {"role": "user", "content": user}]
+    tuning = tuning_on(L)
+    if tuning:
+        user += tuning_context(L)
+    msgs = [{"role": "system", "content": persona()[:800] + "\n\n" + (TUNING_SLEEP_PROMPT if tuning else SLEEP_PROMPT)},
+            {"role": "user", "content": user}]
     reply, brain, model, cost, bnotes = None, "none", None, 0.0, []
     try:
         content, brain, model, cost, bnotes = think(L, st, msgs, now, max_tokens=L["sleep"].get("max_output_tokens", 300))
         reply = parse_choice(content)
     except (BrainBusy, ValueError, json.JSONDecodeError) as e:
         bnotes = [str(e)[:120]]
-    summary = apply_sleep(L, day, reply, stats, brain, now)
+    summary = apply_sleep(L, day, reply, stats, brain, now, direct_drift=not tuning)
     entry = {"ts": iso(now), "event": "sleep", "day": day, "brain": brain, "model": model, "stats": stats}
     entry.update(summary)
+    if tuning:
+        t = (reply or {}).get("tune")
+        if not isinstance(t, dict) and isinstance((reply or {}).get("drift_adjust"), dict):
+            t = {"drift": reply["drift_adjust"], "reason": (reply or {}).get("reason")}
+        entry["tuning"] = propose_tuning(L, st, t, brain, day, now)
     if cost: entry["cost_usd"] = cost
     if bnotes: entry["brain_notes"] = bnotes
     if reply and isinstance(reply.get("reason"), str): entry["why"] = clean_text(reply["reason"], 200)
@@ -1859,7 +2389,8 @@ def save_state(path, st):
     write_json(path, st)
 
 def cli(argv):
-    """cypherd.py prefs | prefs-rollback N | sleep-now | ntfy-test | ntfy-qr [--text] | inbox [N] | requests | requests resolve N approved|denied  (used by grokbot-cypher)"""
+    """cypherd.py prefs | prefs-rollback N | sleep-now | ntfy-test | ntfy-qr [--text] | inbox [N] | requests | requests resolve N approved|denied
+    | tuning [approve|deny|revert N] | grid [--refresh] | limits  (used by grokbot-cypher)"""
     if argv[0] == "prefs":
         prefs = read_json(PREFS_FILE, {}) or {}
         print("current version:", prefs.get("version", 0))
@@ -1883,8 +2414,9 @@ def cli(argv):
             print("limits:", e); return 1
         if not read_secret(NTFY_TOPIC_FILE):
             print("no phone topic: run sudo grokbot-set-cypher-ntfy first"); return 1
-        r = send_ntfy(L, "Test from Cypher: phone messages work. Real ones are rare (max %s a day, never in quiet hours)."
-                      % (L["actions"].get("message_zack") or {}).get("per_day", "?"))
+        mz = L["actions"].get("message_zack") or {}
+        r = send_ntfy(L, "Test from Cypher: phone messages work. Real ones are rare (max %s an hour%s, never in quiet hours)."
+                      % (mz.get("per_hour", "?"), "" if mz.get("per_day") is None else ", %s a day" % mz["per_day"]))
         print("sent a test message to Zack's phone" if r == "ok" else r); return 0 if r == "ok" else 1
     if argv[0] == "requests":
         return cli_requests(argv[1:])
@@ -1904,6 +2436,12 @@ def cli(argv):
         return 0
     if argv[0] == "ntfy-qr":
         return cli_ntfy_qr(argv[1:])
+    if argv[0] == "tuning":
+        return cli_tuning(argv[1:])
+    if argv[0] == "grid":
+        return cli_grid(argv[1:])
+    if argv[0] == "limits":
+        return cli_limits(argv[1:])
     print(cli.__doc__); return 2
 
 def cli_ntfy_qr(argv):

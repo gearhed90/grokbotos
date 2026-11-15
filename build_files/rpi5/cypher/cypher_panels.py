@@ -19,6 +19,10 @@ per-frame cost is one blit.
 """
 import json, os, re, sys, time
 import cairo
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:            # very old Python: fall back to the process clock
+    ZoneInfo = None
 
 E = os.environ.get
 HOME = os.path.expanduser("~")
@@ -27,6 +31,17 @@ CFG = E("CYPHER_CONFIG_DIR", os.path.join(E("XDG_CONFIG_HOME") or os.path.join(H
 SNAP = os.path.join(STATE, "dash.json")
 HIDDEN = os.path.join(CFG, "panels-hidden")
 STALE_S = 180
+TZ_NAME = E("CYPHER_TZ", "America/New_York")    # Zack's clock; the deck's system clock stays UTC
+
+def clock_text(now, fmt="%a %-I:%M %p"):
+    """The panel clock in Eastern time, without touching the process or system timezone."""
+    if ZoneInfo is not None:
+        try:
+            import datetime
+            return datetime.datetime.fromtimestamp(now, ZoneInfo(TZ_NAME)).strftime(fmt)
+        except Exception:
+            pass
+    return time.strftime(fmt, time.localtime(now))
 COL_W, MARGIN = 270, 14          # column width and edge margin at 1280x720
 
 # palette (design page): background, magenta, cyan, acid green
@@ -39,7 +54,7 @@ TXT = (0.88, 0.90, 0.96)
 AMBER = (1.0, 0.72, 0.18)
 FONT = E("CYPHER_DASH_FONT", "monospace")
 KIND_COLOR = {"thought": CYAN, "zack": ACID, "talk": ACID, "phone": MAG, "note": CYAN, "found": AMBER, "refused": MAG,
-              "ask": AMBER, "sleep": DIM, "camera": DIM, "color": CYAN, "event": DIM}
+              "ask": AMBER, "tune": AMBER, "sleep": DIM, "camera": DIM, "color": CYAN, "event": DIM}
 BADGE_COLOR = {"ALPHA": CYAN, "LOCAL": ACID, "GROK": MAG, "NONE": DIM}
 DRIVE_COLOR = {"energy": ACID, "curiosity": CYAN, "social": MAG, "boredom": AMBER, "focus": CYAN}
 
@@ -213,7 +228,7 @@ def render_panels(cr, w, h, snap, now=None):
         for line in wrap(cr, "%s %s" % (safe(t, 8), safe(msg, 140)), W - 28, 2):
             text(cr, 14, y, line, TXT, 12); y += 16
         y += 4
-    reqs = list(dict.fromkeys(safe(r, 40) for r in s.get("requests") or []))[-2:]
+    reqs = list(dict.fromkeys(safe(r, 40) for r in (s.get("requests") or []) + (s.get("tuning") or [])))[-3:]
     if reqs and y < 690:
         text(cr, 14, min(y, 690), "waiting on you: " + ", ".join(reqs), AMBER, 12, width=W - 28); y += 18
     if y == 610:
@@ -223,14 +238,14 @@ def render_panels(cr, w, h, snap, now=None):
 
     # ---------------- right column ----------------
     cr.save(); cr.translate(w - (MARGIN + COL_W) * k, 0); cr.scale(k, k); W = COL_W
-    clock = time.strftime("%a %-I:%M %p", time.localtime(now))
+    clock = clock_text(now)
     font(cr, 17, True)
     text(cr, W - cr.text_extents(clock).x_advance, 104, clock, TXT, 17, True)
     tick = "TICK %s" % safe(str(s.get("tick", 0)), 8)
     text(cr, 0, 103, tick, DIM, 11)
 
-    panel(cr, 0, 124, W, 346, "JOURNAL", CYAN)
-    rows = [r for r in s.get("journal") or [] if isinstance(r, list) and len(r) == 3][-6:]
+    panel(cr, 0, 124, W, 226, "JOURNAL", CYAN)
+    rows = [r for r in s.get("journal") or [] if isinstance(r, list) and len(r) == 3][-4:]
     if not rows: text(cr, 14, 156, "nothing journaled yet", DIM, 12)
     y = 150
     for hm, kind, t in reversed(rows):            # newest first
@@ -241,17 +256,43 @@ def render_panels(cr, w, h, snap, now=None):
         for line in wrap(cr, safe(t, 160), W - 30, 2):
             text(cr, 22, y, line, TXT, 12.5); y += 16
         y += 8
-        if y > 452: break
+        if y > 318: break
 
-    panel(cr, 0, 486, W, 218, "ACTIONS", MAG)
-    acts = [safe(a, 70) for a in (s.get("actions") or [])][-7:]
-    if not acts: text(cr, 14, 514, "none yet", DIM, 12)
+    grid_panel(cr, W, s.get("grid") or {}, stale)
+
+    panel(cr, 0, 532, W, 172, "ACTIONS", MAG)
+    acts = [safe(a, 70) for a in (s.get("actions") or [])][-5:]
+    if not acts: text(cr, 14, 560, "none yet", DIM, 12)
     for i, a in enumerate(reversed(acts)):
         refused = "(refused" in a
         if refused:
             a = a.replace(" (refused: ", ": ", 1).rstrip(")")
-        text(cr, 14, 514 + i * 26, ("\u2717 " if refused else "\u203a ") + a, MAG if refused else TXT, 12, width=W - 26)
+        text(cr, 14, 560 + i * 26, ("\u2717 " if refused else "\u203a ") + a, MAG if refused else TXT, 12, width=W - 26)
     cr.restore()
+
+def grid_panel(cr, W, g, stale):
+    """GRID REPORT (read-only gridwatch): Alpha and its proxy, who holds the mind, cameras, repo."""
+    checked = safe(g.get("checked"), 8)
+    panel(cr, 0, 366, W, 150, "GRID REPORT" + ((" \u00b7 " + checked) if checked and checked != "?" else ""), ACID)
+    if not g:
+        text(cr, 14, 394, "no grid check yet", DIM, 12); return
+    up = safe(g.get("alpha"), 12) == "up"
+    rows = [("ALPHA", "%s \u00b7 proxy %s" % (safe(g.get("alpha"), 12) or "?", safe(g.get("proxy"), 24) or "?"), ACID if up else MAG),
+            ("MIND", "on %s%s" % (safe(g.get("mind"), 24) or "?",
+                                  (" \u00b7 standby %s" % safe(g.get("standby"), 5)) if g.get("standby") else ""), TXT),
+            ("CAMS", "feed %s" % (safe(g.get("cams"), 24) or "?"), TXT if str(g.get("cams", "")).startswith("ok") else AMBER)]
+    y = 394
+    for label, val, col in rows:
+        text(cr, 14, y, label, DIM, 10.5, True)
+        text(cr, 62, y, val, col, 12, width=W - 76); y += 20
+    for r in [r for r in g.get("repos") or [] if isinstance(r, list) and len(r) == 4][:1]:
+        name, sha, hm, msg = (safe(x, 72) for x in r)
+        text(cr, 14, y, "REPO", DIM, 10.5, True)
+        text(cr, 62, y, ("%s %s %s" % (name, sha, hm)) if sha else "%s %s" % (name, msg), TXT, 12, width=W - 76); y += 17
+        if sha:
+            font(cr, 11.5)
+            for line in wrap(cr, msg, W - 76, 2):
+                text(cr, 62, y, line, DIM, 11.5); y += 15
 
 def bar_width(w, h):
     """How wide the avatar's text bar may be so it never runs under a column."""

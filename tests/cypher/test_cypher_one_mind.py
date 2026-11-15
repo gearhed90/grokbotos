@@ -24,6 +24,7 @@ L0 = json.load(open(os.path.join(SRC, "cypher-limits.json")))
 L0["brain"]["primary_urls"] = ["http://127.0.0.1:9"]; L0["brain"]["primary_url"] = L0["brain"]["primary_urls"][0]
 L0["brain"]["local"]["enabled"] = False; L0["brain"]["hosted_backup"]["enabled"] = False
 L0["failover"]["enabled"] = False; L0["camera"]["enabled"] = False; L0["sleep"]["enabled"] = False
+L0["grid"]["enabled"] = False      # gridwatch has its own tests (test_cypherd_phase5.py)
 with open(os.path.join(T, "limits.json"), "w") as f: json.dump(L0, f)
 os.environ.update(CYPHER_LIMITS=os.path.join(T, "limits.json"), CYPHER_LIMITS_INSECURE_OK="1",
                   CYPHER_BRAIN_TOKEN_FILE=os.path.join(T, "token"), CYPHER_XAI_KEY_FILE=os.path.join(T, "nokey"),
@@ -99,7 +100,7 @@ check("tool args are an allowlist (url dropped)", r[0]["tools"][0]["args"] == {"
 check("spool is 0600", stat.S_IMODE(os.stat(SP).st_mode) == 0o600)
 check("queue_action only queues request_account", not CL.queue_action("message_zack", {"text": "hi"})["ok"]
       and not CL.queue_action("request_account", {"service": "GitHub"})["ok"])
-q = CL.queue_action("request_account", {"service": "GitHub", "why": "to keep my code"}, now=now)
+q = CL.queue_action("request_account", {"service": "github.com", "why": "to keep my code"}, now=now)
 check("queue_action says it only queues, and approval is not here", q["ok"] and "Queued" in q["result"] and "not here" in q["result"])
 os.environ["CYPHER_LINK"] = "0"
 check("CYPHER_LINK=0 turns the bridge off", CL.record_turn("x", "y") is False and CL.state_lines() == "")
@@ -132,16 +133,16 @@ check("queued request_account went through the validator and is pending",
 check("asked-on-screen request shows in last actions", any("asked on screen" in a for a in st["last_actions"]), st["last_actions"])
 check("the ntfy ask never carries the email or topic in its body", all(TOPIC not in str(s["data"]) and "@" not in str(s["data"]) for s in sent))
 # a second ask the same day: refused by the daily cap, still journaled
-CL.queue_action("request_account", {"service": "Codeberg", "why": "a second home for code"}, now=now + 60)
+CL.queue_action("request_account", {"service": "codeberg.org", "why": "a second home for code"}, now=now + 60)
 C.talk_step(L, st, now + 65, P)
 check("2nd queued ask the same day refused by the cap", len(C.load_account_requests()) == 1 and "daily cap" in journal_text(),
       journal_text()[-400:])
 # a forbidden ask
-CL.queue_action("request_account", {"service": "Vault", "why": "to store the front door password"}, now=now + 70)
+CL.queue_action("request_account", {"service": "vault.com", "why": "to store the front door password"}, now=now + 70)
 C.talk_step(L, dict(st, recent=[]), now + 75, P)
 check("forbidden ask (password / house words) refused", len(C.load_account_requests()) == 1)
 # quiet hours
-CL.queue_action("request_account", {"service": "Sourcehut", "why": "to try it"}, now=now + 80)
+CL.queue_action("request_account", {"service": "sourcehut.org", "why": "to try it"}, now=now + 80)
 C.talk_step(L, dict(st, recent=[]), now + 85, dict(P, quiet_hours=True))
 check("queued ask refused in quiet hours", len(C.load_account_requests()) == 1 and "quiet hours" in journal_text())
 # saying "approve" on screen approves nothing
@@ -182,7 +183,7 @@ check("novad reply still streams to the screen", ev and ev[-1] == {"reply": "Hey
 r = spool_rows()
 check("novad spools the turn, scrubbed", len(r) == 1 and r[0]["kind"] == "turn" and "hunter2" not in json.dumps(r), r)
 script[:] = [{"content": "", "tool_calls": [{"id": "1", "function": {"name": "request_account",
-             "arguments": json.dumps({"service": "GitHub", "why": "to keep my code"})}}]},
+             "arguments": json.dumps({"service": "github.com", "why": "to keep my code"})}}]},
              {"content": "Asked. Zack decides."}]
 ev = []; N.handle_prompt("ask for a github account", ev.append, "voice")
 r = spool_rows()

@@ -476,7 +476,7 @@ def tool_schema():
         f("set_avatar", "Change how you (the on-screen avatar) look: shape and/or color.",
           {"shape": {"type": "string", "enum": avatar_shapes.SHAPE_IDS}, "color": {"type": "string", "enum": avatar_shapes.COLOR_IDS}}),
         f("power", "Lock the screen, restart or shut down. Asks the user first.", {"action": {"type": "string", "enum": ["lock", "restart", "shutdown"]}}, ["action"]),
-        f("request_account", "Ask Zack for an account on a service (queued; your locked limits check it; Zack approves only through Nova). "
+        f("request_account", "Ask Zack for an account on a website, given as its plain domain like github.com (queued; your locked limits check it; Zack approves only through Nova). "
           "Never include your email address or a password.",
           {"service": {"type": "string", "maxLength": 40}, "why": {"type": "string", "maxLength": 160}}, ["service", "why"]),
     ]

@@ -39,6 +39,7 @@ L0 = json.load(open(os.path.join(SRC, "cypher-limits.json")))
 L0["brain"]["primary_urls"] = ["http://127.0.0.1:%d" % port]; L0["brain"]["primary_url"] = L0["brain"]["primary_urls"][0]
 L0["brain"]["local"]["enabled"] = False; L0["brain"]["hosted_backup"]["enabled"] = False
 L0["failover"]["enabled"] = False; L0["camera"]["enabled"] = False; L0["sleep"]["enabled"] = False
+L0["grid"]["enabled"] = False      # gridwatch has its own tests (test_cypherd_phase5.py)
 L0["ntfy"]["inbox"]["enabled"] = False      # phase 4's reply inbox has its own tests (test_cypherd_phase4.py)
 with open(os.path.join(T, "limits.json"), "w") as f: json.dump(L0, f)
 os.environ.update(CYPHER_LIMITS=os.path.join(T, "limits.json"), CYPHER_LIMITS_INSECURE_OK="1",
@@ -57,7 +58,7 @@ L = C.current_limits(C.new_state())
 def at(h, m=0, day=16):
     return time.mktime((2026, 11, day, h, m, 0, 0, 0, -1))     # Mon Nov 16 2026
 P = {"local_time": "Mon 2:00 PM", "hour": 14, "presence": "active", "focused_app": "foot", "window_title": "htop",
-     "dnd": False, "muted": False, "quiet_hours": False, "camera": []}
+     "dnd": False, "muted": False, "quiet_hours": False, "camera": [], "brain": "alpha"}
 def manifest(st, p=P, now=None):
     return C.build_messages(L, st, dict(p), now or at(14))[0]["content"].split("Manifest:")[1]
 
@@ -139,10 +140,11 @@ check("message ok", C.validate(L, st, P, {"action": "message_zack", "params": {"
 check("message over 200 refused", "over 200" in C.validate(L, st, P, {"action": "message_zack", "params": {"text": "x" * 201}}, now)[2])
 check("message in quiet hours refused", C.validate(L, st, dict(P, quiet_hours=True), {"action": "message_zack", "params": {"text": "hi"}}, now)[2] == "rejected: quiet hours")
 check("message works while Zack is away (it is his phone)", C.validate(L, st, dict(P, presence="away"), {"action": "message_zack", "params": {"text": "hi"}}, now)[2] == "ok")
-st["recent"] = [[now - 1800, "message_zack"]]
-check("2nd message in an hour refused", "hourly cap" in C.validate(L, st, P, {"action": "message_zack", "params": {"text": "hi"}}, now)[2])
-st["recent"] = [[now - 4000 * (i + 1), "message_zack"] for i in range(3)]
-check("4th message in a day refused", "daily cap" in C.validate(L, st, P, {"action": "message_zack", "params": {"text": "hi"}}, now)[2])
+st["recent"] = [[now - 600 * (i + 1), "message_zack"] for i in range(3)]
+check("4th message in an hour refused (per_hour 3)", "hourly cap" in C.validate(L, st, P, {"action": "message_zack", "params": {"text": "hi"}}, now)[2])
+st["recent"] = [[now - 4000 - 1200 * i, "message_zack"] for i in range(12)]
+check("no daily cap: 13th message today allowed outside the hour", C.validate(L, st, P, {"action": "message_zack", "params": {"text": "hi"}}, now)[2] == "ok"
+      and L["actions"]["message_zack"]["per_day"] is None and L["actions"]["message_zack"]["per_hour"] == 3)
 check("Friday 11:30 PM not quiet -> message allowed (no quiet hours Fri/Sat)",
       not C.in_quiet_hours(L, at(23, 30, 20)) and C.validate(L, C.new_state(), dict(P, quiet_hours=C.in_quiet_hours(L, at(23, 30, 20))),
                                                              {"action": "message_zack", "params": {"text": "hi"}}, at(23, 30, 20))[2] == "ok")
@@ -293,7 +295,7 @@ check("request_account ntfy does not consume message_zack's cap",
 # a real tick should append request_account (not message_zack) to recent
 C._http = fake_ntfy
 before = len(sent)
-PX["reply"] = '{"action":"request_account","params":{"service":"GitHub","why":"so I can file issues on the tank firmware"},"reason":"need it"}'
+PX["reply"] = '{"action":"request_account","params":{"service":"github.com","why":"so I can file issues on the tank firmware"},"reason":"need it"}'
 st = C.new_state()
 e = C.tick(L, st, now, perceive_fn=lambda L, n: dict(P), camera_fn=lambda L, s, n: [])
 check("request_account tick records its own cap only",
@@ -313,7 +315,7 @@ import io, contextlib
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf): rc = C.cli(["requests"])
 out = buf.getvalue()
-check("cli requests lists pending", rc == 0 and "pinos.world" in out and "pending" in out and "GitHub" in out, out)
+check("cli requests lists pending", rc == 0 and "pinos.world" in out and "pending" in out and "github.com" in out, out)
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf): rc = C.cli(["requests", "resolve", "1", "approved"])
 check("cli resolve 1 approved", rc == 0 and "approved" in buf.getvalue() and C.load_account_requests()[0]["status"] == "approved", buf.getvalue())
@@ -332,7 +334,7 @@ check("cli resolve 2 denied", rc == 0 and C.load_account_requests()[1]["status"]
 # grokbot-cypher wrapper forwards to cypherd
 cli = os.path.join(SRC, "grokbot-cypher")
 pr = __import__("subprocess").run([cli, "requests"], capture_output=True, text=True, env=dict(os.environ, CYPHER_DAEMON=os.path.join(SRC, "cypherd.py"), CYPHER_NO_SYSTEMCTL="1"))
-check("grokbot-cypher requests lists them", pr.returncode == 0 and "GitHub" in pr.stdout, pr.stdout + pr.stderr)
+check("grokbot-cypher requests lists them", pr.returncode == 0 and "github.com" in pr.stdout, pr.stdout + pr.stderr)
 C._http = real_http
 
 # ---- house controls stay impossible; Alpha keeps deck-only actions off ----

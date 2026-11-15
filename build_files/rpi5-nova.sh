@@ -72,6 +72,9 @@ install -m 0755 "${csrc}/grokbot-set-cypher-token" /usr/local/sbin/grokbot-set-c
 # sudo grokbot-set-cypher-ntfy (/etc/grokbot/cypher-ntfy-topic, root:grokbot
 # 0640); never in the image. glance_screen uses grim (already in the image).
 install -m 0755 "${csrc}/grokbot-set-cypher-ntfy" /usr/local/sbin/grokbot-set-cypher-ntfy
+# Phase 5: `grokbot-cypher limits set` changes one cap through this root helper
+# (bounds-checked, validated, atomic; cypherd reloads the file live).
+install -m 0755 "${csrc}/grokbot-set-cypher-limit" /usr/local/sbin/grokbot-set-cypher-limit
 # Phase 4: Cypher's HUD panels around the avatar (cypher_panels.py, drawn by
 # nova_native.py; Super+C hides/shows them) and qrencode for grokbot-cypher
 # ntfy-qr (a terminal QR of the topic, on screen only).

@@ -137,6 +137,14 @@ python3 tests/cypher/test_cypherd_phase4.py
 # Phase 4: one mind. HUD panels around the avatar (Super+C hides/shows), the
 # avatar's conversations go to cypherd (cypher_link), Super+Enter terminal, qrencode.
 python3 tests/cypher/test_cypher_one_mind.py
+# Phase 5: gridwatch, strict request_account, limits command, self-tuning proposals.
+python3 tests/cypher/test_cypherd_phase5.py
+python3 -m py_compile "${cy}/grokbot-set-cypher-limit"
+assert_contains build_files/rpi5-nova.sh '/usr/local/sbin/grokbot-set-cypher-limit'
+assert_contains "${cy}/cypher-limits.json" '"message_zack": {"phase": 3, "max_chars": 200, "per_hour": 3, "per_day": null'
+if grep -nE 'LIMITS_FILE' "${cy}/cypherd.py" | grep -E 'write_json|"w"'; then
+    fail "cypherd must never write the locked limits file"
+fi
 bash -n "${cy}/grokbot-cypher-panels"
 bash -n "${nova}/grokbot-term"
 python3 -m py_compile "${cy}/cypher_panels.py" "${nova}/cypher_link.py"
