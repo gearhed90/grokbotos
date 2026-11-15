@@ -119,6 +119,7 @@ assert_contains build_files/rpi5-nova.sh '[[ ! -e /etc/grokbot/cypher-brain-toke
 assert_contains build_files/rpi5-nova.sh 'systemctl enable tailscaled.service'
 assert_contains "${cy}/cypherd.service" 'RestartPreventExitStatus=78'
 assert_contains "${cy}/cypherd.service" 'MemoryMax='
+assert_contains "${cy}/cypherd.service" 'ConditionGroup=grokbot'
 if bash "${cy}/grokbot-set-cypher-token" </dev/null 2>/dev/null; then
     fail "grokbot-set-cypher-token ran without root"
 fi

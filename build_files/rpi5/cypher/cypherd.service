@@ -1,6 +1,9 @@
 [Unit]
 Description=Cypher autonomy loop (drives, decision tick, journal)
 After=grokbotd.service
+# Only the kiosk user (group grokbot, which can read the proxy token) runs
+# Cypher. Admin logins (SSH) get no second brain.
+ConditionGroup=grokbot
 StartLimitIntervalSec=300
 StartLimitBurst=5
 
