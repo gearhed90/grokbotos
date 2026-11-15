@@ -72,6 +72,18 @@ systemctl --global enable cypherd.service
 python3 -m py_compile "${cypher}/cypherd.py"
 [[ ! -e /etc/grokbot/cypher-brain-token ]]
 
+# Phase 2: local fallback model. llama.cpp from Fedora; the 2 GB model is not in
+# the image (it would ride along with every update) but fetched once into /var
+# by cypher-llm-fetch (sha256-pinned). cypher-llm serves it on 127.0.0.1:8081
+# under a 3 GB memory cap and 3 CPUs.
+dnf5 install -y llama-cpp
+install -D -m 0755 "${csrc}/cypher-llm-fetch" /usr/libexec/grokbot/cypher-llm-fetch
+install -m 0644 "${csrc}/cypher-llm.service" /usr/lib/systemd/system/cypher-llm.service
+install -m 0644 "${csrc}/cypher-llm-fetch.service" /usr/lib/systemd/system/cypher-llm-fetch.service
+install -m 0644 "${csrc}/cypher-llm.tmpfiles" /usr/lib/tmpfiles.d/cypher-llm.conf
+systemctl enable cypher-llm-fetch.service cypher-llm.service
+[[ -x /usr/bin/llama-server ]]
+
 # --- Tailscale (Fedora package): reach Alpha away from home. Not logged in
 # here; the owner joins the device to the tailnet with sudo tailscale up.
 dnf5 install -y tailscale

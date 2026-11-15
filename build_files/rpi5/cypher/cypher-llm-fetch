@@ -1,0 +1,14 @@
+#!/usr/bin/bash
+# Download Cypher's local fallback model once and check it against a pinned sha256.
+set -euo pipefail
+dir=/var/lib/cypher-llm/models
+name=qwen2.5-3b-instruct-q4_k_m.gguf
+url="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/${name}"
+sha=626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d
+[[ -e "${dir}/${name}" ]] && exit 0
+install -d -m 0755 "$dir"
+curl -fsSL --retry 3 -o "${dir}/${name}.part" "$url"
+echo "${sha}  ${dir}/${name}.part" | sha256sum -c --quiet
+chmod 0644 "${dir}/${name}.part"
+mv "${dir}/${name}.part" "${dir}/${name}"
+systemctl --no-block start cypher-llm.service

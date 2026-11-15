@@ -24,6 +24,7 @@ if command -v shellcheck >/dev/null 2>&1; then
         build_files/rpi5/nova/grokbot-nova \
         build_files/rpi5/nova/grokbot-set-xai-key \
         build_files/rpi5/cypher/grokbot-set-cypher-token \
+        build_files/rpi5/cypher/cypher-llm-fetch \
         tests/*.sh
 else
     echo "SKIP shellcheck: not installed"

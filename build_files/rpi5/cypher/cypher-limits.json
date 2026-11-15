@@ -1,7 +1,7 @@
 {
   "_comment": "Cypher's locked limits. Root-owned, shipped in the image; cypherd re-reads it every tick and Cypher can never edit it. Change it only with sudo (see docs/CYPHER.md).",
   "enabled": true,
-  "phase_max": 1,
+  "phase_max": 2,
   "tick_s": 45,
   "tick_s_bounds": [30, 300],
   "heartbeat_s": 600,
@@ -10,9 +10,19 @@
   "quiet_hours": {"default": ["23:00", "06:00"], "nights": {"fri": null, "sat": null}},
   "brain": {
     "primary_url": "http://192.168.12.126:8090",
+    "primary_urls": ["http://192.168.12.126:8090", "http://100.114.239.111:8090"],
     "timeout_s": 25,
     "max_output_tokens": 150,
     "retry_after_s": 300,
+    "local": {
+      "_comment": "The deck's own Qwen2.5 3B (cypher-llm.service, 127.0.0.1 only). Used when Alpha is busy or away, before the hosted backup.",
+      "enabled": true,
+      "phase": 2,
+      "url": "http://127.0.0.1:8081",
+      "model": "qwen2.5-3b-instruct-q4_k_m",
+      "timeout_s": 120,
+      "max_output_tokens": 120
+    },
     "hosted_backup": {
       "enabled": true,
       "url": "https://api.x.ai/v1",
@@ -21,6 +31,37 @@
       "usd_per_mtok_in": 1.25,
       "usd_per_mtok_out": 2.50
     }
+  },
+  "failover": {
+    "_comment": "Mind lease on Alpha's proxy. A standby cypherd on Alpha takes over only when cypherd here stopped cleanly or the deck is dark (lease expired and none of deck_addrs answers), and hands back as soon as this deck returns.",
+    "enabled": true,
+    "phase": 2,
+    "standby_poll_s": 20,
+    "renew_s": 60,
+    "deck_addrs": ["192.168.12.71:22", "100.72.32.17:22"]
+  },
+  "camera": {
+    "_comment": "Read-only, sanitized events from cypher-camfeed on Alpha. Cypher reacts in its journal and mood only; camera, light and house actions never exist.",
+    "enabled": true,
+    "phase": 2,
+    "react_kinds": ["person", "stranger", "family", "alert", "vehicle", "arrival_start", "arrival_end"],
+    "max_age_s": 1800,
+    "first_lookback_s": 43200,
+    "max_per_tick": 5
+  },
+  "sleep": {
+    "_comment": "Nightly: condense yesterday's journal into memories; preference notes and drift change within these limits, every change versioned (grokbot-cypher prefs).",
+    "enabled": true,
+    "phase": 2,
+    "at": "04:00",
+    "max_output_tokens": 300,
+    "max_new_memories": 3,
+    "memory_chars": 140,
+    "max_memories": 60,
+    "max_notes": 8,
+    "note_chars": 120,
+    "max_drift_step": 0.02,
+    "keep_versions": 30
   },
   "actions": {
     "none": {"phase": 1},

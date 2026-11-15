@@ -1,0 +1,16 @@
+[Unit]
+Description=Fetch Cypher's local model once (sha256-pinned, Hugging Face)
+ConditionPathExists=!/var/lib/cypher-llm/models/qwen2.5-3b-instruct-q4_k_m.gguf
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/grokbot/cypher-llm-fetch
+TimeoutStartSec=1h
+Nice=19
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

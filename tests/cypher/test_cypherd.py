@@ -47,6 +47,8 @@ for w in ("alpha", "hosted"):
 
 def write_limits(**over):
     L = json.loads(json.dumps(limits_src))
+    L["phase_max"] = 1                 # phase 2 (failover, camera, local model, sleep) is tested in test_cypherd_phase2.py
+    L["brain"].pop("primary_urls", None)
     L["brain"]["primary_url"] = "http://127.0.0.1:%d" % ports["alpha"]
     L["brain"]["hosted_backup"]["url"] = "http://127.0.0.1:%d/v1" % ports["hosted"]
     for k, v in over.items():
@@ -65,7 +67,7 @@ C = importlib.util.module_from_spec(spec); spec.loader.exec_module(C)
 
 # ---- shipped limits ----
 shipped = C.load_limits(os.path.join(SRC, "cypher-limits.json"))
-check("shipped limits load", shipped["phase_max"] == 1 and shipped["tick_s"] == 45)
+check("shipped limits load", shipped["phase_max"] == 2 and shipped["tick_s"] == 45)
 check("v1 actions are exactly none/journal/note/avatar", sorted(C.allowed_actions(shipped)) == ["journal_thought", "none", "set_avatar_color", "show_note"])
 check("quiet hours 11 PM to 6 AM, off Friday and Saturday nights",
       shipped["quiet_hours"] == {"default": ["23:00", "06:00"], "nights": {"fri": None, "sat": None}})

@@ -130,6 +130,18 @@ if grep -n 'Pixel' "${nova}"/*.py "${nova}"/*.html | grep -v devicePixelRatio; t
     fail "the assistant is still called Pixel somewhere"
 fi
 python3 tests/cypher/test_cypherd.py
+python3 tests/cypher/test_cypherd_phase2.py
+# Phase 2 local model: installed, enabled, capped, loopback only, model fetched with a pinned sha256.
+for f in cypher-llm.service cypher-llm-fetch.service cypher-llm-fetch cypher-llm.tmpfiles; do
+    [[ -f "${cy}/${f}" ]] || fail "missing ${cy}/${f}"
+done
+bash -n "${cy}/cypher-llm-fetch"
+assert_contains build_files/rpi5-nova.sh 'dnf5 install -y llama-cpp'
+assert_contains build_files/rpi5-nova.sh 'systemctl enable cypher-llm-fetch.service cypher-llm.service'
+assert_contains "${cy}/cypher-llm.service" '--host 127.0.0.1'
+assert_contains "${cy}/cypher-llm.service" 'MemoryMax=3G'
+assert_contains "${cy}/cypher-llm.service" 'DynamicUser=yes'
+assert_contains "${cy}/cypher-llm-fetch" 'sha256sum -c'
 
 python3 tests/nova/test_units.py
 python3 tests/nova/run_tests.py

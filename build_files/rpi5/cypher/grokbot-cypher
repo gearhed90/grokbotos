@@ -8,6 +8,10 @@
   grokbot-cypher resume            end a pause
   grokbot-cypher stop              kill switch: cypherd stops and stays off
   grokbot-cypher start             clear the kill switch and start cypherd
+  grokbot-cypher memories          what Cypher remembers (nightly sleep)
+  grokbot-cypher prefs             preference notes and their versions
+  grokbot-cypher prefs rollback N  make version N current again (as a new version)
+  grokbot-cypher sleep-now         condense today at the next tick
 """
 import json, os, subprocess, sys, time
 E = os.environ.get
@@ -16,6 +20,7 @@ CFG = E("CYPHER_CONFIG_DIR", os.path.join(E("XDG_CONFIG_HOME") or os.path.join(H
 STATE = E("CYPHER_STATE_DIR", os.path.join(E("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state"), "cypher"))
 DATA = E("CYPHER_DATA_DIR", os.path.join(E("XDG_DATA_HOME") or os.path.join(HOME, ".local", "share"), "cypher"))
 NO_SYSTEMCTL = E("CYPHER_NO_SYSTEMCTL") == "1"
+CYPHERD = E("CYPHER_DAEMON", "/usr/share/grokbot/cypher/cypherd.py")
 os.environ.setdefault("TZ", "America/New_York"); time.tzset()
 
 def touch(name, content=""):
@@ -45,13 +50,16 @@ def journal_lines(n):
 def fmt(line):
     try: j = json.loads(line)
     except ValueError: return line
-    if "event" in j: return "%s  [%s] %s" % (j.get("ts", "")[11:19], j["event"], j.get("why", ""))
+    if "event" in j: return "%s  [%s] %s" % (j.get("ts", "")[11:19], j["event"], j.get("why") or "")
+    cam = (j.get("perception") or {}).get("camera") or []
     ch = j.get("choice") or {}
     p = ch.get("params") or {}
     what = ch.get("action", "?") + ((": " + (p.get("text") or p.get("color") or "")) if p else "")
     v = j.get("validator", "")
-    return "%s  %-6s %s%s\n          why: %s" % (j.get("ts", "")[11:19], j.get("brain", ""), what,
-                                              "" if v in ("ok", "skipped") else "  (" + v + ")", j.get("reason", ""))
+    host = " @alpha" if j.get("host") == "alpha" else ""
+    return "%s  %-6s %s%s%s%s\n          why: %s" % (j.get("ts", "")[11:19], j.get("brain", ""), what,
+                                              "" if v in ("ok", "skipped") else "  (" + v + ")", host,
+                                              ("  [cameras: %d]" % len(cam)) if cam else "", j.get("reason", ""))
 
 def main(argv):
     cmd = argv[1] if len(argv) > 1 else "status"
@@ -89,6 +97,15 @@ def main(argv):
         rm("KILL"); rc = systemctl("start", "cypherd.service")
         print("Cypher started" if rc == 0 else "could not start cypherd (see journalctl --user -u cypherd)")
         return rc
+    elif cmd == "memories":
+        try:
+            with open(os.path.join(DATA, "memory", "memories.json")) as f: mem = json.load(f)
+        except (OSError, ValueError): mem = []
+        for m in mem[-20:]: print("%s  %s" % (m.get("day", ""), m.get("text", "")))
+        if not mem: print("no memories yet (Cypher sleeps at 4 AM)")
+    elif cmd in ("prefs", "sleep-now"):
+        args = ["prefs-rollback", argv[3]] if cmd == "prefs" and len(argv) > 3 and argv[2] == "rollback" else [cmd]
+        return subprocess.run([sys.executable, CYPHERD, *args]).returncode
     else:
         print(__doc__.strip()); return 2
     return 0
