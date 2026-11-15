@@ -1059,6 +1059,7 @@ def mind_step(L, st):
         if code == 200 and r.get("granted"):
             st["holding"] = True; st["lease_epoch"] = _EPOCH[0] = r["epoch"]
             catch_up(L, st, "deck_dark" if unreachable else "deck_stopped")
+            st["last_sig"] = None                  # think on the first tick after taking over
             return True
     except BrainBusy:
         if st.get("holding"):
