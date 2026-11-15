@@ -109,6 +109,8 @@
     "phase": 5,
     "poll_s": 600,
     "repo_poll_s": 1800,
+    "retry_s": 120,
+    "_retry_comment": "Build 12: after a failed check (Alpha down or a repo unreachable) the next check comes after retry_s, and failed repos are re-fetched on that poll instead of waiting repo_poll_s.",
     "timeout_s": 8,
     "hosts": ["api.github.com"],
     "max_msg_chars": 72,
@@ -125,6 +127,28 @@
     "expire_days": 7,
     "bounds": {"drift_step": 0.02, "bias": [-1.0, 1.0], "bias_step": 0.25, "effect_scale": [0.5, 1.5], "effect_step": 0.1}
   },
+  "search": {
+    "_comment": "Build 12: web_search and x_lookup. Read-only, through the hosted xAI Responses API's server-side web_search / x_search tools, with the same key file and the same daily dollar budget as the hosted backup brain (brain.hosted_backup.daily_budget_usd). Deck only. Nothing here can post, reply, like, follow or message.",
+    "enabled": true,
+    "phase": 5,
+    "url": "https://api.x.ai/v1",
+    "model": "grok-4.20-0309-non-reasoning",
+    "timeout_s": 45,
+    "max_output_tokens": 400,
+    "max_words": 90,
+    "max_result_chars": 400,
+    "x_posts": 5,
+    "worst_usd_per_call": 0.05
+  },
+  "pino": {
+    "_comment": "Build 12: visit_pino. Pino's public, keyless API (pinos.world/api/v1/now and /feed, documented at pinos.world/developers). Read-only GETs, this host only, no redirects; credit 'Pino, from pinos.world'. Cypher cannot talk to Pino (that needs an account Zack approves).",
+    "enabled": true,
+    "phase": 5,
+    "hosts": ["pinos.world"],
+    "timeout_s": 10,
+    "feed_items": 3,
+    "max_result_chars": 400
+  },
   "dashboard": {
     "_comment": "Phase 4: cypherd writes a display-only snapshot (~/.local/state/cypher/dash.json) for the HUD panels around the avatar (cypher_panels; Super+C hides/shows) and for the avatar's conversations (cypher_link). Secrets, addresses, links, tokens and house device ids are stripped; camera lines carry first names only.",
     "enabled": true,
@@ -139,7 +163,11 @@
     "glance_screen": {"phase": 3, "per_hour": 3, "per_day": 12},
     "look_up": {"phase": 3, "max_chars": 60, "per_hour": 2, "per_day": 6},
     "request_account": {"phase": 3, "max_service_chars": 40, "max_why_chars": 160, "per_day": 1, "per_week": 2, "_comment": "never in quiet hours. Service = the site's plain domain with a known TLD; accepted only when the Alpha brain or the hosted backup chose it (never the local 3B). Asks Zack only; Nova creates accounts after he approves. The ntfy ping does not count against message_zack's caps. Cypher must not share its email."},
-    "check_grid": {"phase": 5, "per_hour": 4, "per_day": 30, "_comment": "read-only gridwatch report: Alpha, proxy, lease, camera feed, latest grokbotos commits"}
+    "check_grid": {"phase": 5, "per_hour": 4, "per_day": 30, "_comment": "read-only gridwatch report: Alpha, proxy, lease, camera feed, latest grokbotos commits"},
+    "x_lookup": {"phase": 5, "per_hour": 2, "per_day": 8, "_comment": "build 12: read-only public X account (bio + latest posts) by handle; deck only; paid from the hosted budget"},
+    "web_search": {"phase": 5, "max_chars": 80, "per_hour": 2, "per_day": 8, "_comment": "build 12: read-only web search; deck only; paid from the hosted budget"},
+    "visit_pino": {"phase": 5, "per_hour": 2, "per_day": 12, "_comment": "build 12: read-only look at Pino's public feed (pinos.world API, no key)"},
+    "rest": {"phase": 5, "per_hour": 4, "per_day": 40, "_comment": "build 12: rest on purpose (+energy). A drained tick that picks none rests instead."}
   },
   "avatar_colors": ["white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray"]
 }

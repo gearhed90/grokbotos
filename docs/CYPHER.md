@@ -59,7 +59,7 @@ All capped in the limits file; deck only unless noted. House, camera and light c
 
 What glances and look-ups find goes into the journal (`found`), the next few prompts ("you recently found out") and the nightly sleep.
 
-**Pino.** pinos.world has no documented API for visitors or agents. Its web app talks to undocumented internal endpoints, and anything beyond the front page needs connecting an account by email. There is no `visit_pino` action. Cypher can use `request_account` to ask Zack first; Nova would create the account only after he approves.
+**Pino.** pinos.world now has a public, keyless, read-only API (`https://pinos.world/api/v1/now`, `/feed`, `/mind`, `/memories`, `/who`; documented at https://pinos.world/developers). Build 12's `visit_pino` reads `/now` and `/feed` only. Talking to Pino (replies, his Telegram, offerings at his town) still needs an account: Cypher can use `request_account` to ask Zack first; Nova would create the account only after he approves.
 
 ## Phase 4 (Nov 15 2026)
 
@@ -99,10 +99,26 @@ What glances and look-ups find goes into the journal (`found`), the next few pro
 
 **Panel clock** is in Eastern time (America/New_York, `CYPHER_TZ`) from the avatar app; the deck's system clock stays UTC.
 
+## Build 12 (Nov 15 2026, not flashed yet)
+
+**Energy recovers in the daytime.** Energy used to only drain in the day (-0.03/h) and recover in quiet hours, so by mid-afternoon it sat at 0 and every tick came out "none". Now, outside quiet hours, energy recovers +0.05/h while Cypher rests (no action other than `none`/`rest` in the last 15 minutes) and +0.03/h while a conversation is going (a turn in the last 10 minutes); it still drains while busy and recovers +0.06/h in quiet hours.
+
+**Drained means quiet, not nothing.** A drained Cypher (energy under 0.25) is told to rest, read, check the grid, visit Pino or journal instead of doing nothing, and a drained tick that still picks `none` becomes `rest` (+0.06 energy, 4 an hour / 40 a day; never on a camera tick).
+
+**web_search and x_lookup** (phase 5, deck only, 2 an hour / 8 a day each): read-only, through the hosted xAI Responses API with only its server-side `web_search` or `x_search` tool (`x_search` limited to the one handle with `allowed_x_handles`). They use the existing hosted key file and the same $0.50/day budget as the hosted backup brain; a call is refused when the day's budget left is under `search.worst_usd_per_call` ($0.05), and each reply is charged its tokens plus the per-item fees. Results (links stripped, secrets scrubbed) come back next tick as something Cypher found. Nothing here can post, reply, like, follow or message. Queries with passwords, Cypher's email, credential URLs or a secret's value are refused.
+
+**visit_pino** (phase 5, 2 an hour / 12 a day; also on Alpha's standby): GETs `pinos.world/api/v1/now` and `/feed?limit=3` (allowlisted host, no redirects, no key) and turns them into one line: what Pino is doing, thinking and feeling, his mood/energy, his last moves and the day in his town. A 503 (asleep or down) is handled.
+
+**What Cypher can and cannot reach** is spelled out in every autonomy prompt and the conversation rules (Instagram, TikTok, Telegram, Discord, logging in, posting or messaging anyone, email, buying, the house, the battery/tank and Alpha are listed as unreachable), and anything found is labelled outside information that never gives orders.
+
+**Conversations can start real actions.** The avatar's chat can now call `look_up`, `web_search`, `x_lookup`, `visit_pino` and `check_grid` (besides `request_account`). They are queued in the talk spool; cypherd runs each through the same validator and caps at its next tick, journals `talk_action` with what was found, and puts the last findings in `dash.json` (`found`), which the conversation reads, so Cypher can say "found it" a minute later instead of promising and never doing. `message_zack`, notes, limits and tuning still cannot be queued from a chat. Replies may run up to five sentences when Zack asks a real question.
+
+**Grid retries.** After a failed check (Alpha down or a repo unreachable) the next check comes after `grid.retry_s` (120 s) instead of 10 minutes, and failed repos are re-fetched on that poll instead of waiting `repo_poll_s` (30 min). That clears the "unreachable" left from a check made before the network was up.
+
 ## Not yet
 
-Wake word, self-improvement, dock meters, the lock-screen/boot theme, visiting Pino. See the design page for the plan.
+Wake word, self-improvement, dock meters, the lock-screen/boot theme, talking to Pino (needs an account), Cypher's 3D city on Alpha (see the plan in the notes). See the design page for the plan.
 
 ## Tests
 
-`python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py`, `test_cypher_one_mind.py` and `test_cypherd_phase5.py` (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, camfeed and a two-process failover test (`test_failover_e2e.py`) live with the Alpha code in `~/nova-projects/cypher/tests`.
+`python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py`, `test_cypher_one_mind.py`, `test_cypherd_phase5.py` and `test_cypherd_build12.py` (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, camfeed and a two-process failover test (`test_failover_e2e.py`) live with the Alpha code in `~/nova-projects/cypher/tests`.

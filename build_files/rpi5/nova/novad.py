@@ -433,9 +433,9 @@ def call_tool(name, a):
             if shape is None and color is None: raise ValueError("give shape and/or color")
             c = avatar_shapes.save(shape=shape, color=color)
             r = {"ok": True, "result": "Avatar is now a %s %s." % (c["color"], c["shape"])}
-        elif name == "request_account":
+        elif name in cypher_link.QUEUEABLE:
             # Only queued for cypherd: its validator and locked caps decide. Never an approval.
-            r = cypher_link.queue_action("request_account", {"service": a.get("service"), "why": a.get("why")})
+            r = cypher_link.queue_action(name, {k: a.get(k) for k in cypher_link.QUEUEABLE[name]})
         elif name == "power":
             act = a.get("action")
             m = {"lock": ("lock", "Lock the screen?", "Locking."), "restart": ("reboot", "Restart the Pi?", "Restarting."),
@@ -479,6 +479,15 @@ def tool_schema():
         f("request_account", "Ask Zack for an account on a website, given as its plain domain like github.com (queued; your locked limits check it; Zack approves only through Nova). "
           "Never include your email address or a password.",
           {"service": {"type": "string", "maxLength": 40}, "why": {"type": "string", "maxLength": 160}}, ["service", "why"]),
+        f("look_up", "Look a topic up on Wikipedia (queued; the summary reaches you in a minute or two).",
+          {"topic": {"type": "string", "maxLength": 60}}, ["topic"]),
+        f("web_search", "Search the web, read-only (queued; a short summary reaches you in a minute or two).",
+          {"query": {"type": "string", "maxLength": 80}}, ["query"]),
+        f("x_lookup", "Read a public X account's bio and latest posts by handle, read-only; you cannot post, follow or message "
+          "(queued; the summary reaches you in a minute or two).", {"handle": {"type": "string", "maxLength": 16}}, ["handle"]),
+        f("visit_pino", "Drop in on Pino (the AI kiwi at pinos.world) through his public feed, read-only "
+          "(queued; what he is doing and feeling reaches you in a minute or two).", {}),
+        f("check_grid", "Read-only grid report: Alpha, its brain proxy, who holds your mind, the camera feed, latest commits (queued).", {}),
     ]
 
 TOOL_RULES = ("You run on Zack's Grok Bot OS Raspberry Pi touchscreen. "
@@ -487,7 +496,8 @@ TOOL_RULES = ("You run on Zack's Grok Bot OS Raspberry Pi touchscreen. "
           "Some tools return pending: the user is shown Yes/No buttons; just restate the question briefly. "
           "Never ask for, repeat or accept a WiFi password: tell the user to enter it in Settings. "
           "You cannot install updates. "
-          "Replies are shown in one line above a text bar: keep them to one or two short sentences.")
+          "Replies are shown above a text bar: keep small talk to one or two short sentences, but when Zack asks a real "
+          "question or for your ideas, answer properly in up to five sentences.")
 
 def system_prompt():
     """Cypher's persona + live state + the tool rules (rebuilt every prompt; cheap file reads)."""

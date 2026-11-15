@@ -139,6 +139,7 @@ python3 tests/cypher/test_cypherd_phase4.py
 python3 tests/cypher/test_cypher_one_mind.py
 # Phase 5: gridwatch, strict request_account, limits command, self-tuning proposals.
 python3 tests/cypher/test_cypherd_phase5.py
+python3 tests/cypher/test_cypherd_build12.py
 python3 -m py_compile "${cy}/grokbot-set-cypher-limit"
 assert_contains build_files/rpi5-nova.sh '/usr/local/sbin/grokbot-set-cypher-limit'
 assert_contains "${cy}/cypher-limits.json" '"message_zack": {"phase": 3, "max_chars": 200, "per_hour": 3, "per_day": null'
