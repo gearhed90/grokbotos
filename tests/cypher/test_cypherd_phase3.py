@@ -39,6 +39,7 @@ L0 = json.load(open(os.path.join(SRC, "cypher-limits.json")))
 L0["brain"]["primary_urls"] = ["http://127.0.0.1:%d" % port]; L0["brain"]["primary_url"] = L0["brain"]["primary_urls"][0]
 L0["brain"]["local"]["enabled"] = False; L0["brain"]["hosted_backup"]["enabled"] = False
 L0["failover"]["enabled"] = False; L0["camera"]["enabled"] = False; L0["sleep"]["enabled"] = False
+L0["ntfy"]["inbox"]["enabled"] = False      # phase 4's reply inbox has its own tests (test_cypherd_phase4.py)
 with open(os.path.join(T, "limits.json"), "w") as f: json.dump(L0, f)
 os.environ.update(CYPHER_LIMITS=os.path.join(T, "limits.json"), CYPHER_LIMITS_INSECURE_OK="1",
                   CYPHER_BRAIN_TOKEN_FILE=os.path.join(T, "token"), CYPHER_XAI_KEY_FILE=os.path.join(T, "nokey"),

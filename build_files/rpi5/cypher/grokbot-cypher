@@ -16,6 +16,10 @@
   grokbot-cypher requests          list account requests Cypher has asked Zack for
   grokbot-cypher requests resolve N approved|denied
                                    mark request N approved or denied (Nova, after Zack replies)
+  grokbot-cypher inbox [N]         Zack's replies from the phone (messages only, never approvals)
+  grokbot-cypher ntfy-qr [--text]  show the phone topic as a QR code (a terminal on Cypher's own
+                                   screen only; refuses over SSH or a pipe)
+  grokbot-cypher dash              show or hide the dashboard (same as Super+C)
 """
 import json, os, subprocess, sys, time
 E = os.environ.get
@@ -108,11 +112,13 @@ def main(argv):
         except (OSError, ValueError): mem = []
         for m in mem[-20:]: print("%s  %s" % (m.get("day", ""), m.get("text", "")))
         if not mem: print("no memories yet (Cypher sleeps at 4 AM)")
-    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests"):
+    elif cmd == "dash":
+        return subprocess.run([E("CYPHER_DASH_TOGGLE", "/usr/local/bin/grokbot-cypher-dash"), *argv[2:]]).returncode
+    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests", "inbox", "ntfy-qr"):
         if cmd == "prefs" and len(argv) > 3 and argv[2] == "rollback":
             args = ["prefs-rollback", argv[3]]
-        elif cmd == "requests":
-            args = ["requests", *argv[2:]]
+        elif cmd in ("requests", "inbox", "ntfy-qr"):
+            args = [cmd, *argv[2:]]
         else:
             args = [cmd]
         return subprocess.run([sys.executable, CYPHERD, *args]).returncode

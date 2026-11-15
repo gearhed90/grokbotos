@@ -1,7 +1,7 @@
 {
   "_comment": "Cypher's locked limits. Root-owned, shipped in the image; cypherd re-reads it every tick and Cypher can never edit it. Change it only with sudo (see docs/CYPHER.md).",
   "enabled": true,
-  "phase_max": 3,
+  "phase_max": 4,
   "tick_s": 45,
   "tick_s_bounds": [30, 300],
   "heartbeat_s": 600,
@@ -70,7 +70,20 @@
     "phase": 3,
     "url": "https://ntfy.sh",
     "title": "Cypher",
-    "timeout_s": 10
+    "timeout_s": 10,
+    "inbox": {
+      "_comment": "Phase 4: two-way ntfy. cypherd reads Zack's replies on the same secret topic and stores them as messages from Zack (journal + ~/.local/state/cypher/zack-inbox.jsonl). A reply is NEVER an approval of an action, an account request, a limit or anything else. Cypher's own pushes carry the cypher-out tag and are skipped. Deck only.",
+      "enabled": true,
+      "phase": 4,
+      "poll_s": 60,
+      "first_lookback_s": 3600,
+      "timeout_s": 8,
+      "max_per_poll": 3,
+      "per_hour": 12,
+      "per_day": 40,
+      "max_chars": 280,
+      "max_bytes": 65536
+    }
   },
   "screen": {
     "_comment": "Phase 3: glance_screen. One low-res grim screenshot of the deck's own screen, described only by Alpha's Qwen3-VL through cypher-brain-proxy, deleted right after. Never the hosted backup. Only while Zack is at the screen.",
@@ -89,6 +102,11 @@
     "hosts": ["en.wikipedia.org"],
     "timeout_s": 10,
     "max_result_chars": 300
+  },
+  "dashboard": {
+    "_comment": "Phase 4: cypherd writes a display-only snapshot (~/.local/state/cypher/dash.json) for cypher-dash on its own sway workspace (Super+C). Secrets, addresses, links, tokens and house device ids are stripped; camera lines carry first names only.",
+    "enabled": true,
+    "phase": 4
   },
   "actions": {
     "none": {"phase": 1},

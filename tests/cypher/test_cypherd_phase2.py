@@ -71,6 +71,7 @@ def write_limits(name="limits.json", **over):
 def load(host, tag):
     env = dict(CYPHER_LIMITS=write_limits(tag + "-limits.json"), CYPHER_LIMITS_INSECURE_OK="1", CYPHER_HOST=host,
                CYPHER_BRAIN_TOKEN_FILE=os.path.join(T, "token"), CYPHER_XAI_KEY_FILE=os.path.join(T, "nokey"),
+               CYPHER_NTFY_TOPIC_FILE=os.path.join(T, "no-topic"),        # never the real topic, even on the deck
                CYPHER_CONFIG_DIR=os.path.join(T, tag, "cfg"), CYPHER_STATE_DIR=os.path.join(T, tag, "state"),
                CYPHER_DATA_DIR=os.path.join(T, tag, "data"), CYPHER_PERSONA=os.path.join(SRC, "persona.md"),
                CYPHER_DRY_RUN="1", TZ="America/New_York")
@@ -83,7 +84,7 @@ L = D.current_limits(D.new_state())
 
 # ---- shipped phase-2 limits ----
 S = D.load_limits(os.path.join(SRC, "cypher-limits.json"))
-check("phase 2 unlocked (shipped at phase 3)", S["phase_max"] == 3)
+check("phase 2 unlocked (shipped at phase 4)", S["phase_max"] == 4)
 check("failover, camera, sleep, local all on", all(D.phase_on(S, b) for b in ("failover", "camera", "sleep", "local")))
 check("local model is loopback only", S["brain"]["local"]["url"].startswith("http://127.0.0.1:"))
 check("deck addresses: LAN and tailnet", S["failover"]["deck_addrs"] == ["192.168.12.71:22", "100.72.32.17:22"])
@@ -222,7 +223,7 @@ check("same epoch -> no second catch-up", not any(c[1] == "/sync/state" for c in
 PX["pushed"].clear(); D._OUTBOX[:] = [{"ts": "2026-11-15T03:20:00-0500", "tick": 501}]
 D.sync_push(L, std)
 sp = [b for b in PX["pushed"] if "state" in b]
-check("deck pushes its state with epoch and its limits", sp and sp[0]["epoch"] == 7 and sp[0]["holder"] == "cypher" and sp[0]["state"]["limits"]["phase_max"] == 3, sp)
+check("deck pushes its state with epoch and its limits", sp and sp[0]["epoch"] == 7 and sp[0]["holder"] == "cypher" and sp[0]["state"]["limits"]["phase_max"] == 4, sp)
 check("deck pushes its journal outbox, then clears it", any("entries" in b for b in PX["pushed"]) and D._OUTBOX == [])
 PX["calls"].clear(); D.release(L, std, handoff=False)
 rl = [c[2] for c in PX["calls"] if c[1] == "/lease"]

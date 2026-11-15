@@ -59,7 +59,8 @@ def write_limits(**over):
     return p
 
 os.environ.update(CYPHER_LIMITS=write_limits(), CYPHER_LIMITS_INSECURE_OK="1", CYPHER_BRAIN_TOKEN_FILE=os.path.join(T, "token"),
-                  CYPHER_XAI_KEY_FILE=os.path.join(T, "xai"), CYPHER_CONFIG_DIR=os.path.join(T, "cfg"),
+                  CYPHER_XAI_KEY_FILE=os.path.join(T, "xai"), CYPHER_NTFY_TOPIC_FILE=os.path.join(T, "no-topic"),
+                  CYPHER_CONFIG_DIR=os.path.join(T, "cfg"),
                   CYPHER_STATE_DIR=os.path.join(T, "state"), CYPHER_DATA_DIR=os.path.join(T, "data"),
                   CYPHER_PERSONA=os.path.join(SRC, "persona.md"), CYPHER_DRY_RUN="1", TZ="America/New_York")
 spec = importlib.util.spec_from_file_location("cypherd", os.path.join(SRC, "cypherd.py"))
@@ -67,7 +68,7 @@ C = importlib.util.module_from_spec(spec); spec.loader.exec_module(C)
 
 # ---- shipped limits ----
 shipped = C.load_limits(os.path.join(SRC, "cypher-limits.json"))
-check("shipped limits load", shipped["phase_max"] == 3 and shipped["tick_s"] == 45)
+check("shipped limits load", shipped["phase_max"] == 4 and shipped["tick_s"] == 45)
 check("phase 3 actions are exactly none/journal/note/avatar/phone/glance/look-up/request_account", sorted(C.allowed_actions(shipped)) ==
       ["glance_screen", "journal_thought", "look_up", "message_zack", "none", "request_account", "set_avatar_color", "show_note"])
 check("quiet hours 11 PM to 6 AM, off Friday and Saturday nights",
