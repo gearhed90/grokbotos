@@ -106,6 +106,30 @@ assert_contains build-pi-image.sh 'OUT=/data/grokbotos-build'
 assert_contains build-pi-image.sh '(( $# == 0 )) || die "takes no arguments"'
 grep -qE '^[[:space:]]*(source|\.)[[:space:]]' build-pi-image.sh && fail "build script sources a file"
 
+# Cypher (cypherd): installed, enabled per user, locked limits shipped, no token in the image.
+cy=build_files/rpi5/cypher
+for f in cypherd.py cypherd.service cypher-limits.json persona.md grokbot-cypher grokbot-set-cypher-token; do
+    assert_file "${cy}/${f}"
+done
+bash -n "${cy}/grokbot-set-cypher-token"
+python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "${cy}/cypher-limits.json"
+assert_contains build_files/rpi5-nova.sh 'systemctl --global enable cypherd.service'
+assert_contains build_files/rpi5-nova.sh '/etc/grokbot/cypher-limits.json'
+assert_contains build_files/rpi5-nova.sh '[[ ! -e /etc/grokbot/cypher-brain-token ]]'
+assert_contains build_files/rpi5-nova.sh 'systemctl enable tailscaled.service'
+assert_contains "${cy}/cypherd.service" 'RestartPreventExitStatus=78'
+assert_contains "${cy}/cypherd.service" 'MemoryMax='
+if bash "${cy}/grokbot-set-cypher-token" </dev/null 2>/dev/null; then
+    fail "grokbot-set-cypher-token ran without root"
+fi
+# The on-screen assistant is Cypher now (was Pixel).
+assert_contains "${nova}/novad.py" 'You are Cypher, the assistant'
+assert_contains "${nova}/shell.html" 'placeholder="Ask Cypher…"'
+if grep -n 'Pixel' "${nova}"/*.py "${nova}"/*.html | grep -v devicePixelRatio; then
+    fail "the assistant is still called Pixel somewhere"
+fi
+python3 tests/cypher/test_cypherd.py
+
 python3 tests/nova/test_units.py
 python3 tests/nova/run_tests.py
 python3 tests/nova/test_vad.py

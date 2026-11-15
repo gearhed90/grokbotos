@@ -1,0 +1,38 @@
+#!/bin/bash
+# Save the token Cypher (cypherd) uses for cypher-brain-proxy on Alpha, as
+# /etc/grokbot/cypher-brain-token, owned root:grokbot, mode 0640.
+# Run as an admin: sudo grokbot-set-cypher-token < token-file
+# Reads from stdin (or the terminal without echo). Never prints the token.
+#   grokbot-set-cypher-token --remove   delete it
+set -euo pipefail
+dest=${GROKBOT_CYPHER_TOKEN_FILE:-/etc/grokbot/cypher-brain-token}
+group=${GROKBOT_CYPHER_TOKEN_GROUP:-grokbot}
+if (( EUID != 0 )); then
+    echo "grokbot-set-cypher-token: run with sudo" >&2
+    exit 2
+fi
+if [[ ${1:-} == "--remove" ]]; then
+    rm -f "$dest"
+    echo "Removed ${dest}."
+    exit 0
+fi
+if [[ -t 0 ]]; then
+    IFS= read -r -s -p "Cypher brain token (input hidden): " token
+    echo
+else
+    IFS= read -r token || true
+fi
+token=${token//[[:space:]]/}
+if [[ ! $token =~ ^[A-Za-z0-9._-]{32,}$ ]]; then
+    echo "grokbot-set-cypher-token: that does not look like a token, nothing saved" >&2
+    exit 1
+fi
+install -d -m 0755 "$(dirname "$dest")"
+tmp=$(mktemp "${dest}.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+printf '%s\n' "$token" >"$tmp"
+chown "root:${group}" "$tmp"
+chmod 0640 "$tmp"
+mv -f "$tmp" "$dest"
+trap - EXIT
+echo "Saved ${dest} (root:${group}, 0640). cypherd uses it on the next tick."

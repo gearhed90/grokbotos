@@ -1,0 +1,31 @@
+{
+  "_comment": "Cypher's locked limits. Root-owned, shipped in the image; cypherd re-reads it every tick and Cypher can never edit it. Change it only with sudo (see docs/CYPHER.md).",
+  "enabled": true,
+  "phase_max": 1,
+  "tick_s": 45,
+  "tick_s_bounds": [30, 300],
+  "heartbeat_s": 600,
+  "drift_bounds_per_hour": [-0.2, 0.2],
+  "quiet_hours": ["23:00", "06:00"],
+  "brain": {
+    "primary_url": "http://192.168.12.126:8090",
+    "timeout_s": 25,
+    "max_output_tokens": 150,
+    "retry_after_s": 300,
+    "hosted_backup": {
+      "enabled": true,
+      "url": "https://api.x.ai/v1",
+      "model": "grok-4.20-0309-non-reasoning",
+      "daily_budget_usd": 0.50,
+      "usd_per_mtok_in": 1.25,
+      "usd_per_mtok_out": 2.50
+    }
+  },
+  "actions": {
+    "none": {"phase": 1},
+    "journal_thought": {"phase": 1, "max_chars": 280, "per_hour": 20},
+    "show_note": {"phase": 1, "max_chars": 120, "per_hour": 3, "per_day": 12},
+    "set_avatar_color": {"phase": 1, "per_hour": 2}
+  },
+  "avatar_colors": ["white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray"]
+}

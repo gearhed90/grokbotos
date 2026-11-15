@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""grokbot-cypher - look at and steer Cypher's autonomy loop (cypherd).
+
+  grokbot-cypher status            drives, mood, brain, last decisions
+  grokbot-cypher journal [-n N]    recent journal lines (default 10)
+  grokbot-cypher mute | unmute     on-screen notes off / on
+  grokbot-cypher pause MINUTES     no model calls for a while (drives still drift)
+  grokbot-cypher resume            end a pause
+  grokbot-cypher stop              kill switch: cypherd stops and stays off
+  grokbot-cypher start             clear the kill switch and start cypherd
+"""
+import json, os, subprocess, sys, time
+E = os.environ.get
+HOME = os.path.expanduser("~")
+CFG = E("CYPHER_CONFIG_DIR", os.path.join(E("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "cypher"))
+STATE = E("CYPHER_STATE_DIR", os.path.join(E("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state"), "cypher"))
+DATA = E("CYPHER_DATA_DIR", os.path.join(E("XDG_DATA_HOME") or os.path.join(HOME, ".local", "share"), "cypher"))
+NO_SYSTEMCTL = E("CYPHER_NO_SYSTEMCTL") == "1"
+os.environ.setdefault("TZ", "America/New_York"); time.tzset()
+
+def touch(name, content=""):
+    os.makedirs(CFG, mode=0o700, exist_ok=True)
+    with open(os.path.join(CFG, name), "w") as f:
+        f.write(content)
+
+def rm(name):
+    try: os.remove(os.path.join(CFG, name))
+    except FileNotFoundError: pass
+
+def systemctl(*a):
+    if NO_SYSTEMCTL: return 0
+    return subprocess.run(["systemctl", "--user", *a]).returncode
+
+def journal_lines(n):
+    d = os.path.join(DATA, "journal")
+    try: files = sorted(f for f in os.listdir(d) if f.endswith(".jsonl"))
+    except FileNotFoundError: return []
+    out = []
+    for f in reversed(files):
+        with open(os.path.join(d, f)) as fh:
+            out = fh.read().splitlines() + out
+        if len(out) >= n: break
+    return out[-n:]
+
+def fmt(line):
+    try: j = json.loads(line)
+    except ValueError: return line
+    if "event" in j: return "%s  [%s] %s" % (j.get("ts", "")[11:19], j["event"], j.get("why", ""))
+    ch = j.get("choice") or {}
+    p = ch.get("params") or {}
+    what = ch.get("action", "?") + ((": " + (p.get("text") or p.get("color") or "")) if p else "")
+    v = j.get("validator", "")
+    return "%s  %-6s %s%s\n          why: %s" % (j.get("ts", "")[11:19], j.get("brain", ""), what,
+                                              "" if v in ("ok", "skipped") else "  (" + v + ")", j.get("reason", ""))
+
+def main(argv):
+    cmd = argv[1] if len(argv) > 1 else "status"
+    if cmd == "status":
+        st = {}
+        try:
+            with open(os.path.join(STATE, "drives.json")) as f: st = json.load(f)
+        except (OSError, ValueError): pass
+        flags = [n for n in ("KILL", "muted") if os.path.exists(os.path.join(CFG, n))]
+        try:
+            with open(os.path.join(CFG, "pause_until")) as f: pu = float(f.read() or 0)
+            if pu > time.time(): flags.append("paused until " + time.strftime("%-I:%M %p", time.localtime(pu)))
+        except (OSError, ValueError): pass
+        print("switches:", ", ".join(flags) or "none")
+        d = st.get("drives") or {}
+        print("drives:  ", "  ".join("%s %.2f" % (k, v) for k, v in d.items()) or "no state yet")
+        print("mood:    ", (st.get("mood") or {}).get("label", "-"), "| tick", st.get("tick", 0))
+        b = st.get("budget") or {}
+        print("backup:   $%.4f spent on %s" % (b.get("usd", 0), b.get("date") or "-"))
+        print("last decisions:")
+        for l in journal_lines(5): print("  " + fmt(l))
+    elif cmd == "journal":
+        n = int(argv[3]) if len(argv) > 3 and argv[2] == "-n" else 10
+        for l in journal_lines(n): print(fmt(l))
+    elif cmd == "mute": touch("muted"); print("notes muted")
+    elif cmd == "unmute": rm("muted"); print("notes on")
+    elif cmd == "pause":
+        mins = float(argv[2]) if len(argv) > 2 else 60
+        touch("pause_until", str(time.time() + mins * 60)); print("paused for %g min" % mins)
+    elif cmd == "resume": rm("pause_until"); print("resumed")
+    elif cmd == "stop":
+        touch("KILL", time.strftime("%Y-%m-%d %H:%M:%S\n")); systemctl("stop", "cypherd.service")
+        print("Cypher stopped (kill switch set). 'grokbot-cypher start' brings it back.")
+    elif cmd == "start":
+        rm("KILL"); rc = systemctl("start", "cypherd.service")
+        print("Cypher started" if rc == 0 else "could not start cypherd (see journalctl --user -u cypherd)")
+        return rc
+    else:
+        print(__doc__.strip()); return 2
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

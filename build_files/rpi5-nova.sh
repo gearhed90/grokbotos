@@ -52,6 +52,31 @@ install -m 0644 "${src}/novad.service" /usr/lib/systemd/user/novad.service
 install -D -m 0644 "${src}/sway-rpi5-nova.conf" /etc/sway/grokbot.d/60-rpi5-nova.conf
 python3 -m py_compile "${nova}"/*.py
 
+# --- Cypher: autonomy loop (cypherd) -----------------------------------------
+# Drives, a 45 s decision tick and a journal; thinks with Alpha's llama-server
+# through cypher-brain-proxy (cameras first), hosted Grok backup under a daily
+# cap. /etc/grokbot/cypher-limits.json is the locked limits file (root-owned;
+# cypherd refuses to run if it is missing or writable by others). The proxy
+# token is never in the image: sudo grokbot-set-cypher-token saves it as
+# /etc/grokbot/cypher-brain-token (root:grokbot 0640). See docs/CYPHER.md.
+csrc="${ctx}/rpi5/cypher"
+cypher=/usr/share/grokbot/cypher
+install -d -m 0755 "$cypher"
+install -m 0644 "${csrc}/cypherd.py" "${cypher}/cypherd.py"
+install -m 0644 "${csrc}/persona.md" "${cypher}/persona.md"
+install -m 0644 "${csrc}/cypher-limits.json" /etc/grokbot/cypher-limits.json
+install -m 0755 "${csrc}/grokbot-cypher" /usr/local/bin/grokbot-cypher
+install -m 0755 "${csrc}/grokbot-set-cypher-token" /usr/local/sbin/grokbot-set-cypher-token
+install -m 0644 "${csrc}/cypherd.service" /usr/lib/systemd/user/cypherd.service
+systemctl --global enable cypherd.service
+python3 -m py_compile "${cypher}/cypherd.py"
+[[ ! -e /etc/grokbot/cypher-brain-token ]]
+
+# --- Tailscale (Fedora package): reach Alpha away from home. Not logged in
+# here; the owner joins the device to the tailnet with sudo tailscale up.
+dnf5 install -y tailscale
+systemctl enable tailscaled.service
+
 # Nova replaces the Grok Bot sign-in app as the kiosk screen. Firefox stays
 # for web pages (novad's nova-web profile).
 cat >/etc/grokbot/app.conf <<'CONF'

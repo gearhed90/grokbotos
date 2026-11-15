@@ -1,0 +1,19 @@
+[Unit]
+Description=Cypher autonomy loop (drives, decision tick, journal)
+After=grokbotd.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/share/grokbot/cypher/cypherd.py
+Restart=on-failure
+RestartSec=10
+# 78 = bad or missing locked limits file: stay off instead of looping.
+RestartPreventExitStatus=78
+MemoryMax=128M
+TasksMax=32
+NoNewPrivileges=yes
+UMask=0077
+
+[Install]
+WantedBy=default.target
