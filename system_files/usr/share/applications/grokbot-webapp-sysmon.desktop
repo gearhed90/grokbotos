@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=시스템 모니터
-Name[en]=System Monitor
-Comment=CPU, 메모리, 디스크, 배터리, 네트워크, API 기록
-Comment[en]=CPU, memory, disk, battery, network and API audit
+Name=System Monitor
+Name[ko]=시스템 모니터
+Comment=CPU, memory, disk, battery, network and API audit
+Comment[ko]=CPU, 메모리, 디스크, 배터리, 네트워크, API 기록
 Exec=/usr/local/bin/grokbot-webapp sysmon
 Icon=/usr/share/grokbot/webapps/sysmon/icon.svg
 Terminal=false

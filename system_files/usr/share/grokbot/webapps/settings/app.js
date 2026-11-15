@@ -3,7 +3,7 @@
 // origin) with this origin's own grants. DOM nodes only (no HTML strings): SSIDs, origins and
 // audit text are untrusted and always go in as text nodes.
 (function () {
-  let lang = localStorage.getItem("lang") === "en" ? "en" : "ko";
+  let lang = localStorage.getItem("lang") === "ko" ? "ko" : "en";
   const t = (k, ...a) => { let s = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
   let rid = 0;
   const main = document.getElementById("main");

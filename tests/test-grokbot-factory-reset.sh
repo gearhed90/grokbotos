@@ -41,7 +41,7 @@ plant "$GROKBOT_RESET_ROOT"
 code=0
 "$reset" >"${tmp}/none.out" 2>"${tmp}/none.err" || code=$?
 [[ "$code" -eq 2 ]]
-assert_contains "${tmp}/none.err" "아무것도 지우지 않았습니다."
+assert_contains "${tmp}/none.err" "Nothing was deleted."
 assert_untouched "$GROKBOT_RESET_ROOT"
 
 code=0
@@ -84,7 +84,7 @@ assert_file "${GROKBOT_RESET_ROOT}/var/lib/grokbot/lock-pin/grokbot"
 [[ ! -e "${GROKBOT_RESET_ROOT}/var/lib/grokbot/faillock/grokbot" ]] || fail "faillock tally kept"
 assert_contains "${tmp}/wipe.out" "test mode"
 grep -q "usermod -p '!' grokbot" "$reset" || fail "real reset does not lock the password"
-assert_contains "${tmp}/wipe.out" "재부팅은 하지 않았습니다."
+assert_contains "${tmp}/wipe.out" "Did not reboot."
 [[ -d "${GROKBOT_RESET_ROOT}/var/home/grokbot" ]]
 [[ ! -e "${GROKBOT_RESET_ROOT}/var/home/grokbot/.config" ]]
 [[ ! -e "${GROKBOT_RESET_ROOT}/var/home/grokbot/Apps" ]]
@@ -93,7 +93,7 @@ assert_file "${GROKBOT_RESET_ROOT}/usr/bin/grok-bot"
 assert_file "${GROKBOT_RESET_ROOT}/etc/machine-id"
 
 "$reset" --dry-run >"${tmp}/empty.out"
-assert_contains "${tmp}/empty.out" "지울 항목이 없습니다."
+assert_contains "${tmp}/empty.out" "Nothing to delete."
 
 # A second wipe of an empty home still does not touch the neighbors.
 "$reset" --confirm RESET >"${tmp}/again.out"
@@ -133,7 +133,7 @@ unset GROKBOT_RESET_ROOT
 code=0
 "$reset" --dry-run >"${tmp}/noroot.out" 2>"${tmp}/noroot.err" || code=$?
 [[ "$code" -eq 2 ]]
-assert_contains "${tmp}/noroot.err" "아무것도 지우지 않았습니다."
+assert_contains "${tmp}/noroot.err" "Nothing was deleted."
 
 if grep -n 'factory-reset' "${root}/system_files/etc/sway/config"; then
     fail "factory reset is bound to a sway key"

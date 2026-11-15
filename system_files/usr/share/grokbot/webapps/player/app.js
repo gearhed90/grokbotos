@@ -17,8 +17,8 @@
       keyson: "Media keys on", keysoff: "Media keys off", keysask: "Media keys: ask", nothing: "Add a file to play",
       prev: "Previous", next: "Next", play: "Play", pause: "Pause", key: "Media key: %s", cant: "Cannot play this file: %s" }
   };
-  let lang = localStorage.getItem("player.lang") || "ko";
-  const t = (k, ...a) => { let s = (T[lang] || T.ko)[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
+  let lang = localStorage.getItem("player.lang") || "en";
+  const t = (k, ...a) => { let s = (T[lang] || T.en)[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
   const $ = (id) => document.getElementById(id);
   const v = $("v");
   const fmt = (s) => { if (!isFinite(s)) return "0:00"; s = Math.floor(s); const m = Math.floor(s / 60), x = s % 60; return (m >= 60 ? Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };

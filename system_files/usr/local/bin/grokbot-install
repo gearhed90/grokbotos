@@ -81,7 +81,7 @@ ok_line() {
     if [[ "$JSON" -eq 1 ]]; then
         printf '{"ok":true,"id":"%s","kind":"%s","name":"%s"}\n' "$id" "$kind" "$name"
     else
-        printf '설치됨: %s (%s)\n' "$name" "$id"
+        printf 'Installed: %s (%s)\n' "$name" "$id"
     fi
 }
 
@@ -321,7 +321,7 @@ cmd_remove() {
     if [[ "$JSON" -eq 1 ]]; then
         printf '{"ok":true,"id":"%s","kind":"%s","removed":true}\n' "$id" "$kind"
     else
-        printf '제거됨: %s (%s)\n' "${name:-$id}" "$id"
+        printf 'Removed: %s (%s)\n' "${name:-$id}" "$id"
     fi
 }
 

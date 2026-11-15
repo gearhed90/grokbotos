@@ -25,8 +25,8 @@
       askmode: "\"%s\" is set to ask every time, so this does not refresh by itself. Allow it in Settings > Permissions, or:", showonce: "Show once now" }
   };
   const SCOPE = { system: ["시스템 정보", "System information"], power: ["전원", "Power"], network: ["네트워크", "Network"], audit: ["감사 기록", "Audit log"] };
-  let lang = localStorage.getItem("sysmon.lang") || "ko";
-  const t = (k, ...a) => { let s = (T[lang] || T.ko)[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
+  let lang = localStorage.getItem("sysmon.lang") || "en";
+  const t = (k, ...a) => { let s = (T[lang] || T.en)[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
   const $ = (id) => document.getElementById(id);
   function h(tag, attrs, ...kids) {
     const el = document.createElement(tag);

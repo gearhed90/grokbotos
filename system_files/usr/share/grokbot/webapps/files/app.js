@@ -25,8 +25,8 @@
       big: "Too large to open here", binary: "No preview for this file (%s)", offline: "Cannot reach grokbotd", dir: "Folder",
       needreadvol: "To see the files on '%s', Files needs the \"view files\" permission (the same one as for your home folder).", drives: "USB drives", eject: "Eject", ejected: "Ejected. Safe to remove", opening: "Opening the drive…", unlock: "Unlock", unlocking: "Type the passphrase in the secure prompt…", lock: "Lock", locked: "Drive locked" }
   };
-  let lang = localStorage.getItem("files.lang") || "ko";
-  const t = (k, ...a) => { let s = (T[lang] || T.ko)[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
+  let lang = localStorage.getItem("files.lang") || "en";
+  const t = (k, ...a) => { let s = (T[lang] || T.en)[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
   const $ = (id) => document.getElementById(id);
   function h(tag, attrs, ...kids) {
     const el = document.createElement(tag);

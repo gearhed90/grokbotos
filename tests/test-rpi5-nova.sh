@@ -59,10 +59,25 @@ assert_contains build_files/rpi5-nova.sh 'screen_off = 300'
 assert_contains system_files/usr/local/bin/grokbot-lock '"$keypad" -f'
 assert_contains "${nova}/grokbot-lock.pam" 'auth       include      login'
 
-# The English default edit must still match the web apps' source.
+# English is the default UI language in the sources themselves (Korean stays
+# one click away); the Pi build no longer patches it in with sed.
 for app in files notes player sysmon; do
-    assert_contains "system_files/usr/share/grokbot/webapps/${app}/app.js" "localStorage.getItem(\"${app}.lang\") || \"ko\""
+    assert_contains "system_files/usr/share/grokbot/webapps/${app}/app.js" "localStorage.getItem(\"${app}.lang\") || \"en\""
+    assert_contains "system_files/usr/share/grokbot/webapps/${app}/index.html" '<html lang="en">'
+    assert_contains "system_files/usr/share/grokbot/webapps/${app}/manifest.json" '"lang": "en"'
 done
+assert_contains system_files/usr/share/grokbot/webapps/settings/app.js 'localStorage.getItem("lang") === "ko" ? "ko" : "en"'
+assert_contains system_files/usr/share/grokbot/webapps/settings/index.html '<html lang="en">'
+assert_contains system_files/usr/local/bin/grokbot-settings '"intl.accept_languages", "en-US, en, ko-KR, ko"'
+assert_contains system_files/usr/local/bin/grokbot-webapp '"intl.accept_languages", "en-US, en, ko-KR, ko"'
+for d in system_files/usr/share/applications/grokbot-*.desktop; do
+    if grep -qP '^(Name|Comment)=.*[\x{AC00}-\x{D7A3}]' "$d"; then
+        fail "${d}: the default Name/Comment is Korean (use Name[ko]=)"
+    fi
+done
+if grep -q 'lang") || "ko"' build_files/rpi5-nova.sh; then
+    fail "rpi5-nova.sh still patches the web app language"
+fi
 
 # Codecs from RPM Fusion; no password, key or Wi-Fi secret anywhere in the Pi bits.
 assert_contains build_files/rpi5-nova.sh 'libavcodec-freeworld'

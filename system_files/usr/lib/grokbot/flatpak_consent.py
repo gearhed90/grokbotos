@@ -20,15 +20,15 @@ from grokbotd import consent, peer  # noqa: E402
 
 # Permissions that let an app out of its sandbox, or close to it.
 BROAD = {
-    ("filesystems", "host"): "모든 파일 / all files on the computer",
-    ("filesystems", "host-os"): "시스템 파일 / system files",
-    ("filesystems", "host-etc"): "시스템 설정 / system settings (/etc)",
-    ("filesystems", "home"): "홈 폴더 전체 / the whole home folder",
-    ("devices", "all"): "모든 장치(카메라, USB 등) / all devices (camera, USB, ...)",
-    ("sockets", "x11"): "X11 화면(다른 창 엿보기 가능) / X11 display (can watch other windows)",
-    ("sockets", "system-bus"): "시스템 버스 / system D-Bus",
-    ("sockets", "session-bus"): "세션 버스 전체 / the whole session D-Bus",
-    ("talk", "org.freedesktop.Flatpak"): "샌드박스 밖에서 명령 실행 / run commands outside the sandbox",
+    ("filesystems", "host"): "all files on the computer",
+    ("filesystems", "host-os"): "system files",
+    ("filesystems", "host-etc"): "system settings (/etc)",
+    ("filesystems", "home"): "the whole home folder",
+    ("devices", "all"): "all devices (camera, USB, ...)",
+    ("sockets", "x11"): "X11 display (can watch other windows)",
+    ("sockets", "system-bus"): "system D-Bus",
+    ("sockets", "session-bus"): "the whole session D-Bus",
+    ("talk", "org.freedesktop.Flatpak"): "run commands outside the sandbox",
 }
 
 
@@ -39,7 +39,7 @@ def permissions(metadata):
     try:
         cp.read_string(metadata)
     except configparser.Error:
-        return [("권한 정보를 읽지 못함 / could not read the permissions", True)]
+        return [("could not read the permissions", True)]
     out = []
     if cp.has_section("Context"):
         for key, val in cp.items("Context"):
@@ -52,7 +52,7 @@ def permissions(metadata):
             for name, mode in cp.items(sec):
                 broad = BROAD.get(("talk", name))
                 out.append(("%s: %s %s%s" % (sec, mode, name, " — " + broad if broad else ""), bool(broad)))
-    return out or [("추가 권한 없음 / no extra permissions", False)]
+    return out or [("no extra permissions", False)]
 
 
 def main():

@@ -55,7 +55,7 @@ def lines(req):
     wk, we = who(req)
     ak, ae, call = action(req)
     return {
-        "title": "권한 요청 / Permission request",
+        "title": "Permission request",
         "who": (wk, we),
         "scope": (req.get("scope_ko") or req.get("scope"), req.get("scope_en") or req.get("scope")),
         "action": (ak, ae),
@@ -105,7 +105,7 @@ def main():
     from gi.repository import GLib, Gdk, Gtk, GtkLayerShell
 
     answer = {"v": "deny"}
-    win = Gtk.Window(title="Grok Bot 권한 요청")
+    win = Gtk.Window(title="Grok Bot permission request")
     win.get_style_context().add_class("grokbot-consent")
     GtkLayerShell.init_for_window(win)
     GtkLayerShell.set_layer(win, GtkLayerShell.Layer.OVERLAY)
@@ -131,18 +131,15 @@ def main():
         return lb
 
     lab(t["title"], "title")
-    for key, pair in (("누가 / Who", t["who"]), ("무엇을 / Scope", t["scope"]),
-                      ("어떤 동작 / Action", t["action"])):
+    # English is the display language; the Korean half of each pair stays in
+    # lines() for callers that want it, but is not shown by default.
+    for key, pair in (("Who", t["who"]), ("Scope", t["scope"]), ("Action", t["action"])):
         lab(key, "key")
-        lab(pair[0], "val")
-        if pair[1] != pair[0]:
-            lab(pair[1], "en")
+        lab(pair[1] or pair[0], "val")
     lab(t["call"], "call")
     if t["warning"]:
         w = t["warning"] if isinstance(t["warning"], list) else [t["warning"], t["warning"]]
-        lab(w[0], "warn")
-        if w[1] != w[0]:
-            lab(w[1], "warn-en")
+        lab(w[1] or w[0], "warn")
     timer = lab("", "timer")
 
     row = Gtk.Box(spacing=8)
@@ -176,7 +173,7 @@ def main():
         secret = Gtk.Entry()
         secret.set_visibility(False)
         secret.set_input_purpose(Gtk.InputPurpose.PASSWORD)
-        secret.set_placeholder_text("암호 / Passphrase")
+        secret.set_placeholder_text("Passphrase")
         secret.get_style_context().add_class("secret")
         card.pack_start(secret, False, False, 4)
 
@@ -186,18 +183,18 @@ def main():
                 done("once")
         secret.connect("activate", submit)
 
-    deny = button("취소 / Cancel" if secret is not None else "거부 / Deny", "deny", "deny")
+    deny = button("Cancel" if secret is not None else "Deny", "deny", "deny")
     if secret is not None:
-        ok = Gtk.Button(label="잠금 해제 / Unlock")
+        ok = Gtk.Button(label="Unlock")
         ok.get_style_context().add_class("allow")
         ok.connect("clicked", submit)
         row.pack_start(ok, False, False, 0)
     elif t["once"]:
-        button("이번 한 번만 / Allow once", "allow", "once")
+        button("Allow once", "allow", "once")
     if t["session"] and secret is None:
-        button("이번 세션 동안 / This session", "session", "session")
+        button("This session", "session", "session")
     if t["always"] and secret is None:
-        button("항상 허용 / Always allow", "always", "always")
+        button("Always allow", "always", "always")
     card.pack_start(row, False, False, 6)
     win.add(card)
 
@@ -215,7 +212,7 @@ def main():
 
     def tick():
         left["s"] -= 1
-        timer.set_text("%d초 뒤 자동 거부 / auto-deny in %ds" % (left["s"], left["s"]))
+        timer.set_text("Auto-deny in %ds" % left["s"])
         if left["s"] <= 0:
             done("deny")
             return False

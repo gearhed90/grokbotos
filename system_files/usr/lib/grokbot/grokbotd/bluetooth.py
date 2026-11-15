@@ -190,7 +190,7 @@ def _ask(kind, ko, en, code):
 def _show(kind, ko, en, code):
     try:
         subprocess.run(["notify-send", "-a", "Bluetooth", "-u", "critical", "-t", "60000",
-                        "Bluetooth: %s" % code, "%s\n%s" % (ko, en)], timeout=5, capture_output=True)
+                        "Bluetooth: %s" % code, en], timeout=5, capture_output=True)
     except (OSError, subprocess.TimeoutExpired):
         pass
 

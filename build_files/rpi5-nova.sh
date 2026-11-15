@@ -88,19 +88,6 @@ if [[ -e "${src}/local-nova-sudo" ]]; then
     visudo -cf /etc/sudoers.d/nova-grokbot
 fi
 
-# --- built-in web apps open in English (each keeps its 한국어 switch) -----
-web=/usr/share/grokbot/webapps
-for app in files notes player sysmon; do
-    js="${web}/${app}/app.js"
-    sed -i "s/localStorage.getItem(\"${app}.lang\") || \"ko\"/localStorage.getItem(\"${app}.lang\") || \"en\"/" "$js"
-    grep -q "localStorage.getItem(\"${app}.lang\") || \"en\"" "$js" || {
-        echo "could not set English default in ${js}" >&2
-        exit 1
-    }
-    sed -i 's/^<html lang="ko">/<html lang="en">/' "${web}/${app}/index.html"
-    sed -i 's|<button type="button" id="lang">English</button>|<button type="button" id="lang">한국어</button>|' "${web}/${app}/index.html"
-done
-
 # --- Nunito (SIL OFL 1.1, Google Fonts) for the avatar's z's and the lock --
 install -D -m 0644 "${ctx}/rpi5/fonts/Nunito[wght].ttf" "/usr/share/fonts/nunito/Nunito[wght].ttf"
 install -D -m 0644 "${ctx}/rpi5/fonts/OFL.txt" /usr/share/licenses/nunito/OFL.txt

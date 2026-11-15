@@ -11,8 +11,8 @@
       empty: "No notes yet. Press \"New note\" to start.", saved: "Saved %s", saving: "Saving…", lang: "한국어",
       confirm: "Delete this note? This cannot be undone.", where: "Stored on this computer only · %s", nomatch: "No matching notes" }
   };
-  let lang = localStorage.getItem("notes.lang") || "ko";
-  const t = (k, ...a) => { let s = (T[lang] || T.ko)[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
+  let lang = localStorage.getItem("notes.lang") || "en";
+  const t = (k, ...a) => { let s = (T[lang] || T.en)[k] || k; for (const x of a) s = s.replace("%s", x); return s; };
   const $ = (id) => document.getElementById(id);
   const when = (ms) => new Date(ms).toLocaleString(lang === "ko" ? "ko-KR" : "en-US", { dateStyle: "short", timeStyle: "short" });
 

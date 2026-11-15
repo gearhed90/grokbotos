@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=파일
-Name[en]=Files
-Comment=홈 폴더의 파일 보기, 열기, 이름 바꾸기, 휴지통
-Comment[en]=Browse, open, rename and trash files in your home folder
+Name=Files
+Name[ko]=파일
+Comment=Browse, open, rename and trash files in your home folder
+Comment[ko]=홈 폴더의 파일 보기, 열기, 이름 바꾸기, 휴지통
 Exec=/usr/local/bin/grokbot-webapp files
 Icon=/usr/share/grokbot/webapps/files/icon.svg
 Terminal=false

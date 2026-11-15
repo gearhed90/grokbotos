@@ -123,7 +123,7 @@ class StatusTests(unittest.TestCase):
         self.assertIsNone(st._printing(None))
         self.assertIsNone(st._printing({"available": False, "printers": [], "jobs": []}))
         i = st._printing({"printers": [{"name": "Office", "state": "idle"}], "jobs": [{"id": "Office-3", "printer": "Office"}]})
-        self.assertEqual((i["id"], i["text"]), ("printing", "인쇄 1"))
+        self.assertEqual((i["id"], i["text"]), ("printing", "Print 1"))
         self.assertNotIn("alert", i)
         i = st._printing({"printers": [{"name": "Office", "state": "stopped"}], "jobs": [{"id": "Office-3", "printer": "Office"}]})
         self.assertTrue(i["alert"])
@@ -132,7 +132,7 @@ class StatusTests(unittest.TestCase):
     def test_power_mode_item(self):
         self.assertIsNone(st._power_mode({"available": True, "active": "balanced"}))
         self.assertIsNone(st._power_mode({"available": False}))
-        self.assertEqual(st._power_mode({"available": True, "active": "power-saver"})["text"], "절전")
+        self.assertEqual(st._power_mode({"available": True, "active": "power-saver"})["text"], "Saver")
         perf = st._power_mode({"available": True, "active": "performance", "degraded": "high-operating-temperature"})
         self.assertIn("high-operating-temperature", perf["tooltip"])
 
@@ -186,30 +186,30 @@ class StatusTests(unittest.TestCase):
 
         charging = battery("Charging", 42, True)
         self.assertEqual(charging["icon"], "battery-level-40-charging-symbolic")
-        self.assertEqual(charging["text"], "충전 중")
-        self.assertIn("충전 중", charging["tooltip"])
-        self.assertNotIn("전원 연결됨", charging["text"])
+        self.assertEqual(charging["text"], "Charging")
+        self.assertIn("Charging", charging["tooltip"])
+        self.assertNotIn("Plugged in", charging["text"])
 
         charging_off_ac = battery("Charging", 42, False)
         self.assertEqual(charging_off_ac["icon"], "battery-level-40-charging-symbolic")
-        self.assertEqual(charging_off_ac["text"], "충전 중")
+        self.assertEqual(charging_off_ac["text"], "Charging")
 
         full = battery("Full", 100, True)
         self.assertEqual(full["icon"], "battery-level-100-charged-symbolic")
-        self.assertEqual(full["text"], "전원 연결됨 (가득 참)")
-        self.assertIn("전원 연결됨 (가득 참)", full["tooltip"])
+        self.assertEqual(full["text"], "Plugged in (full)")
+        self.assertIn("Plugged in (full)", full["tooltip"])
 
         held = battery("Not charging", 80, True)
         self.assertEqual(held["icon"], "ac-adapter-symbolic")
-        self.assertEqual(held["text"], "전원 연결됨")
-        self.assertIn("전원 연결됨", held["tooltip"])
-        self.assertNotIn("가득", held["tooltip"])
+        self.assertEqual(held["text"], "Plugged in")
+        self.assertIn("Plugged in", held["tooltip"])
+        self.assertNotIn("(full)", held["tooltip"])
 
         discharging = battery("Discharging", 78, False)
         self.assertEqual(discharging["icon"], "battery-level-80-symbolic")
         self.assertEqual(discharging["text"], "78%")
         self.assertIn("78%", discharging["tooltip"])
-        self.assertEqual(discharging["tooltip"], "배터리 / Battery 78%")
+        self.assertEqual(discharging["tooltip"], "Battery 78%")
 
         # AC alone does not mean plugged-in or charging when the pack is discharging.
         discharging_ac = battery("Discharging", 78, True)
@@ -226,9 +226,9 @@ class StatusTests(unittest.TestCase):
         for status in ("Unknown", "", None):
             item = battery(status, 55, True)
             self.assertEqual(item["icon"], "ac-adapter-symbolic", status)
-            self.assertEqual(item["text"], "전원 연결됨")
-            self.assertIn("전원 연결됨", item["tooltip"])
-            self.assertNotIn("가득", item["text"])
+            self.assertEqual(item["text"], "Plugged in")
+            self.assertIn("Plugged in", item["tooltip"])
+            self.assertNotIn("(full)", item["text"])
 
     def test_full_and_held_without_ac_stay_percent(self):
         def battery(status, cap, on_ac):
@@ -252,15 +252,15 @@ class StatusTests(unittest.TestCase):
 
         charging = battery("Charging", True)
         self.assertEqual(charging["icon"], "battery-missing-symbolic")
-        self.assertEqual(charging["text"], "충전 중")
+        self.assertEqual(charging["text"], "Charging")
 
         full = battery("Full", True)
         self.assertEqual(full["icon"], "battery-level-100-charged-symbolic")
-        self.assertEqual(full["text"], "전원 연결됨 (가득 참)")
+        self.assertEqual(full["text"], "Plugged in (full)")
 
         unknown = battery("Unknown", True)
         self.assertEqual(unknown["icon"], "ac-adapter-symbolic")
-        self.assertEqual(unknown["text"], "전원 연결됨")
+        self.assertEqual(unknown["text"], "Plugged in")
         self.assertIn("?", unknown["tooltip"])
 
         discharging = battery("Discharging", True)

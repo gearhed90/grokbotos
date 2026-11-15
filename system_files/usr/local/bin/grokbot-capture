@@ -32,6 +32,6 @@ if command -v wl-copy >/dev/null 2>&1; then
     wl-copy --type image/png <"$file" || true
 fi
 notify-send -a "Grok Bot OS" -i "$file" \
-    "스크린샷 저장 / Screenshot saved" \
-    "$(basename "$file") — 클립보드에 복사됨 / copied to clipboard" 2>/dev/null || true
+    "Screenshot saved" \
+    "$(basename "$file") — copied to clipboard" 2>/dev/null || true
 echo "$file"

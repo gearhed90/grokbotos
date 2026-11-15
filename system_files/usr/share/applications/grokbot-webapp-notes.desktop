@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=메모
-Name[en]=Notes
-Comment=이 컴퓨터에만 저장되는 메모 (오프라인)
-Comment[en]=Notes kept only on this computer, works offline
+Name=Notes
+Name[ko]=메모
+Comment=Notes kept only on this computer, works offline
+Comment[ko]=이 컴퓨터에만 저장되는 메모 (오프라인)
 Exec=/usr/local/bin/grokbot-webapp notes
 Icon=/usr/share/grokbot/webapps/notes/icon.svg
 Terminal=false

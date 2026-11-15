@@ -44,7 +44,7 @@ echo stay >"${keep}/note"
 [[ ! -e "$profile" ]]
 assert_file "${keep}/note"
 assert_contains "$SWAYMSG_LOG" '[app_id="firefox"] kill'
-assert_contains "${tmp}/out" "브라우저 세션을 지웠습니다."
+assert_contains "${tmp}/out" "Cleared the browser session."
 
 outside="${tmp}/outside"
 mkdir -p "$outside"
@@ -63,6 +63,6 @@ GROKBOT_APP_ID="grokbot"
 GROKBOT_EXEC="/usr/lib/grokbot/grokbot-native"
 EOF
 "$signout" >"${tmp}/native-out" 2>&1
-assert_contains "${tmp}/native-out" "로그아웃"
+assert_contains "${tmp}/native-out" "Log out"
 
 echo "PASS test-grokbot-sign-out.sh"

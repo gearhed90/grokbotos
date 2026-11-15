@@ -25,30 +25,30 @@ ask() {
     printf '%s' "$v"
 }
 
-echo "화면 잠금 PIN 설정 / Set your screen-lock PIN"
-echo "잠금 화면을 풀 때 씁니다. 6자 이상, 숫자나 문자. / Used to unlock the screen. 6+ characters."
-echo "나중에 하려면 Enter만 누르세요. / Press Enter alone to skip for now."
+echo "Set your screen-lock PIN"
+echo "Used to unlock the screen. 6+ characters."
+echo "Press Enter alone to skip for now."
 echo
 current=""
 if [[ -f $state_dir/$user ]]; then
-    current=$(ask "현재 PIN / Current PIN: ")
+    current=$(ask "Current PIN: ")
 fi
 for _ in 1 2 3; do
-    pin=$(ask "새 PIN / New PIN: ")
+    pin=$(ask "New PIN: ")
     if [[ -z $pin && -z $current ]]; then
         mkdir -p "$(dirname "$skip_file")"
         : >"$skip_file"
-        echo "건너뜀. Super+L 또는 grokbot-lock-setup으로 나중에 설정. / Skipped. Run grokbot-lock-setup later."
+        echo "Skipped. Press Super+L or run grokbot-lock-setup later."
         sleep 3
         exit 0
     fi
-    again=$(ask "한 번 더 / Repeat: ")
+    again=$(ask "Repeat: ")
     if [[ $pin != "$again" ]]; then
-        echo "두 PIN이 다릅니다. / PINs do not match."
+        echo "PINs do not match."
         continue
     fi
     if (( ${#pin} < 6 )); then
-        echo "6자 이상이어야 합니다. / Must be at least 6 characters."
+        echo "Must be at least 6 characters."
         continue
     fi
     if [[ -n $current ]]; then
@@ -58,11 +58,11 @@ for _ in 1 2 3; do
     fi
     if sudo -n /usr/lib/grokbot/lock-setpin.sh <<<"$input" >/dev/null; then
         rm -f "$skip_file"
-        echo "PIN을 저장했습니다. Super+L로 잠급니다. / PIN saved. Super+L locks the screen."
+        echo "PIN saved. Super+L locks the screen."
         sleep 3
         exit 0
     fi
-    echo "저장하지 못했습니다. / Could not save the PIN."
+    echo "Could not save the PIN."
     [[ -n $current ]] && exit 1
 done
 exit 1

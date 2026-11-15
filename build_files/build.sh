@@ -60,6 +60,7 @@ dnf5 install -y --disablerepo=fedora-cisco-openh264 \
     gtk-layer-shell \
     adwaita-icon-theme \
     google-noto-sans-cjk-ttc-fonts \
+    glibc-langpack-en \
     xdg-utils \
     fuse \
     fuse-libs \

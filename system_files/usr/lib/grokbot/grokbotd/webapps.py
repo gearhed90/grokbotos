@@ -397,8 +397,8 @@ def write_desktop(rec):
     p = _desktop_path(rec["id"])
     os.makedirs(os.path.dirname(p), exist_ok=True)
     lines = ["[Desktop Entry]", "Type=Application",
-             "Name=%s" % _desktop_escape(rec["name_ko"] or rec["name"]),
-             "Name[en]=%s" % _desktop_escape(rec["name"]),
+             "Name=%s" % _desktop_escape(rec["name"]),
+             "Name[ko]=%s" % _desktop_escape(rec["name_ko"] or rec["name"]),
              "Comment=%s" % _desktop_escape(rec.get("description") or rec["origin"]),
              "Exec=/usr/local/bin/grokbot-webapp %s" % rec["id"],
              "Icon=%s" % (rec.get("icon") or "applications-internet"),

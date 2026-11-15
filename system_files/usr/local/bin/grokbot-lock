@@ -14,7 +14,7 @@ open_setup() {
     if pgrep -u "$user" -f 'app-id=grokbot-lock-setup' >/dev/null; then
         return 0
     fi
-    swaymsg -q "exec foot --app-id=grokbot-lock-setup --title='화면 잠금 PIN / Screen lock PIN' /usr/local/bin/grokbot-lock-setup" || true
+    swaymsg -q "exec foot --app-id=grokbot-lock-setup --title='Screen lock PIN' /usr/local/bin/grokbot-lock-setup" || true
 }
 
 case ${1:-} in
@@ -47,8 +47,8 @@ esac
 
 if [[ $pin_state != "set" ]]; then
     echo "grokbot-lock: no PIN set, not locking" >&2
-    notify-send -a "Grok Bot OS" "화면 잠금 PIN이 없습니다 / No screen-lock PIN" \
-        "PIN을 설정하면 잠글 수 있습니다. / Set a PIN to enable the lock." 2>/dev/null || true
+    notify-send -a "Grok Bot OS" "No screen-lock PIN" \
+        "Set a PIN to enable the lock." 2>/dev/null || true
     open_setup
     [[ ${1:-} == "--suspend" ]] && systemctl suspend
     exit 0

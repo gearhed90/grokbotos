@@ -1,6 +1,6 @@
 :root { --bg:#0f0f12; --panel:#18181b; --line:#27272a; --fg:#f4f4f5; --dim:#a1a1aa; --acc:#3b82f6; --bad:#ef4444; --ok:#22c55e; --warn:#f59e0b; }
 * { box-sizing: border-box; }
-html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:15px/1.5 "Noto Sans CJK KR","Noto Sans KR","Noto Sans",system-ui,sans-serif; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:15px/1.5 "Noto Sans","Noto Sans CJK KR","Noto Sans KR",system-ui,sans-serif; }
 body { display:flex; flex-direction:column; }
 header { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid var(--line); }
 header h1 { font-size:19px; margin:0; }

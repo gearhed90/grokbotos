@@ -125,16 +125,15 @@ def notify_once(send=_notify):
     s = status()
     if s["available"] and s.get("available_digest") and seen.get("available") != s["available_digest"]:
         v = s.get("available_version") or s["available_digest"][:19]
-        send("업데이트가 있습니다 / Update available",
-             "새 OS 이미지 %s. 설정 > 업데이트에서 설치할 수 있습니다. / New OS image %s: Settings > Update." % (v, v))
+        send("Update available", "New OS image %s: Settings > Update." % v)
         seen["available"] = s["available_digest"]
         changed = True
     rb = s["health"].get("rolled_back")
     if rb and seen.get("rolled_back") != rb.get("at"):
         v = rb.get("from_version") or (rb.get("from") or "")[:19]
-        send("업데이트를 되돌렸습니다 / Update rolled back",
-             "%s 이미지로 시작한 뒤 세션이 뜨지 않아 이전 이미지로 되돌렸습니다 (%s). / The session did not come up on %s, "
-             "so the previous image was restored." % (v, rb.get("why"), v), "critical")
+        send("Update rolled back",
+             "The session did not come up on %s (%s), so the previous image was restored." % (v, rb.get("why")),
+             "critical")
         seen["rolled_back"] = rb.get("at")
         changed = True
     if changed:

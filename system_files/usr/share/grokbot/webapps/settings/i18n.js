@@ -1,5 +1,5 @@
 "use strict";
-// Korean first; any key missing in Korean falls back to English.
+// English is the default; Korean is the optional translation (missing keys fall back to English).
 window.I18N = {
   en: {
     app_title: "Settings", lang_other: "한국어",

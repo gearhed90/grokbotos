@@ -4,7 +4,7 @@
   "description": "Notes kept only on this computer, works offline",
   "start_url": "/",
   "display": "standalone",
-  "lang": "ko",
+  "lang": "en",
   "background_color": "#0f0f12",
   "theme_color": "#0f0f12",
   "version": "1.0.0",

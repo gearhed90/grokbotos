@@ -285,7 +285,7 @@ def cmd_grants(args, as_json):
         print(json.dumps({"ok": True, "result": resp["result"]}, ensure_ascii=False, indent=2))
         return 0
     for p in resp["result"]["principals"]:
-        print(p["principal"] + (" (이 사용자 / this user)" if p["local"] else ""))
+        print(p["principal"] + (" (this user)" if p["local"] else ""))
         for s, m in p["scopes"].items():
             if p["local"] or m["read"] != "deny" or m["write"] != "deny":
                 print("  %-14s read=%-5s write=%-5s %s" % (s, m["read"], m["write"],

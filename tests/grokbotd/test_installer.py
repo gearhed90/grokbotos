@@ -145,7 +145,8 @@ class InstallerTests(tg.Base):
             d = f.read()
         self.assertIn("Exec=/usr/local/bin/grokbot-webapp jotter\n", d)
         self.assertIn("StartupWMClass=grokbot-webapp-jotter\n", d)
-        self.assertIn("Name=메모\n", d)
+        self.assertIn("Name=Jotter\n", d)
+        self.assertIn("Name[ko]=메모\n", d)  # English Name= is the default; Korean is the translation
         self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "Desktop")))
         # nothing granted: the app is known for CORS but its calls are denied
         st, hd, body = self.origin_rpc(origin, "audio.status")

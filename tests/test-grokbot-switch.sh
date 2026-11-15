@@ -33,7 +33,7 @@ EOF
 chmod 755 "${fake}/fuzzel"
 "$switch"
 assert_contains "$FUZZEL_LOG" "--prompt"
-assert_contains "$FUZZEL_LOG" "앱 실행 "
+assert_contains "$FUZZEL_LOG" "Run "
 
 export GROKBOT_CONF="${tmp}/app.conf"
 export SWAYMSG_LOG="${tmp}/swaymsg.log"

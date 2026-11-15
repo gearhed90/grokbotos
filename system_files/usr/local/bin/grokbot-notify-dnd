@@ -20,9 +20,9 @@ case ${1:-toggle} in
     *) echo "usage: grokbot-notify-dnd [toggle|on|off|status]" >&2; exit 2 ;;
 esac
 if is_on; then
-    state="켬 / on"
+    state="on"
 else
-    state="끔 / off"
-    notify-send -a "Grok Bot OS" -t 2000 "방해 금지 끔 / Do Not Disturb off" 2>/dev/null || true
+    state="off"
+    notify-send -a "Grok Bot OS" -t 2000 "Do Not Disturb off" 2>/dev/null || true
 fi
 echo "do-not-disturb: $state"

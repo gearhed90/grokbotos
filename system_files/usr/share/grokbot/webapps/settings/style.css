@@ -1,7 +1,7 @@
 :root { --bg:#0f0f12; --panel:#18181b; --line:#27272a; --fg:#f4f4f5; --dim:#a1a1aa; --acc:#3b82f6; --bad:#ef4444; --ok:#22c55e; --warn:#f59e0b; }
 * { box-sizing: border-box; }
 html, body { margin:0; height:100%; background:var(--bg); color:var(--fg);
-  font: 15px/1.5 "Noto Sans CJK KR", "Noto Sans KR", "Noto Sans", system-ui, sans-serif; }
+  font: 15px/1.5 "Noto Sans", "Noto Sans CJK KR", "Noto Sans KR", system-ui, sans-serif; }
 body { display:flex; }
 nav { width:230px; background:var(--panel); border-right:1px solid var(--line); padding:18px 10px; display:flex; flex-direction:column; gap:2px; }
 nav h1 { font-size:20px; margin:4px 12px 16px; }

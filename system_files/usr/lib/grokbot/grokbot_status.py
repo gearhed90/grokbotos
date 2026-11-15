@@ -73,22 +73,22 @@ def _battery(power):
         pct = "%s%%" % cap
     if charging:
         icon = "battery-missing-symbolic" if level is None else "battery-level-%d-charging-symbolic" % level
-        text = "충전 중"
-        tip = "충전 중 / Charging %s" % pct
+        text = "Charging"
+        tip = "Charging %s" % pct
     elif plugged:
         if status == "full":
             # Adwaita status icon: full battery plus a charged mark.
             # Not charging keeps the plug (ac-adapter-symbolic) so an
             # icon-only dock can tell the two apart.
             icon = "battery-level-100-charged-symbolic"
-            text, tip = "전원 연결됨 (가득 참)", "전원 연결됨 (가득 참) / Plugged in (full)"
+            text, tip = "Plugged in (full)", "Plugged in (full)"
         else:
             icon = "ac-adapter-symbolic"
-            text, tip = "전원 연결됨", "전원 연결됨 / Plugged in %s" % pct
+            text, tip = "Plugged in", "Plugged in %s" % pct
     else:
         icon = "battery-missing-symbolic" if level is None else "battery-level-%d-symbolic" % level
         text = pct
-        tip = "배터리 / Battery %s" % pct
+        tip = "Battery %s" % pct
     return {"id": "battery", "icon": icon, "text": text, "tooltip": tip}
 
 
@@ -100,13 +100,13 @@ def _network(net):
     up = [i for i in ifs if i.get("state") == "up" and i.get("addresses")]
     dev = next((i for i in up if i.get("name") == route.get("interface")), up[0] if up else None)
     if not net.get("online") or dev is None:
-        return {"id": "network", "icon": "network-offline-symbolic", "text": "오프라인",
-                "tooltip": "연결 안 됨 / Offline. 클릭: Wi-Fi 설정 / Click: Wi-Fi settings"}
+        return {"id": "network", "icon": "network-offline-symbolic", "text": "Offline",
+                "tooltip": "Offline. Click: Wi-Fi settings"}
     if dev.get("wireless"):
         return {"id": "network", "icon": "network-wireless-signal-good-symbolic", "text": "Wi-Fi",
                 "tooltip": "Wi-Fi: %s" % dev["name"]}
-    return {"id": "network", "icon": "network-wired-symbolic", "text": "유선", "page": "network",
-            "tooltip": "유선 / Wired: %s. 클릭: 유선·VPN 설정 / Click: Wired and VPN settings" % dev["name"]}
+    return {"id": "network", "icon": "network-wired-symbolic", "text": "Wired", "page": "network",
+            "tooltip": "Wired: %s. Click: Wired and VPN settings" % dev["name"]}
 
 
 def _vpn(conns):
@@ -115,7 +115,7 @@ def _vpn(conns):
         return None
     names = ", ".join(conns["vpn_active"])
     return {"id": "vpn", "icon": "network-vpn-symbolic", "text": "VPN",
-            "tooltip": "VPN 연결됨 / VPN on: %s. 클릭: 유선·VPN 설정 / Click: Wired and VPN settings" % names}
+            "tooltip": "VPN on: %s. Click: Wired and VPN settings" % names}
 
 
 def _volume(audio):
@@ -131,9 +131,9 @@ def _volume(audio):
         icon = "audio-volume-medium-symbolic"
     else:
         icon = "audio-volume-high-symbolic"
-    text = "음소거" if o.get("muted") else "%d%%" % v
+    text = "Muted" if o.get("muted") else "%d%%" % v
     return {"id": "volume", "icon": icon, "text": text,
-            "tooltip": "볼륨 / Volume %s. 클릭: 음소거, 스크롤: 조절 / Click: mute, scroll: adjust" % text}
+            "tooltip": "Volume %s. Click: mute, scroll: adjust" % text}
 
 
 def _bluetooth(bt):
@@ -142,23 +142,22 @@ def _bluetooth(bt):
         return None
     names = bt.get("connected") or []
     if not bt.get("powered"):
-        return {"id": "bluetooth", "icon": "bluetooth-disabled-symbolic", "text": "꺼짐",
-                "tooltip": "블루투스 꺼짐 / Bluetooth off. 클릭: 블루투스 설정 / Click: Bluetooth settings"}
+        return {"id": "bluetooth", "icon": "bluetooth-disabled-symbolic", "text": "Off",
+                "tooltip": "Bluetooth off. Click: Bluetooth settings"}
     if names:
         return {"id": "bluetooth", "icon": "bluetooth-active-symbolic", "text": names[0][:16],
-                "tooltip": "블루투스 연결됨 / Bluetooth connected: %s. 클릭: 블루투스 설정 / Click: Bluetooth settings"
+                "tooltip": "Bluetooth connected: %s. Click: Bluetooth settings"
                            % ", ".join(names)}
-    return {"id": "bluetooth", "icon": "bluetooth-symbolic", "text": "켜짐",
-            "tooltip": "블루투스 켜짐, 연결된 기기 없음 / Bluetooth on, nothing connected. "
-                       "클릭: 블루투스 설정 / Click: Bluetooth settings"}
+    return {"id": "bluetooth", "icon": "bluetooth-symbolic", "text": "On",
+            "tooltip": "Bluetooth on, nothing connected. Click: Bluetooth settings"}
 def _mic(audio):
     """Microphone muted: a reminder at the end of the dock (click: unmute)."""
     if not audio or not audio.get("available") or not audio.get("input"):
         return None
     if not audio["input"].get("muted"):
         return None
-    return {"id": "mic-muted", "icon": "microphone-sensitivity-muted-symbolic", "text": "마이크 꺼짐",
-            "tooltip": "마이크 음소거됨 / Microphone muted. 클릭: 음소거 해제 / Click: unmute"}
+    return {"id": "mic-muted", "icon": "microphone-sensitivity-muted-symbolic", "text": "Mic off",
+            "tooltip": "Microphone muted. Click: unmute"}
 def _storage(st):
     """Removable drives plugged in: one item; click opens Settings > Storage."""
     vols = (st or {}).get("volumes") or []
@@ -167,7 +166,7 @@ def _storage(st):
     names = ", ".join(v.get("name") or v.get("id") or "?" for v in vols)
     opened = [v for v in vols if v.get("mounted")]
     return {"id": "storage", "icon": "media-removable-symbolic", "text": "USB",
-            "tooltip": "외장 저장장치 / Removable drives: %s (%d 열림 / open). 클릭: 꺼내기 / Click: safely remove"
+            "tooltip": "Removable drives: %s (%d open). Click: safely remove"
                        % (names, len(opened))}
 def _brightness(br):
     """Backlight (laptops): NN%; scroll changes it like the brightness keys,
@@ -179,17 +178,16 @@ def _brightness(br):
     if not isinstance(p, int):
         return None
     return {"id": "brightness", "icon": "display-brightness-symbolic", "text": "%d%%" % p,
-            "tooltip": "화면 밝기 %d%% / Brightness %d%%. 스크롤: 조절 / Scroll: adjust. 클릭: 디스플레이 설정 / Click: Display settings"
-                       % (p, p)}
+            "tooltip": "Brightness %d%%. Scroll: adjust. Click: Display settings" % p}
 
 
 def _nightlight(nl):
     """Night light on: one item (warm temperature); click opens Settings > Display."""
     if not nl or not nl.get("enabled") or not nl.get("running"):
         return None
-    sched = "%s–%s" % (nl.get("from"), nl.get("to")) if nl.get("schedule") == "custom" else "항상 / always"
-    return {"id": "nightlight", "icon": "weather-clear-night-symbolic", "text": "야간",
-            "tooltip": "야간 모드 켜짐 %dK (%s) / Night light on. 클릭: 디스플레이 설정 / Click: Display settings"
+    sched = "%s–%s" % (nl.get("from"), nl.get("to")) if nl.get("schedule") == "custom" else "always"
+    return {"id": "nightlight", "icon": "weather-clear-night-symbolic", "text": "Night",
+            "tooltip": "Night light on %dK (%s). Click: Display settings"
                        % (nl.get("temperature") or 0, sched)}
 
 
@@ -212,11 +210,11 @@ def _printing(pr):
         return None
     stopped = {p["name"] for p in pr.get("printers", []) if p.get("state") == "stopped"}
     stuck = sorted({j["printer"] for j in jobs if j.get("printer") in stopped})
-    it = {"id": "printing", "icon": "printer-symbolic", "text": "인쇄 %d" % len(jobs),
-          "tooltip": "인쇄 작업 %d개 / %d print job(s). 클릭: 프린터 / Click: Printers" % (len(jobs), len(jobs))}
+    it = {"id": "printing", "icon": "printer-symbolic", "text": "Print %d" % len(jobs),
+          "tooltip": "%d print job(s). Click: Printers" % len(jobs)}
     if stuck:
         it["alert"] = True
-        it["tooltip"] = "프린터 멈춤 / Printer stopped: %s. " % ", ".join(stuck) + it["tooltip"]
+        it["tooltip"] = "Printer stopped: %s. " % ", ".join(stuck) + it["tooltip"]
     return it
 
 
@@ -226,18 +224,18 @@ def _power_mode(pm):
     if not pm or not pm.get("available") or pm.get("active") in (None, "balanced"):
         return None
     if pm["active"] == "power-saver":
-        return {"id": "power-mode", "icon": "power-profile-power-saver-symbolic", "text": "절전",
-                "tooltip": "전원 모드: 절전 / Power mode: power saver. 클릭: 전원 설정 / Click: Power settings"}
-    tip = "전원 모드: 성능 / Power mode: performance"
+        return {"id": "power-mode", "icon": "power-profile-power-saver-symbolic", "text": "Saver",
+                "tooltip": "Power mode: power saver. Click: Power settings"}
+    tip = "Power mode: performance"
     if pm.get("degraded"):
-        tip += " (제한됨 / limited: %s)" % pm["degraded"]
-    return {"id": "power-mode", "icon": "power-profile-performance-symbolic", "text": "성능",
-            "tooltip": tip + ". 클릭: 전원 설정 / Click: Power settings"}
+        tip += " (limited: %s)" % pm["degraded"]
+    return {"id": "power-mode", "icon": "power-profile-performance-symbolic", "text": "Performance",
+            "tooltip": tip + ". Click: Power settings"}
 
 
 def _who(sess):
     p = sess.get("principal") or "?"
-    name = p[7:] if p.startswith("origin:") else ("이 컴퓨터 / local" if p.startswith("local:") else p)
+    name = p[7:] if p.startswith("origin:") else ("this computer" if p.startswith("local:") else p)
     return name + (" (%s)" % sess["client"] if sess.get("client") else "")
 
 
@@ -247,13 +245,12 @@ def _privacy(priv):
     if not priv:
         return []
     out = []
-    for kind, icon, ko, en in (("camera", "camera-web-symbolic", "카메라 사용 중", "Camera in use"),
-                               ("microphone", "audio-input-microphone-symbolic", "마이크 사용 중",
-                                "Microphone in use")):
+    for kind, icon, en in (("camera", "camera-web-symbolic", "Camera in use"),
+                           ("microphone", "audio-input-microphone-symbolic", "Microphone in use")):
         ss = [x for x in priv.get("sessions", []) if x.get("kind") == kind]
         if ss:
-            out.append({"id": "inuse-" + kind, "icon": icon, "text": ko, "alert": True,
-                        "tooltip": "%s / %s: %s. 클릭: 권한 / Click: permissions" % (ko, en, ", ".join(_who(x) for x in ss))})
+            out.append({"id": "inuse-" + kind, "icon": icon, "text": en, "alert": True,
+                        "tooltip": "%s: %s. Click: permissions" % (en, ", ".join(_who(x) for x in ss))})
     return out
 
 
@@ -263,13 +260,12 @@ def _update(up):
     if not up:
         return None
     if up.get("restart_needed"):
-        return {"id": "update", "icon": "system-reboot-symbolic", "text": "다시 시작 필요",
-                "tooltip": "업데이트가 준비됐습니다. 다시 시작하면 적용됩니다 / Update ready: restart to use it. "
-                           "클릭: 업데이트 / Click: Update"}
+        return {"id": "update", "icon": "system-reboot-symbolic", "text": "Restart needed",
+                "tooltip": "Update ready: restart to use it. Click: Update"}
     if up.get("available"):
         v = up.get("available_version") or ""
-        return {"id": "update", "icon": "software-update-available-symbolic", "text": "업데이트", "alert": True,
-                "tooltip": "OS 업데이트가 있습니다 %s / OS update available %s. 클릭: 업데이트 / Click: Update" % (v, v)}
+        return {"id": "update", "icon": "software-update-available-symbolic", "text": "Update", "alert": True,
+                "tooltip": "OS update available %s. Click: Update" % v}
     return None
 
 

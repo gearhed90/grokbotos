@@ -43,10 +43,17 @@ if command -v flatpak >/dev/null 2>&1; then
         >>"${HOME}/.local/share/grokbot/shell.log" 2>&1 || true
 fi
 
-# agetty runs this directly, so no locale is set (C/POSIX). fuzzel then
-# rejects the Korean prompt ("invalid prompt") and Alt+Space shows nothing.
-# Seen in a QEMU boot 2026-10-20.
-export LANG="${LANG:-C.UTF-8}"
+# agetty runs this directly, so no locale is set (C/POSIX). Without a UTF-8
+# locale fuzzel rejects non-ASCII text and Korean (한/영) input breaks; seen in
+# a QEMU boot 2026-10-20. English (en_US, glibc-langpack-en) is the default;
+# C.UTF-8 is the fallback when that locale is not installed.
+if [[ -z "${LANG:-}" ]]; then
+    if [[ -d /usr/lib/locale/en_US.utf8 ]]; then
+        export LANG=en_US.UTF-8
+    else
+        export LANG=C.UTF-8
+    fi
+fi
 
 # Korean input (fcitx5 + hangul, started by sway). Wayland-native apps
 # (Grok Bot with --enable-wayland-ime, Firefox, foot) use text-input-v3;

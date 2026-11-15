@@ -18,7 +18,7 @@ source "$CONF"
 mode="${GROKBOT_MODE:-placeholder}"
 case "$mode" in
     native)
-        echo "Grok Bot 앱 안의 로그아웃을 사용하세요. 이 OS는 계정 정보를 보관하지 않습니다." >&2
+        echo "Use Log out inside the Grok Bot app. This OS does not keep account details." >&2
         exit 0
         ;;
     placeholder) ;;
@@ -54,5 +54,5 @@ if [[ "$app_id" =~ ^[A-Za-z][A-Za-z0-9_.-]*$ ]] && command -v swaymsg >/dev/null
     swaymsg "[app_id=\"${app_id}\"] kill" || true
 fi
 
-echo "브라우저 세션을 지웠습니다. Grok Bot 창이 다시 뜨면 로그인 화면이어야 합니다."
+echo "Cleared the browser session. When the Grok Bot window comes back it should show the sign-in screen."
 exit 0
