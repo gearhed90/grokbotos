@@ -10,7 +10,7 @@ Cypher is the Raspberry Pi 5 running grokbotos, and the always-running mind on i
 | Locked limits | `/etc/grokbot/cypher-limits.json` (root-owned; cypherd re-reads it each tick and exits with 78 if it is missing, invalid or writable by others) |
 | Seed persona | `/usr/share/grokbot/cypher/persona.md` (a copy in `~/.config/cypher/persona.md` wins) |
 | Proxy token | `/etc/grokbot/cypher-brain-token` (root:grokbot 0640), saved with `sudo grokbot-set-cypher-token < file`; never in the image |
-| CLI | `grokbot-cypher status / journal -n N / mute / unmute / pause MIN / resume / stop / start` |
+| CLI | `grokbot-cypher status / journal -n N / mute / unmute / pause MIN / resume / stop / start / memories / prefs / ntfy-test / requests` |
 | Journal | `~/.local/share/cypher/journal/YYYY-MM-DD.jsonl` (0600) |
 | State | `~/.local/state/cypher/drives.json` |
 | Switches | `~/.config/cypher/KILL` (stop and stay off), `muted` (no on-screen notes), `pause_until` |
@@ -53,10 +53,11 @@ All capped in the limits file; deck only unless noted. House, camera and light c
 - `message_zack`: a short ntfy.sh push to Zack's phone. Max 200 chars, 1 an hour, 3 a day, never in quiet hours (none on Friday and Saturday nights). The topic is a secret made on the device with `sudo grokbot-set-cypher-ntfy` (`/etc/grokbot/cypher-ntfy-topic`, root:grokbot 0640; never in the image, the logs or the journal). Without that file the action is simply not offered. `grokbot-cypher ntfy-test` sends one test message.
 - `glance_screen`: one low-res grim screenshot (half size, JPEG) of the deck's own screen, sent only to `POST /v1/vision/describe` on Alpha's proxy, where Qwen3-VL describes it with a fixed prompt in at most 40 words. The file is deleted right after reading; the proxy never writes, logs or forwards it. Never the hosted backup. Only while Zack is at the screen and never on a window whose title looks private (passwords, banking, sign-in). 3 an hour, 12 a day.
 - `look_up`: a Wikipedia summary (`en.wikipedia.org` only, https, no redirects). 2 an hour, 6 a day. Also on the Alpha standby.
+- `request_account`: ask Zack for an account on a named service (`service` max 40 chars, `why` max 160). 1 a day, 2 a week, never in quiet hours, deck only. Writes a journal entry and appends a pending line to `~/.local/state/cypher/account-requests.jsonl`, then sends one ntfy message ("Cypher asks for an account: <service> - <why>. Reply to Nova to approve."). That ping uses the same topic file as `message_zack` but does **not** count against `message_zack`'s hourly or daily caps. If ntfy fails, the pending entry is kept. Cypher cannot sign up, hold a password, read or send mail, or share its address (`s4j6vbnk+cypher@mail.grokbot.com`, a tagged address on Nova's inbox; the address is in the persona so Cypher knows it exists, but cypherd never puts it in a journal line, an ntfy body or the request file). Requests whose service or why mention a password, a house or camera word, a URL with credentials, or the address itself are refused. Nova creates accounts only after Zack approves. `grokbot-cypher requests` lists them; `grokbot-cypher requests resolve N approved|denied` marks one (for Nova, over sudo/ssh).
 
 What glances and look-ups find goes into the journal (`found`), the next few prompts ("you recently found out") and the nightly sleep.
 
-**Pino.** pinos.world has no documented API for visitors or agents. Its web app talks to undocumented internal endpoints, and anything beyond the front page (leaving him something, mail, the diary) needs connecting an account by email. There is no `visit_pino` action; it needs Zack's decision on an account first.
+**Pino.** pinos.world has no documented API for visitors or agents. Its web app talks to undocumented internal endpoints, and anything beyond the front page needs connecting an account by email. There is no `visit_pino` action. Cypher can use `request_account` to ask Zack first; Nova would create the account only after he approves.
 
 ## Not yet
 

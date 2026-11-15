@@ -97,7 +97,8 @@
     "set_avatar_color": {"phase": 1, "per_hour": 2, "_comment": "also only when the mood label changed since the last color, never the same color"},
     "message_zack": {"phase": 3, "max_chars": 200, "per_hour": 1, "per_day": 3, "_comment": "never in quiet hours"},
     "glance_screen": {"phase": 3, "per_hour": 3, "per_day": 12},
-    "look_up": {"phase": 3, "max_chars": 60, "per_hour": 2, "per_day": 6}
+    "look_up": {"phase": 3, "max_chars": 60, "per_hour": 2, "per_day": 6},
+    "request_account": {"phase": 3, "max_service_chars": 40, "max_why_chars": 160, "per_day": 1, "per_week": 2, "_comment": "never in quiet hours. Asks Zack only; Nova creates accounts after he approves. The ntfy ping does not count against message_zack's caps. Cypher must not share its email."}
   },
   "avatar_colors": ["white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray"]
 }

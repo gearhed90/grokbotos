@@ -64,7 +64,7 @@ def manifest(st, p=P, now=None):
 st = C.new_state(); now = at(14)
 m = manifest(st)
 check("fresh state offers all phase-3 actions", all(a in m for a in ("journal_thought", "show_note", "set_avatar_color",
-                                                                  "message_zack", "glance_screen", "look_up")), m)
+                                                                  "message_zack", "glance_screen", "look_up", "request_account")), m)
 st["recent"] = [[now - 600, "set_avatar_color"], [now - 300, "set_avatar_color"]]
 check("color capped -> not in the manifest", "set_avatar_color" not in manifest(st))
 check("validator refuses it with the same words", C.validate(L, st, P, {"action": "set_avatar_color", "params": {"color": "red"}}, now)[2]
@@ -218,6 +218,122 @@ check("busy Alpha -> glance fails, no fallback", r == "glance failed: camera_bus
 check("no image ever sent to a chat brain", not any("image" in json.dumps(b) for b in PX["seen"]))
 PX["vcode"] = 200
 
+# ---- phase 3: request_account ----
+st = C.new_state(); now = at(14)
+ok_ch = {"action": "request_account", "params": {"service": "pinos.world", "why": "so I can visit Pino's world"}}
+check("request_account ok", C.validate(L, st, P, ok_ch, now) == ("request_account", {"service": "pinos.world", "why": "so I can visit Pino's world"}, "ok"))
+check("request allowed while Zack is away", C.validate(L, st, dict(P, presence="away"), ok_ch, now)[2] == "ok")
+check("request in quiet hours refused", C.validate(L, st, dict(P, quiet_hours=True), ok_ch, now)[2] == "rejected: quiet hours")
+check("request left out of the manifest in quiet hours", "request_account" not in manifest(st, dict(P, quiet_hours=True)))
+check("empty service refused", "service name" in C.validate(L, st, P, {"action": "request_account", "params": {"service": "  ", "why": "because"}}, now)[2])
+check("empty why refused", "needs a why" in C.validate(L, st, P, {"action": "request_account", "params": {"service": "GitHub", "why": ""}}, now)[2])
+check("service over 40 refused", "service name" in C.validate(L, st, P, {"action": "request_account", "params": {"service": "x"*41, "why": "because"}}, now)[2])
+check("why over 160 refused", "needs a why" in C.validate(L, st, P, {"action": "request_account", "params": {"service": "GitHub", "why": "y"*161}}, now)[2])
+# rejection rules: password, house/camera words, URLs with credentials, the email itself
+for label, svc, why in (
+    ("password in why", "GitHub", "I need a password manager"),
+    ("password in service", "PasswordApp", "to try it"),
+    ("house word door", "GitHub", "so I can unlock the front door logs"),
+    ("house word camera", "cameras-r-us", "to archive clips"),
+    ("cred URL user:pass", "GitHub", "sign in at https://me:secret@evil.example/x"),
+    ("cred URL user@", "GitHub", "see https://admin@evil.example/signup"),
+    ("cred URL query password", "GitHub", "link https://example.com/a?password=hunter2"),
+    ("email in why", "Pino", "use s4j6vbnk+cypher@mail.grokbot.com please"),
+):
+    v = C.validate(L, st, P, {"action": "request_account", "params": {"service": svc, "why": why}}, now)[2]
+    check("rejected: %s" % label, "cannot mention passwords, house controls or credential URLs" in v, v)
+# caps: 1/day, 2/week; recent kept long enough for the week
+st["recent"] = [[now - 3600, "request_account"]]
+check("2nd request the same day refused", "daily cap" in C.validate(L, st, P, ok_ch, now)[2])
+check("daily cap leaves request out of the manifest", "request_account" not in manifest(st, now=now))
+st["recent"] = [[now - 90000, "request_account"]]  # a bit over a day ago
+check("next day, weekly room left -> ok", C.validate(L, st, P, ok_ch, now)[2] == "ok")
+st["recent"] = [[now - 90000, "request_account"], [now - 200000, "request_account"]]
+check("3rd request in a week refused", "weekly cap" in C.validate(L, st, P, ok_ch, now)[2])
+st["recent"] = [[now - (C.WEEK_S + 60), "request_account"], [now - 200000, "request_account"]]
+check("oldest over a week old -> weekly cap lifts", C.validate(L, st, P, ok_ch, now)[2] == "ok")
+# ntfy success, failure keeps pending, does not consume message_zack, no email in outbound
+sent = []
+def fake_ntfy(url, data=None, headers=None, timeout=10, hosts=None, cap=65536):
+    sent.append({"url": url, "data": data, "headers": headers}); return 200, b"{}"
+real_http = C._http; C._http = fake_ntfy
+# start from a clean requests file (STATE_DIR is the temp dir)
+req_path = C.requests_file()
+if os.path.exists(req_path): os.remove(req_path)
+r = C.do_request_account(L, C.new_state(), {"service": "pinos.world", "why": "so I can visit Pino"})
+rows = C.load_account_requests()
+check("execute writes a pending request", r == "ok" and len(rows) == 1 and rows[0]["status"] == "pending"
+      and rows[0]["service"] == "pinos.world" and rows[0]["id"] == 1, (r, rows))
+check("ntfy body matches the asked wording and has no email",
+      sent and sent[-1]["data"] == b"Cypher asks for an account: pinos.world - so I can visit Pino. Reply to Nova to approve."
+      and C.ACCOUNT_EMAIL.encode() not in sent[-1]["data"] and b"mail.grokbot.com" not in sent[-1]["data"],
+      sent[-1]["data"] if sent else None)
+# journal event from execute
+Jlines = []
+jd = os.path.join(T, "data", "journal")
+for f in os.listdir(jd):
+    Jlines += open(os.path.join(jd, f)).read().splitlines()
+ev = [json.loads(x) for x in Jlines if "account_request" in x]
+check("journal has an account_request event", ev and ev[-1].get("event") == "account_request" and ev[-1].get("status") == "pending"
+      and ev[-1].get("service") == "pinos.world" and C.ACCOUNT_EMAIL not in json.dumps(ev[-1]), ev[-1] if ev else None)
+# ntfy failure keeps pending
+def boom(url, data=None, headers=None, timeout=10, hosts=None, cap=65536):
+    sent.append({"url": url, "data": data}); raise ConnectionError("down")
+C._http = boom
+r = C.do_request_account(L, C.new_state(), {"service": "Wikipedia", "why": "a login for look-ups that need an account"})
+rows = C.load_account_requests()
+check("ntfy failure still leaves a pending entry", r.startswith("asked; phone failed") and len(rows) == 2
+      and rows[-1]["service"] == "Wikipedia" and rows[-1]["status"] == "pending", (r, rows[-1] if rows else None))
+# message_zack budget is independent
+st = C.new_state()
+# two request_account already happened via execute, not via tick, so recent is empty
+check("request_account ntfy does not consume message_zack's cap",
+      C.validate(L, st, P, {"action": "message_zack", "params": {"text": "Alpha is down."}}, now)[2] == "ok")
+# a real tick should append request_account (not message_zack) to recent
+C._http = fake_ntfy
+before = len(sent)
+PX["reply"] = '{"action":"request_account","params":{"service":"GitHub","why":"so I can file issues on the tank firmware"},"reason":"need it"}'
+st = C.new_state()
+e = C.tick(L, st, now, perceive_fn=lambda L, n: dict(P), camera_fn=lambda L, s, n: [])
+check("request_account tick records its own cap only",
+      e["result"] == "ok" and e["choice"]["action"] == "request_account"
+      and [a for t, a in st["recent"] if a == "request_account"] == ["request_account"]
+      and [a for t, a in st["recent"] if a == "message_zack"] == []
+      and len(sent) == before + 1, (e.get("result"), st["recent"], len(sent)-before))
+check("persona mentions the address but outbound tick journal does not",
+      C.ACCOUNT_EMAIL in C.persona() and C.ACCOUNT_EMAIL not in json.dumps(e)
+      and "private until Zack" in C.persona())
+check("manifest says it only asks and must not share the email",
+      "only ASKS" in manifest(C.new_state()) and "must not share" in manifest(C.new_state())
+      and "Nova creates" in manifest(C.new_state()), manifest(C.new_state()))
+
+# CLI: list and resolve
+import io, contextlib
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf): rc = C.cli(["requests"])
+out = buf.getvalue()
+check("cli requests lists pending", rc == 0 and "pinos.world" in out and "pending" in out and "GitHub" in out, out)
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf): rc = C.cli(["requests", "resolve", "1", "approved"])
+check("cli resolve 1 approved", rc == 0 and "approved" in buf.getvalue() and C.load_account_requests()[0]["status"] == "approved", buf.getvalue())
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf): rc = C.cli(["requests", "resolve", "1", "denied"])
+check("cli will not re-resolve", rc == 1 and "already approved" in buf.getvalue(), buf.getvalue())
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf): rc = C.cli(["requests", "resolve", "99", "denied"])
+check("cli resolve missing id fails", rc == 1 and "no request 99" in buf.getvalue(), buf.getvalue())
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf): rc = C.cli(["requests", "resolve", "2", "nope"])
+check("cli resolve bad status fails", rc == 2, buf.getvalue())
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf): rc = C.cli(["requests", "resolve", "2", "denied"])
+check("cli resolve 2 denied", rc == 0 and C.load_account_requests()[1]["status"] == "denied", buf.getvalue())
+# grokbot-cypher wrapper forwards to cypherd
+cli = os.path.join(SRC, "grokbot-cypher")
+pr = __import__("subprocess").run([cli, "requests"], capture_output=True, text=True, env=dict(os.environ, CYPHER_DAEMON=os.path.join(SRC, "cypherd.py"), CYPHER_NO_SYSTEMCTL="1"))
+check("grokbot-cypher requests lists them", pr.returncode == 0 and "GitHub" in pr.stdout, pr.stdout + pr.stderr)
+C._http = real_http
+
 # ---- house controls stay impossible; Alpha keeps deck-only actions off ----
 check("no phase-3 action name is a house control", not any(C.HOUSE_WORDS.search(a) for a in L["actions"]))
 A = load("alpha", host="alpha"); LA = A.current_limits(A.new_state())
@@ -225,4 +341,7 @@ check("Alpha standby: no phone, glance, note or color", not any(a in A.allowed_a
 check("Alpha standby: look_up allowed", "look_up" in A.allowed_actions(LA))
 J = "".join(open(os.path.join(T, "data", "journal", f)).read() for f in os.listdir(os.path.join(T, "data", "journal")))
 check("journal never contains the token or topic", TOKEN not in J and TOPIC not in J)
+J = "".join(open(os.path.join(T, "data", "journal", f)).read() for f in os.listdir(os.path.join(T, "data", "journal")))
+Rf = open(C.requests_file()).read() if os.path.exists(C.requests_file()) else ""
+check("journal and request file never contain the email or topic", C.ACCOUNT_EMAIL not in J and C.ACCOUNT_EMAIL not in Rf and TOPIC not in J and TOPIC not in Rf)
 print("%d passed, %d failed" % (ok, fail)); sys.exit(1 if fail else 0)

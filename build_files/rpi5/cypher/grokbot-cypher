@@ -13,6 +13,9 @@
   grokbot-cypher prefs rollback N  make version N current again (as a new version)
   grokbot-cypher sleep-now         condense today at the next tick
   grokbot-cypher ntfy-test         send one test message to Zack's phone (ntfy)
+  grokbot-cypher requests          list account requests Cypher has asked Zack for
+  grokbot-cypher requests resolve N approved|denied
+                                   mark request N approved or denied (Nova, after Zack replies)
 """
 import json, os, subprocess, sys, time
 E = os.environ.get
@@ -55,7 +58,7 @@ def fmt(line):
     cam = (j.get("perception") or {}).get("camera") or []
     ch = j.get("choice") or {}
     p = ch.get("params") or {}
-    what = ch.get("action", "?") + ((": " + (p.get("text") or p.get("color") or p.get("topic") or "")) if p else "")
+    what = ch.get("action", "?") + ((": " + (p.get("text") or p.get("color") or p.get("topic") or p.get("service") or "")) if p else "")
     v = j.get("validator", "")
     host = " @alpha" if j.get("host") == "alpha" else ""
     return "%s  %-6s %s%s%s%s\n          why: %s" % (j.get("ts", "")[11:19], j.get("brain", ""), what,
@@ -105,8 +108,13 @@ def main(argv):
         except (OSError, ValueError): mem = []
         for m in mem[-20:]: print("%s  %s" % (m.get("day", ""), m.get("text", "")))
         if not mem: print("no memories yet (Cypher sleeps at 4 AM)")
-    elif cmd in ("prefs", "sleep-now", "ntfy-test"):
-        args = ["prefs-rollback", argv[3]] if cmd == "prefs" and len(argv) > 3 and argv[2] == "rollback" else [cmd]
+    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests"):
+        if cmd == "prefs" and len(argv) > 3 and argv[2] == "rollback":
+            args = ["prefs-rollback", argv[3]]
+        elif cmd == "requests":
+            args = ["requests", *argv[2:]]
+        else:
+            args = [cmd]
         return subprocess.run([sys.executable, CYPHERD, *args]).returncode
     else:
         print(__doc__.strip()); return 2

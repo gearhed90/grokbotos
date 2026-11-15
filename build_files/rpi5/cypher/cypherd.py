@@ -41,6 +41,11 @@ Phase 3 (all capped in the limits file; deck only unless noted):
     whose title looks private.
   * look_up: a Wikipedia summary (allowlisted hosts only, read-only), on the
     deck or Alpha. Findings go to the journal and the next prompts.
+  * request_account: ask Zack for an account on a named service. Writes a
+    journal entry and a pending request, and pings his phone once. Nova
+    creates accounts only after Zack approves. Cypher never signs up, never
+    holds a password, and must not share its email. The phone ping does not
+    count against message_zack's caps. Deck only; never in quiet hours.
 
 Switches (all in ~/.config/cypher, see the cypher CLI):
   KILL         present -> cypherd exits at the next tick and stays off
@@ -68,6 +73,7 @@ HOLDER = "alpha" if HOST == "alpha" else "cypher"
 TRUST_OWNER = E("CYPHER_TRUST_OWNER") == "1"  # Alpha: 0600 files owned by this user count as locked
 
 DRIVES = ("energy", "curiosity", "social", "boredom", "focus")
+WEEK_S = 7 * 86400            # retention for recent actions, so per_week caps work
 DEFAULT_DRIFT = {"energy": -0.03, "curiosity": 0.05, "social": 0.06, "boredom": 0.08, "focus": -0.04}
 NIGHT_ENERGY = 0.06          # energy recovered per hour during quiet hours (until the sleep phase exists)
 EVENT_NUDGES = {"user_active": {"social": -0.15, "boredom": -0.20, "focus": 0.10},
@@ -77,8 +83,9 @@ ACTION_EFFECTS = {"journal_thought": {"boredom": -0.05, "curiosity": -0.03},
                   "set_avatar_color": {"boredom": -0.02},     # small: not the default boredom outlet
                   "message_zack": {"social": -0.15, "boredom": -0.03},
                   "glance_screen": {"curiosity": -0.08, "boredom": -0.05},
-                  "look_up": {"curiosity": -0.10, "boredom": -0.06}}
-DECK_ONLY = ("show_note", "set_avatar_color", "message_zack", "glance_screen")
+                  "look_up": {"curiosity": -0.10, "boredom": -0.06},
+                  "request_account": {"social": -0.08, "curiosity": -0.04}}
+DECK_ONLY = ("show_note", "set_avatar_color", "message_zack", "glance_screen", "request_account")
 BLOCKS = ("camera", "sleep", "failover", "ntfy", "screen", "lookup")
 EX_CONFIG = 78
 CAMERA_NUDGES = {"family": {"social": -0.10, "boredom": -0.05}, "person": {"curiosity": 0.05, "focus": 0.03},
@@ -88,6 +95,15 @@ CAMERA_NUDGES = {"family": {"social": -0.10, "boredom": -0.05}, "person": {"curi
                  "unconfirmed": {"curiosity": 0.02}}
 # Never an action, whatever the limits file says.
 HOUSE_WORDS = re.compile(r"camera|light|lock|door|garage|alarm|siren|ptz|record|thermostat|scene|hass|home.?assistant|switch", re.I)
+# Known in persona.md only. Never placed in a journal line, ntfy body or request file by cypherd.
+ACCOUNT_EMAIL = "s4j6vbnk+cypher@mail.grokbot.com"
+_PASSWORD_WORD = re.compile(r"password", re.I)
+_CRED_URL = re.compile(
+    r"https?://[^\s/]*:[^\s/]*@"          # https://user:pass@host
+    r"|https?://[^\s/]+@"                  # https://user@host
+    r"|[?&](?:password|passwd|token|secret|api[_-]?key|access[_-]?token)=",
+    re.I)
+_ACCOUNT_EMAIL_RE = re.compile(r"s4j6vbnk\+cypher@mail\.grokbot\.com|@mail\.grokbot\.com", re.I)
 _OUTBOX = []          # journal entries not yet pushed to Alpha
 _EPOCH = [None]       # current lease epoch, for journal ids
 
@@ -598,6 +614,7 @@ MANIFEST_TEXT = {
                     "(something broken, a finding worth his time). Never small talk, greetings or mood updates. params: {\"text\": max %(max_chars)s chars}",
     "glance_screen": "glance_screen - take one look at what is on your own screen right now; a short description comes back next tick. params: {}",
     "look_up": "look_up - look a topic up on Wikipedia; the summary comes back next tick. params: {\"topic\": max %(max_chars)s chars}",
+    "request_account": "request_account - ask Zack for an account on a service. This only ASKS; you cannot sign up and must not share your email address. Nova creates an account only after Zack approves. params: {\"service\": short name, max 40 chars, \"why\": max 160 chars}",
 }
 CAMERA_RULES = ("Only what the line says happened. 'unconfirmed' means motion nobody has checked: do not guess who it was. "
                 "Never invent doors opening, people coming or going, or who someone is (or is not) unless a name is in the line.")
@@ -615,7 +632,8 @@ def build_messages(L, st, p, now=None):
     system = (persona() + "\n\n"
               "You are not a chat assistant. Each tick you look at your state and the world and choose ONE action "
               "from the manifest, or none. Never invent actions or parameters. You cannot change anything in the house, "
-              "send messages or run commands.\n"
+              "send messages or run commands. Never share your email address or use it to sign up; "
+              "request_account only asks Zack, and must not include the address.\n"
               "Reply with JSON only: {\"action\": \"...\", \"params\": {...}, \"reason\": \"max 25 words\"}\n\n"
               "Manifest:\n" + "\n".join(lines))
     d = st["drives"]; md = st["mood"] or mood(d)
@@ -668,6 +686,8 @@ def blocked(L, st, p, a, now):
         return "%s hourly cap" % a
     if spec.get("per_day") is not None and count_recent(st, a, 86400, now) >= spec["per_day"]:
         return "%s daily cap" % a
+    if spec.get("per_week") is not None and count_recent(st, a, WEEK_S, now) >= spec["per_week"]:
+        return "%s weekly cap" % a
     if a == "show_note":
         if p.get("muted"): return "notes muted"
         if p.get("dnd"): return "do not disturb"
@@ -686,6 +706,8 @@ def blocked(L, st, p, a, now):
             return "private window"
     if a == "look_up" and not phase_on(L, "lookup"):
         return "look-ups off"
+    if a == "request_account":
+        if p.get("quiet_hours"): return "quiet hours"
     return None
 
 _TOPIC_RE = re.compile(r"^[\w][\w '().,:-]*$", re.U)
@@ -733,6 +755,18 @@ def validate(L, st, p, choice, now=None):
         if not t or len(t) > spec.get("max_chars", 60) or not _TOPIC_RE.match(t) or _URL.search(t):
             return "none", {}, "rejected: look_up needs a plain topic (max %d chars)" % spec.get("max_chars", 60)
         return a, {"topic": t}, "ok"
+    if a == "request_account":
+        svc_n = int(spec.get("max_service_chars", 40))
+        why_n = int(spec.get("max_why_chars", 160))
+        service = re.sub(r"\s+", " ", _CTRL.sub(" ", params.get("service") or "")).strip() if isinstance(params.get("service"), str) else ""
+        why = re.sub(r"\s+", " ", _CTRL.sub(" ", params.get("why") or "")).strip() if isinstance(params.get("why"), str) else ""
+        if not service or len(service) > svc_n:
+            return "none", {}, "rejected: request_account needs a service name (max %d chars)" % svc_n
+        if not why or len(why) > why_n:
+            return "none", {}, "rejected: request_account needs a why (max %d chars)" % why_n
+        if request_forbidden(service, why):
+            return "none", {}, "rejected: request_account cannot mention passwords, house controls or credential URLs"
+        return a, {"service": service, "why": why}, "ok"
     return "none", {}, "rejected: no executor for %s" % a
 
 # ---------- act ----------
@@ -745,6 +779,8 @@ def execute(action, params, L=None, st=None, p=None):
         return do_look_up(L, st, params["topic"])
     if action == "glance_screen":
         return do_glance(L, st, p)
+    if action == "request_account":
+        return do_request_account(L, st, params)
     if DRY_RUN:
         log("DRY-RUN", action, json.dumps(params)); return "ok (dry run)"
     if action == "message_zack":
@@ -793,6 +829,96 @@ def send_ntfy(L, text, title=None):
     except Exception as e:
         return "phone failed: " + type(e).__name__
     return "ok" if code == 200 else "phone failed: http %d" % code
+
+
+def request_forbidden(service, why):
+    """True if service or why mention a password, a house/camera word, a URL with
+    credentials, or Cypher's email (which must never go out in a request)."""
+    for t in (service, why):
+        if HOUSE_WORDS.search(t) or _PASSWORD_WORD.search(t) or _CRED_URL.search(t) or _ACCOUNT_EMAIL_RE.search(t):
+            return True
+    return False
+
+def requests_file():
+    return os.path.join(STATE_DIR, "account-requests.jsonl")
+
+def load_account_requests():
+    rows = []
+    try:
+        with open(requests_file()) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(rec, dict):
+                    rows.append(rec)
+    except OSError:
+        pass
+    return rows
+
+def save_account_requests(rows):
+    path = requests_file()
+    _private_dir(os.path.dirname(path) or ".")
+    tmp = path + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        for rec in rows:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    os.replace(tmp, path)
+
+def do_request_account(L, st, params, now=None):
+    """Record a pending account request and try one ntfy ping. The pending entry
+    is kept even if the phone message fails. Never puts the email in the file,
+    the journal or the ntfy body. Does not count against message_zack's caps."""
+    now = now or time.time()
+    rows = load_account_requests()
+    nid = 1 + max([r["id"] for r in rows if isinstance(r.get("id"), int)] or [0])
+    rec = {"id": nid, "ts": iso(now), "service": params["service"], "why": params["why"], "status": "pending"}
+    rows.append(rec)
+    save_account_requests(rows)
+    journal({"ts": rec["ts"], "event": "account_request", "id": nid,
+             "service": rec["service"], "why": rec["why"], "status": "pending"})
+    text = "Cypher asks for an account: %s - %s. Reply to Nova to approve." % (rec["service"], rec["why"])
+    if _ACCOUNT_EMAIL_RE.search(text):
+        text = "Cypher asks for an account. Reply to Nova to approve."
+    phone = send_ntfy(L, text)
+    rows = load_account_requests()
+    for r in rows:
+        if r.get("id") == nid:
+            r["notify"] = phone
+            break
+    save_account_requests(rows)
+    return "ok" if phone == "ok" else "asked; " + phone
+
+def cli_requests(argv):
+    """List or resolve pending account requests (Nova, via grokbot-cypher)."""
+    rows = load_account_requests()
+    if not argv:
+        if not rows:
+            print("no account requests"); return 0
+        for r in rows:
+            print("%s  %s  %-8s  %s" % (r.get("id", "?"), r.get("ts", ""), r.get("status", ""), r.get("service", "")))
+            if r.get("why"):
+                print("    %s" % r["why"])
+        return 0
+    if argv[0] == "resolve" and len(argv) >= 3:
+        if not str(argv[1]).isdigit() or argv[2] not in ("approved", "denied"):
+            print("usage: grokbot-cypher requests resolve <n> approved|denied"); return 2
+        n, status = int(argv[1]), argv[2]
+        hit = next((r for r in rows if r.get("id") == n), None)
+        if hit is None:
+            print("no request %d" % n); return 1
+        if hit.get("status") != "pending":
+            print("request %d is already %s" % (n, hit.get("status"))); return 1
+        hit["status"] = status
+        hit["resolved_ts"] = iso(time.time())
+        save_account_requests(rows)
+        print("request %d %s (%s)" % (n, status, hit.get("service", ""))); return 0
+    print("usage: grokbot-cypher requests\n       grokbot-cypher requests resolve <n> approved|denied"); return 2
 
 def _found(st, kind, text, now=None):
     if st is None:
@@ -907,7 +1033,7 @@ def tick(L, st, now=None, perceive_fn=None, camera_fn=None):
     st["mood"] = mood(st["drives"])
     st["tick"] += 1
     st["last_tick"] = now
-    st["recent"] = [r for r in st["recent"] if now - r[0] < 86400]
+    st["recent"] = [r for r in st["recent"] if now - r[0] < WEEK_S]
     paused = (read_json(os.path.join(CFG_DIR, "pause_until"), 0) or 0)
     if isinstance(paused, (int, float)) and now < paused:
         return None
@@ -964,11 +1090,11 @@ def action_label(choice, action, params, verdict, result):
     if verdict != "ok":
         a = str(choice.get("action"))[:24]
         pr = choice.get("params") if isinstance(choice.get("params"), dict) else {}
-        arg = pr.get("color") or pr.get("topic")
+        arg = pr.get("color") or pr.get("topic") or pr.get("service")
         why = verdict.replace("rejected: ", "", 1)
         if why.startswith(a + " "): why = why[len(a) + 1:]
         return ("%s%s (refused: %s)" % (a, " " + str(arg)[:20] if isinstance(arg, str) else "", why))[:80]
-    arg = params.get("color") or params.get("topic")
+    arg = params.get("color") or params.get("topic") or params.get("service")
     lab = action + (" " + arg[:24] if arg else "")
     if result not in ("ok", "ok (dry run)", "skipped") and action != "none":
         lab += " (" + result[:30] + ")"
@@ -1150,7 +1276,7 @@ SYNC_KEYS = ("drives", "mood", "tick", "last_actions", "cam_seq", "last_sleep")
 
 def export_state(L, st):
     s = {k: st.get(k) for k in SYNC_KEYS}
-    s["recent"] = st.get("recent", [])[-300:]
+    s["recent"] = [r for r in st.get("recent", []) if isinstance(r, list) and len(r) == 2][-2000:]
     s["memories"] = (read_json(MEM_FILE, []) or [])[-60:]
     s["prefs"] = read_json(PREFS_FILE, {}) or {}
     s["tunables"] = read_json(TUN_FILE, {}) or {}
@@ -1168,7 +1294,7 @@ def adopt_state(st, s):
             if isinstance(v, (int, float)):
                 st["drives"][k] = clamp(float(v), 0, 1)
     if isinstance(s.get("recent"), list):
-        st["recent"] = [r for r in s["recent"] if isinstance(r, list) and len(r) == 2][-300:]
+        st["recent"] = [r for r in s["recent"] if isinstance(r, list) and len(r) == 2][-2000:]
     if isinstance(s.get("last_actions"), list):
         st["last_actions"] = [str(a)[:80] for a in s["last_actions"]][-10:]
     for k in ("cam_seq",):
@@ -1335,7 +1461,7 @@ def save_state(path, st):
     write_json(path, st)
 
 def cli(argv):
-    """cypherd.py prefs | prefs-rollback N | sleep-now | ntfy-test  (used by grokbot-cypher)"""
+    """cypherd.py prefs | prefs-rollback N | sleep-now | ntfy-test | requests | requests resolve N approved|denied  (used by grokbot-cypher)"""
     if argv[0] == "prefs":
         prefs = read_json(PREFS_FILE, {}) or {}
         print("current version:", prefs.get("version", 0))
@@ -1362,6 +1488,8 @@ def cli(argv):
         r = send_ntfy(L, "Test from Cypher: phone messages work. Real ones are rare (max %s a day, never in quiet hours)."
                       % (L["actions"].get("message_zack") or {}).get("per_day", "?"))
         print("sent a test message to Zack's phone" if r == "ok" else r); return 0 if r == "ok" else 1
+    if argv[0] == "requests":
+        return cli_requests(argv[1:])
     print(cli.__doc__); return 2
 
 def main(argv=None):
