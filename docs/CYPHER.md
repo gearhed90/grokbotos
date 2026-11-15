@@ -117,7 +117,7 @@ What glances and look-ups find goes into the journal (`found`), the next few pro
 
 ## Not yet
 
-Wake word, self-improvement, dock meters, the lock-screen/boot theme, talking to Pino (needs an account), Cypher's 3D city on Alpha (see the plan in the notes). See the design page for the plan.
+Wake word, self-improvement, dock meters, the lock-screen/boot theme, talking to Pino (needs an account), Cypher's 3D city on Alpha (plan: docs/CYPHER-WORLD.md). See the design page for the plan.
 
 ## Tests
 
