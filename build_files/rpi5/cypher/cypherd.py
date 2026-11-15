@@ -480,7 +480,7 @@ def ask_local(L, st, messages, max_tokens=None, now=None):
     except urllib.error.HTTPError as e:
         raise BrainBusy("local_http_%d" % e.code)
     except (urllib.error.URLError, TimeoutError, OSError):
-        st["local_backoff_until"] = (now or time.time()) + L["brain"]["retry_after_s"]
+        st["local_backoff_until"] = (now or time.time()) + 60     # same box: cheap to retry soon
         raise BrainBusy("local_unreachable")
     return j["choices"][0]["message"]["content"], "local", lc.get("model", "local"), 0.0
 
@@ -566,6 +566,8 @@ MANIFEST_TEXT = {
 
 def build_messages(L, st, p):
     acts = allowed_actions(L)
+    if p.get("camera"):            # camera ticks: journal or nothing (the validator enforces it too)
+        acts = {a: s for a, s in acts.items() if a in ("none", "journal_thought")}
     lines = []
     for a, spec in acts.items():
         if a in MANIFEST_TEXT:
@@ -586,8 +588,9 @@ def build_messages(L, st, p):
             + "drives: " + ", ".join("%s %.2f" % (k, d[k]) for k in DRIVES) + "\n"
             + "mood: %s\n" % md["label"]
             + "your last actions: %s\n" % last
-            + ("cameras (read-only feed; you cannot control cameras, lights or anything in the house, and you only "
-               "journal about it): %s\n" % camera_line(p["camera"]) if p.get("camera") else "")
+            + ("cameras (read-only feed; you cannot control cameras, lights or anything in the house): %s\n"
+               "The cameras saw something. If it matters to you, write a short journal_thought about it "
+               "(who came or went, how it sits with your mood); otherwise none.\n" % camera_line(p["camera"]) if p.get("camera") else "")
             + memory_lines()
             + "Choose.")
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -1019,7 +1022,10 @@ def mind_step(L, st):
             code, r = lease_call(L, "acquire", st)
         except BrainBusy:
             st["alpha_backoff_until"] = max(st.get("alpha_backoff_until", 0), now + L["brain"]["retry_after_s"])
+            st["lease_unreachable"] = True
             return True
+        if st.pop("lease_unreachable", False):
+            st["alpha_backoff_until"] = 0          # Alpha answers again (e.g. network up after boot): use it now
         if code == 200 and r.get("granted") and r.get("epoch") != st.get("lease_epoch"):
             st["lease_epoch"] = _EPOCH[0] = r["epoch"]
             catch_up(L, st, r.get("why"))

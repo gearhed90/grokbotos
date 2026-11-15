@@ -134,6 +134,8 @@ e = D.tick(L, st3, now, perceive_fn=fakep, camera_fn=lambda L, st, n: [ev(9, "st
 check("stranger raises curiosity and focus", st3["drives"]["curiosity"] > before["curiosity"] and st3["drives"]["focus"] > before["focus"], st3["drives"])
 check("journal entry carries the camera events", e["perception"]["camera"][0]["kind"] == "stranger", e)
 check("prompt tells the model the feed is read-only", "read-only feed" in LOCAL["seen"][-1]["messages"][1]["content"])
+check("camera tick manifest offers only journal or none", "show_note" not in LOCAL["seen"][-1]["messages"][0]["content"]
+      and "set_avatar_color" not in LOCAL["seen"][-1]["messages"][0]["content"] and "journal_thought" in LOCAL["seen"][-1]["messages"][0]["content"])
 
 # ---- local fallback ----
 check("Alpha in gaming mode -> local model answered", e["brain"] == "local" and "alpha_gaming" in e["brain_notes"], e)
@@ -228,6 +230,8 @@ dead = json.loads(json.dumps({k: v for k, v in L.items() if k != "_quiet_nights"
 std2 = D.new_state(); now2 = time.time()
 check("proxy unreachable: deck still thinks", D.mind_step(D.validate_limits(dead), std2) is True)
 check("...and stops asking Alpha for a while", std2["alpha_backoff_until"] > now2)
+PX["lease"] = {"granted": True, "epoch": std2.get("lease_epoch") or 1, "why": "primary", "holder": "cypher"}; std2["lease_epoch"] = PX["lease"]["epoch"]
+D.mind_step(L, std2); check("proxy answers again -> Alpha used right away", std2["alpha_backoff_until"] == 0)
 
 # ---- failover, Alpha standby side ----
 A = load("alpha", "alpha")
