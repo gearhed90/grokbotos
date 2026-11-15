@@ -28,7 +28,7 @@ rpm -q libavcodec-freeworld gtk4-layer-shell >/dev/null
 
 # --- Nova app + novad -----------------------------------------------------
 install -d -m 0755 "$nova"
-for f in avatar.py avatar_shapes.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py cadpad.py nova-web-user.js; do
+for f in avatar.py avatar_shapes.py glview.py nova_native.py novad.py cypher_link.py shell.html lockscene.py pamauth.py cadpad.py nova-web-user.js; do
     install -m 0644 "${src}/${f}" "${nova}/${f}"
 done
 install -m 0755 "${src}/grokbot-lock-keypad.py" "${nova}/grokbot-lock-keypad.py"
@@ -72,16 +72,17 @@ install -m 0755 "${csrc}/grokbot-set-cypher-token" /usr/local/sbin/grokbot-set-c
 # sudo grokbot-set-cypher-ntfy (/etc/grokbot/cypher-ntfy-topic, root:grokbot
 # 0640); never in the image. glance_screen uses grim (already in the image).
 install -m 0755 "${csrc}/grokbot-set-cypher-ntfy" /usr/local/sbin/grokbot-set-cypher-ntfy
-# Phase 4: the dashboard (cypher-dash.py on sway workspace 9, Super+C) and
-# qrencode for grokbot-cypher ntfy-qr (a terminal QR of the topic, on screen only).
-install -m 0644 "${csrc}/cypher-dash.py" "${cypher}/cypher-dash.py"
-install -m 0755 "${csrc}/grokbot-cypher-dash" /usr/local/bin/grokbot-cypher-dash
+# Phase 4: Cypher's HUD panels around the avatar (cypher_panels.py, drawn by
+# nova_native.py; Super+C hides/shows them) and qrencode for grokbot-cypher
+# ntfy-qr (a terminal QR of the topic, on screen only).
+install -m 0644 "${csrc}/cypher_panels.py" "${cypher}/cypher_panels.py"
+install -m 0755 "${csrc}/grokbot-cypher-panels" /usr/local/bin/grokbot-cypher-panels
 dnf5 install -y qrencode
 command -v qrencode >/dev/null
 command -v grim >/dev/null
 install -m 0644 "${csrc}/cypherd.service" /usr/lib/systemd/user/cypherd.service
 systemctl --global enable cypherd.service
-python3 -m py_compile "${cypher}/cypherd.py" "${cypher}/cypher-dash.py"
+python3 -m py_compile "${cypher}/cypherd.py" "${cypher}/cypher_panels.py" "${nova}/cypher_link.py"
 [[ ! -e /etc/grokbot/cypher-brain-token ]]
 [[ ! -e /etc/grokbot/cypher-ntfy-topic ]]
 

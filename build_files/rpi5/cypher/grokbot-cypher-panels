@@ -1,0 +1,16 @@
+#!/bin/bash
+# Super+C: hide or show Cypher's panels around the avatar (phase 4b).
+# The avatar app (nova_native.py) watches ~/.config/cypher/panels-hidden.
+#   grokbot-cypher-panels            toggle
+#   grokbot-cypher-panels show|hide
+set -euo pipefail
+cfg="${CYPHER_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/cypher}"
+flag="$cfg/panels-hidden"
+mkdir -p -m 0700 "$cfg"
+case "${1:-toggle}" in
+    show) rm -f "$flag" ;;
+    hide) : >"$flag" ;;
+    toggle) if [[ -e "$flag" ]]; then rm -f "$flag"; else : >"$flag"; fi ;;
+    *) echo "usage: grokbot-cypher-panels [toggle|show|hide]" >&2; exit 2 ;;
+esac
+[[ -e "$flag" ]] && echo "panels hidden" || echo "panels shown"

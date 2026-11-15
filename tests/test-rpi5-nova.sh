@@ -123,8 +123,9 @@ assert_contains "${cy}/cypherd.service" 'ConditionGroup=grokbot'
 if bash "${cy}/grokbot-set-cypher-token" </dev/null 2>/dev/null; then
     fail "grokbot-set-cypher-token ran without root"
 fi
-# The on-screen assistant is Cypher now (was Pixel).
-assert_contains "${nova}/novad.py" 'You are Cypher, the assistant'
+# The on-screen voice is Cypher itself (was Pixel, then a separate "Cypher" assistant).
+assert_contains "${nova}/novad.py" 'You are Cypher, the mind living in'
+assert_contains "${nova}/novad.py" 'cypher_link.system_prompt(TOOL_RULES)'
 assert_contains "${nova}/shell.html" 'placeholder="Ask Cypher…"'
 if grep -n 'Pixel' "${nova}"/*.py "${nova}"/*.html | grep -v devicePixelRatio; then
     fail "the assistant is still called Pixel somewhere"
@@ -133,20 +134,24 @@ python3 tests/cypher/test_cypherd.py
 python3 tests/cypher/test_cypherd_phase2.py
 python3 tests/cypher/test_cypherd_phase3.py
 python3 tests/cypher/test_cypherd_phase4.py
-# Phase 4: dashboard on workspace 9 (Super+C), Super+Enter terminal, qrencode for ntfy-qr.
-bash -n "${cy}/grokbot-cypher-dash"
+# Phase 4: one mind. HUD panels around the avatar (Super+C hides/shows), the
+# avatar's conversations go to cypherd (cypher_link), Super+Enter terminal, qrencode.
+python3 tests/cypher/test_cypher_one_mind.py
+bash -n "${cy}/grokbot-cypher-panels"
 bash -n "${nova}/grokbot-term"
-python3 -m py_compile "${cy}/cypher-dash.py"
-assert_contains build_files/rpi5-nova.sh '/usr/local/bin/grokbot-cypher-dash'
-assert_contains build_files/rpi5-nova.sh '"${cypher}/cypher-dash.py"'
+python3 -m py_compile "${cy}/cypher_panels.py" "${nova}/cypher_link.py"
+assert_contains build_files/rpi5-nova.sh '/usr/local/bin/grokbot-cypher-panels'
+assert_contains build_files/rpi5-nova.sh '"${cypher}/cypher_panels.py"'
+assert_contains build_files/rpi5-nova.sh 'cypher_link.py'
 assert_contains build_files/rpi5-nova.sh '/usr/local/bin/grokbot-term'
 assert_contains build_files/rpi5-nova.sh 'dnf5 install -y qrencode'
 assert_contains "${nova}/sway-rpi5-nova.conf" 'bindsym Mod4+Return exec /usr/local/bin/grokbot-term'
-assert_contains "${nova}/sway-rpi5-nova.conf" 'assign [app_id="cypher-dash"] workspace number 9'
-assert_contains "${nova}/sway-rpi5-nova.conf" 'for_window [app_id="cypher-dash"] inhibit_idle none'
-assert_contains "${nova}/sway-rpi5-nova.conf" 'bindsym Mod4+c exec /usr/local/bin/grokbot-cypher-dash'
-if grep -E 'cypher-ntfy-topic|cypher-brain-token|xai_key' "${cy}/cypher-dash.py" >/dev/null; then
-    fail "cypher-dash.py must never open a secret file"
+assert_contains "${nova}/sway-rpi5-nova.conf" 'bindsym Mod4+c exec /usr/local/bin/grokbot-cypher-panels'
+grep -q 'cypher-dash' "${nova}/sway-rpi5-nova.conf" build_files/rpi5-nova.sh && fail "the separate dashboard workspace is gone"
+assert_contains "${nova}/nova_native.py" 'import cypher_panels as CP'
+assert_contains "${nova}/novad.py" 'import cypher_link'
+if grep -E 'cypher-ntfy-topic|cypher-brain-token|xai_key|read_secret' "${cy}/cypher_panels.py" "${nova}/cypher_link.py" >/dev/null; then
+    fail "the HUD and the conversation bridge must never open a secret file"
 fi
 # Phase 3: ntfy topic made on the device, never in the image; touch retry enabled.
 bash -n "${cy}/grokbot-set-cypher-ntfy"

@@ -52,8 +52,12 @@ Phase 4:
     display-only snapshot (mood, drives, activity, recent journal, actions and
     refusals, camera summary with first names only). Every string in it goes
     through dash_text(), which strips secrets, addresses, URLs and anything that
-    looks like a token or a house device id. cypher-dash.py draws it on its own
-    sway workspace; it never reads secret files.
+    looks like a token or a house device id. The avatar app draws it as HUD
+    panels around the avatar (cypher_panels.py); it never reads secret files.
+  * One mind: the avatar's conversations (typed or voice, via novad) are Cypher
+    talking. novad builds its prompt from Cypher's persona and this snapshot, and
+    spools every turn; talk_step() journals the turns, moves the drives, and runs
+    any request_account the conversation queued through the same validator.
   * Two-way ntfy: Zack's replies on the same secret topic are read (capped) and
     stored as messages from Zack that Cypher reads and journals. A reply is
     NEVER an approval of anything: not an action, not an account request, not a
@@ -310,7 +314,7 @@ def new_state():
             "merged_since": "", "outbox": [], "deck_limits": None,
             "avatar_color": None, "color_mood": None, "found": [],
             "inbox_since": None, "inbox_last_poll": 0, "inbox_recent": [], "inbox_seen": [], "inbox": [],
-            "cam_log": [], "dash_last": None}
+            "cam_log": [], "dash_last": None, "talk": [], "last_talk": 0}
 
 def apply_delta(drives, delta):
     for k, v in delta.items():
@@ -667,6 +671,7 @@ def build_messages(L, st, p, now=None):
             + "your last actions: %s\n" % last
             + found_lines(st, now)
             + zack_lines(p)
+            + talk_lines(st, now)
             + ("cameras (read-only feed; you cannot control cameras, lights or anything in the house): %s\n"
                "If it matters to you, write a short journal_thought about it; otherwise none. %s\n"
                % (camera_line(p["camera"]), CAMERA_RULES) if p.get("camera") else "")
@@ -709,6 +714,7 @@ def blocked(L, st, p, a, now):
     if spec.get("per_week") is not None and count_recent(st, a, WEEK_S, now) >= spec["per_week"]:
         return "%s weekly cap" % a
     if a == "show_note":
+        if now - float(st.get("last_talk") or 0) < 120: return "talking with zack right now"
         if p.get("muted"): return "notes muted"
         if p.get("dnd"): return "do not disturb"
         if p.get("quiet_hours"): return "quiet hours"
@@ -1064,6 +1070,90 @@ def zack_lines(p):
             "if it needs an answer): " + " | ".join("[%s] %s" % (time.strftime("%-I:%M %p", time.localtime(t)), x)
                                                     for t, x in z))[:900] + "\n"
 
+# ---------- phase 4b: the avatar's conversations are Cypher's ----------
+# novad (the avatar's voice and hands) appends each conversation turn to
+# talk-spool.jsonl (cypher_link.record_turn). cypherd ingests it here: journals each
+# turn (scrubbed again), moves the drives, keeps the last turns for its own prompt
+# and the nightly sleep. A conversation can also queue request_account, which goes
+# through this validator and its locked caps like any other choice. Nothing said
+# in a conversation approves an account request or changes a limit.
+TALK_NUDGE = {"social": -0.12, "boredom": -0.08, "focus": 0.04}
+TALK_KINDS = ("turn", "asks_confirm", "confirm", "error")
+TALK_ARGS = ("name", "action", "percent", "change", "muted", "shape", "color", "ssid", "service")   # same allowlist as cypher_link
+
+def talk_spool():
+    return os.path.join(STATE_DIR, "talk-spool.jsonl")
+
+def talk_step(L, st, now, p):
+    """Ingest the conversation spool (deck only). Returns the number of turns taken in."""
+    if HOST == "alpha":
+        return 0
+    src = talk_spool(); work = src + ".work"
+    try:
+        os.replace(src, work)
+    except OSError:
+        if not os.path.exists(work):
+            return 0
+    rows = []
+    try:
+        with open(work) as f:
+            for line in f:
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(r, dict):
+                    rows.append(r)
+    except OSError:
+        pass
+    try: os.remove(work)
+    except OSError: pass
+    secrets = [read_secret(NTFY_TOPIC_FILE), read_secret(TOKEN_FILE)]
+    S = lambda t, n=300: dash_text(t, n, secrets)
+    turns = nudged = 0
+    for r in rows[:30]:
+        ts = min(float(r["ts"]), now) if isinstance(r.get("ts"), (int, float)) and not isinstance(r.get("ts"), bool) else now
+        if r.get("kind") == "action":
+            pr = r.get("params") if isinstance(r.get("params"), dict) else {}
+            choice = {"action": str(r.get("action"))[:30], "params": {k: S(v, 160) for k, v in pr.items() if k in ("service", "why")}}
+            action, params, verdict = validate(L, st, dict(p, camera=[]), choice, now)
+            if verdict == "ok" and action == "request_account":
+                result = execute(action, params, L, st, p)
+                st["recent"].append([now, action]); apply_delta(st["drives"], ACTION_EFFECTS.get(action, {}))
+            else:
+                result = "skipped"
+            st["last_actions"] = (st["last_actions"] + [action_label(choice, action, params, verdict, result) + " (asked on screen)"])[-10:]
+            journal({"ts": iso(now), "event": "talk_action", "action": choice["action"], "service": choice["params"].get("service"),
+                     "validator": verdict, "result": result, "note": "queued from a conversation; never an approval"}, now)
+            continue
+        if r.get("kind") not in TALK_KINDS:
+            continue
+        tools = []
+        for t in (r.get("tools") or [])[:6]:
+            if isinstance(t, dict):
+                tools.append({"tool": S(t.get("tool"), 30), "outcome": S(t.get("outcome"), 40),
+                              **({"args": {k: S(v, 40) for k, v in t["args"].items() if k in TALK_ARGS}} if isinstance(t.get("args"), dict) and t.get("args") else {})})
+        e = {"ts": iso(ts), "event": "talk", "kind": r["kind"], "via": "voice" if r.get("via") == "voice" else "typed",
+             "user": S(r.get("user")), "reply": S(r.get("reply"))}
+        if tools: e["tools"] = tools
+        journal(e, now)
+        st.setdefault("talk", []).append([ts, e["user"], e["reply"]])
+        if nudged < 3:
+            apply_delta(st["drives"], TALK_NUDGE); nudged += 1
+        turns += 1
+    if len(rows) > 30:
+        journal({"ts": iso(now), "event": "talk_dropped", "count": len(rows) - 30, "why": "conversation spool cap"}, now)
+    st["talk"] = (st.get("talk") or [])[-6:]
+    st["last_talk"] = max([t[0] for t in st["talk"]] or [st.get("last_talk") or 0])
+    return turns
+
+def talk_lines(st, now):
+    t = [x for x in st.get("talk") or [] if isinstance(x, list) and len(x) == 3 and now - x[0] < 1800][-2:]
+    if not t:
+        return ""
+    return ("you recently talked with Zack on your screen (that was you; same mind): "
+            + " | ".join("[%s] Zack: %s / you: %s" % (time.strftime("%-I:%M", time.localtime(a)), b[:140], c[:140]) for a, b, c in t))[:700] + "\n"
+
 # ---------- phase 4: dashboard snapshot ----------
 _DASH_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _DASH_URL = re.compile(r"\b(?:https?|rtsp|rtsps|wss?|mqtt)://\S+|www\.\S+", re.I)
@@ -1100,6 +1190,10 @@ def dash_line(e):
     ev = e.get("event")
     if ev == "zack_message":
         return hm, "zack", str(e.get("text", ""))
+    if ev == "talk":
+        return hm, "talk", "Zack: %s \u2192 %s" % (e.get("user", ""), e.get("reply", ""))
+    if ev == "talk_action":
+        return hm, "ask", "asked on screen: %s %s (%s)" % (e.get("action", ""), e.get("service") or "", e.get("validator", ""))
     if ev == "account_request":
         return hm, "ask", "asked Zack for an account: %s" % e.get("service", "")
     if ev == "sleep":
@@ -1305,7 +1399,7 @@ def iso(t):
     return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(t))
 
 # ---------- the tick ----------
-def tick(L, st, now=None, perceive_fn=None, camera_fn=None, inbox_fn=None):
+def tick(L, st, now=None, perceive_fn=None, camera_fn=None, inbox_fn=None, talk_fn=None):
     """One tick. Returns the journal entry if a model was asked (or a choice rejected), else None."""
     now = now or time.time()
     tun = load_tunables(L)
@@ -1314,6 +1408,7 @@ def tick(L, st, now=None, perceive_fn=None, camera_fn=None, inbox_fn=None):
     p = (perceive_fn or (perceive_alpha if HOST == "alpha" else perceive))(L, now)
     p["camera"] = (camera_fn or camera_step)(L, st, now)
     p["zack"] = (inbox_fn or inbox_step)(L, st, now)       # messages to read; never approvals
+    p["talk"] = (talk_fn or talk_step)(L, st, now, p)       # the avatar's conversations: Cypher's own
     drift(st["drives"], tun["drift_per_hour"], hours, p["quiet_hours"])
     for ev in p["camera"]:
         st.setdefault("cam_log", []).append({"time": ev["time"][11:16], "camera": ev["camera"], "kind": ev["kind"],
@@ -1448,7 +1543,8 @@ def day_stats(entries):
     cams = Counter(c.get("kind") for e in ticks for c in (e.get("perception") or {}).get("camera") or [])
     return {"ticks": len(ticks), "actions": dict(acts), "brains": dict(Counter(e.get("brain") for e in ticks)),
             "moods": dict(Counter(e.get("mood") for e in ticks).most_common(3)), "camera": dict(cams),
-            "on_alpha": sum(1 for e in ticks if e.get("host") == "alpha")}
+            "on_alpha": sum(1 for e in ticks if e.get("host") == "alpha"),
+            "talks": sum(1 for e in entries if e.get("event") == "talk")}
 
 def apply_sleep(L, day, reply, stats, brain, now=None):
     """Apply one night's changes within the locked limits. Returns the summary (journaled)."""
@@ -1533,6 +1629,9 @@ def maybe_sleep(L, st, now=None, force=False):
         return None                       # nothing lived that day (deck off, or before Cypher existed)
     thoughts = []
     for e in entries:
+        if e.get("event") == "talk":
+            thoughts.append("%s talked: Zack: %s / you: %s" % (str(e.get("ts", ""))[11:16], str(e.get("user", ""))[:100], str(e.get("reply", ""))[:100]))
+            continue
         ch = e.get("choice") or {}
         t = (ch.get("params") or {}).get("text") if ch.get("action") == "journal_thought" else e.get("found")
         if t or e.get("reason"):

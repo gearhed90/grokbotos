@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""novad - Nova prompt-shell backend for grokbotos (stdlib only).
+"""novad - Cypher's on-screen voice and hands for grokbotos (stdlib only).
+
+There is no separate chat assistant: talking to the avatar (typed or by voice) is
+talking to Cypher. The system prompt is Cypher's persona and live state
+(cypher_link.system_prompt: mood, drives, journal, phone replies, memories), and
+every turn goes back into Cypher's journal through cypherd (cypher_link.record_turn).
+Cypher's locked limits and approval rules still apply: nothing said here approves
+an account request or changes a limit. The internal names (novad, nova-shell,
+NOVA_* settings, ~/.config/grokbot/nova-voice.json) are kept so sway rules, the
+lock screen and the toggle keep working.
 
 Serves shell.html on http://127.0.0.1:PORT/ and handles prompts via the xAI
 chat completions API with a small allowlisted toolset. No shell-exec tool.
@@ -11,6 +20,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import avatar_shapes   # avatar shape/color choice (~/.config/grokbot/avatar.json); nova_native watches the file
+import cypher_link     # the conversation is Cypher's: persona, state, journal (see module doc)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get("NOVA_PORT", "8765"))
@@ -293,7 +303,7 @@ def t_updates_status():
     return {"ok": True, "version": b.get("version"), "update_available": u.get("available"),
             "available_version": u.get("available_version"), "staged": bool(u.get("staged")),
             "restart_needed": u.get("restart_needed"), "last_check_ok": last.get("ok"),
-            "note": "Nova only reads update status; installing updates is done in Settings."}
+            "note": "Cypher only reads update status; installing updates is done in Settings."}
 
 # ---------- confirmations ----------
 PENDING = {}; plock = threading.Lock(); CONFIRM_TTL = int(os.environ.get("NOVA_CONFIRM_TTL", "60"))
@@ -309,23 +319,35 @@ def make_pending(tool, args, text, run):
     return {"ok": False, "pending": True, "confirm_id": pid, "question": text}
 
 def confirm(pid, yes):
+    r = _confirm(pid, yes)
+    try:
+        cypher_link.record_turn("yes" if yes else "no", r.get("reply") or r.get("text") or "", "typed",
+                                [{"tool": r.pop("_tool", "?"), "args": r.pop("_args", {}), "outcome": r.get("error") or ("ok" if yes else "declined")}],
+                                "confirm")
+    except Exception as e:
+        log("cypher link:", type(e).__name__)
+    r.pop("_tool", None); r.pop("_args", None)
+    return r
+
+def _confirm(pid, yes):
     with plock:
         p = PENDING.pop(str(pid), None)   # single use
     if not p:
         return {"error": "gone", "text": "That request expired or was already answered."}
+    tag = {"_tool": p["tool"], "_args": p["args"]}
     if p["exp"] < time.time():
         audit(p["tool"], p["args"], "expired")
-        return {"error": "expired", "text": "That request expired. Ask me again."}
+        return {"error": "expired", "text": "That request expired. Ask me again.", **tag}
     if not yes:
         audit(p["tool"], p["args"], "declined")
-        return {"reply": "Okay, I won't."}
+        return {"reply": "Okay, I won't.", **tag}
     try:
         res = p["run"]()
         audit(p["tool"], p["args"], "ok", via="confirmed")
-        return {"reply": res}
+        return {"reply": res, **tag}
     except (GbdError, subprocess.SubprocessError, OSError) as e:
         audit(p["tool"], p["args"], "error: " + str(e)[:80], via="confirmed")
-        return {"error": "action", "text": "That didn't work: " + str(e)[:120]}
+        return {"error": "action", "text": "That didn't work: " + str(e)[:120], **tag}
 
 # ---------- tool dispatch ----------
 def _int(v, lo, hi, name):
@@ -411,6 +433,9 @@ def call_tool(name, a):
             if shape is None and color is None: raise ValueError("give shape and/or color")
             c = avatar_shapes.save(shape=shape, color=color)
             r = {"ok": True, "result": "Avatar is now a %s %s." % (c["color"], c["shape"])}
+        elif name == "request_account":
+            # Only queued for cypherd: its validator and locked caps decide. Never an approval.
+            r = cypher_link.queue_action("request_account", {"service": a.get("service"), "why": a.get("why")})
         elif name == "power":
             act = a.get("action")
             m = {"lock": ("lock", "Lock the screen?", "Locking."), "restart": ("reboot", "Restart the Pi?", "Restarting."),
@@ -451,15 +476,27 @@ def tool_schema():
         f("set_avatar", "Change how you (the on-screen avatar) look: shape and/or color.",
           {"shape": {"type": "string", "enum": avatar_shapes.SHAPE_IDS}, "color": {"type": "string", "enum": avatar_shapes.COLOR_IDS}}),
         f("power", "Lock the screen, restart or shut down. Asks the user first.", {"action": {"type": "string", "enum": ["lock", "restart", "shutdown"]}}, ["action"]),
+        f("request_account", "Ask Zack for an account on a service (queued; your locked limits check it; Zack approves only through Nova). "
+          "Never include your email address or a password.",
+          {"service": {"type": "string", "maxLength": 40}, "why": {"type": "string", "maxLength": 160}}, ["service", "why"]),
     ]
 
-SYSTEM = ("You are Cypher, the assistant built into Zack's Grok Bot OS on a Raspberry Pi touchscreen. "
+TOOL_RULES = ("You run on Zack's Grok Bot OS Raspberry Pi touchscreen. "
           "Act on requests using your tools. The onshape_pad app is Zack's touch button pad for Onshape on his PC. For streamers on Twitch open https://www.twitch.tv/<channel> "
           "(channel names are lowercase with no spaces, e.g. 'burnt peanut' -> burntpeanut). "
           "Some tools return pending: the user is shown Yes/No buttons; just restate the question briefly. "
           "Never ask for, repeat or accept a WiFi password: tell the user to enter it in Settings. "
           "You cannot install updates. "
           "Replies are shown in one line above a text bar: keep them to one or two short sentences.")
+
+def system_prompt():
+    """Cypher's persona + live state + the tool rules (rebuilt every prompt; cheap file reads)."""
+    try:
+        return cypher_link.system_prompt(TOOL_RULES)
+    except Exception as e:                      # never lose the conversation over the bridge
+        log("cypher link:", type(e).__name__)
+        return "You are Cypher, the mind living in Zack's Raspberry Pi 5 cyberdeck.\n\n" + TOOL_RULES
+
 
 # ---------- model ----------
 history = []
@@ -474,7 +511,11 @@ def chat(messages, key):
     with urllib.request.urlopen(req, timeout=120) as r:
         return json.load(r)["choices"][0]["message"]
 
-def handle_prompt(prompt, emit):
+def handle_prompt(prompt, emit, via="typed"):
+    used = []                                    # tools this turn used, for Cypher's journal
+    def turn(reply, kind="turn"):
+        try: cypher_link.record_turn(prompt, reply, via, used, kind)
+        except Exception as e: log("cypher link:", type(e).__name__)
     try:
         key = read_key()
     except KeyError_ as e:
@@ -482,9 +523,10 @@ def handle_prompt(prompt, emit):
                if str(e) == "nokey" else
                "The system key /etc/grokbot/xai_key has unsafe owner or permissions. Run: sudo grokbot-set-xai-key"
                if str(e) == "badsys" else "My key file is readable by others. Run: chmod 600 ~/.config/grokbot/xai_key")
-        emit({"error": str(e), "text": msg}); return
+        emit({"error": str(e), "text": msg}); turn(msg, "error"); return
+    sysmsg = system_prompt()
     with hlock:
-        convo = [{"role": "system", "content": SYSTEM}] + history[-HISTORY_MAX:] + [{"role": "user", "content": prompt}]
+        convo = [{"role": "system", "content": sysmsg}] + history[-HISTORY_MAX:] + [{"role": "user", "content": prompt}]
     try:
         pend = None
         for _ in range(MAX_TOOL_ROUNDS + 1):
@@ -492,7 +534,8 @@ def handle_prompt(prompt, emit):
                 with hlock:
                     history.extend([{"role": "user", "content": prompt}, {"role": "assistant", "content": pend["question"]}])
                     del history[:-HISTORY_MAX]
-                emit({"confirm": {"id": pend["confirm_id"], "text": pend["question"], "ttl": CONFIRM_TTL}}); return
+                emit({"confirm": {"id": pend["confirm_id"], "text": pend["question"], "ttl": CONFIRM_TTL}})
+                turn(pend["question"], "asks_confirm"); return
             m = chat(convo, key)
             calls = m.get("tool_calls") or []
             if not calls:
@@ -500,7 +543,7 @@ def handle_prompt(prompt, emit):
                 with hlock:
                     history.extend([{"role": "user", "content": prompt}, {"role": "assistant", "content": text}])
                     del history[:-HISTORY_MAX]
-                emit({"reply": text}); return
+                emit({"reply": text}); turn(text); return
             convo.append({"role": "assistant", "content": m.get("content") or "", "tool_calls": calls})
             for c in calls:
                 fn = c.get("function", {}); name = fn.get("name")
@@ -510,17 +553,20 @@ def handle_prompt(prompt, emit):
                     args = {}
                 emit({"state": "working", "tool": name})
                 res = call_tool(name, args)
+                used.append({"tool": str(name), "args": args if isinstance(args, dict) else {},
+                             "outcome": "pending" if res.get("pending") else ("ok" if res.get("ok", True) else "refused")})
                 convo.append({"role": "tool", "tool_call_id": c.get("id", ""), "content": json.dumps(res)})
                 if res.get("pending"):
                     pend = pend or res
             emit({"state": "thinking"})
-        emit({"error": "loop", "text": "That took too many steps, so I stopped."})
+        emit({"error": "loop", "text": "That took too many steps, so I stopped."}); turn("too many steps", "error")
     except urllib.error.HTTPError as e:
         log("api http error", e.code)
         emit({"error": "api", "text": "The xAI API said no (HTTP %d)." % e.code + (" Check the key." if e.code in (401, 403) else "")})
+        turn("api error %d" % e.code, "error")
     except Exception as e:
         log("api error", type(e).__name__)
-        emit({"error": "net", "text": "I couldn't reach xAI. Is the WiFi up?"})
+        emit({"error": "net", "text": "I couldn't reach xAI. Is the WiFi up?"}); turn("could not reach the model", "error")
 
 # ---------- voice (plan step 6) ----------
 # Push-to-talk is recorded server-side with pw-record (PipeWire, already in the image),
@@ -880,7 +926,7 @@ def wake_word_hook():
     and signal the page through a GET /api/voice/events stream so it can show
     'listening'; the take then ends on its own via the end-of-speech watcher and the
     page picks up the result with /api/voice/wait. Enabled only when nova-voice.json
-    has "wake_word": "nova"."""
+    has "wake_word": "cypher"."""
     return None
 
 # ---------- http ----------
@@ -970,7 +1016,7 @@ class H(BaseHTTPRequestHandler):
         def emit(ev):
             self.wfile.write((json.dumps(ev) + "\n").encode()); self.wfile.flush()
         log("prompt received (%d chars, %s; text not logged)" % (len(prompt), via))
-        handle_prompt(prompt, emit)
+        handle_prompt(prompt, emit, via)
         self.close_connection = True
     def _json(self, obj):
         d = json.dumps(obj).encode()

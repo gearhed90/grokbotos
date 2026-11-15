@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Nova native shell for grokbotos (GTK3 + pycairo). Replaces the Firefox kiosk page.
-Client of novad (http://127.0.0.1:8765). Wayland app_id is "nova-shell" so the sway
-rules and novad's focus watcher keep working. No on-screen keyboard by design."""
+"""Cypher's face for grokbotos (GTK3 + pycairo): the avatar, the text bar and voice,
+and Cypher's HUD panels around the avatar (cypher_panels: mood, drives, brain,
+activity, journal, actions, camera line, phone replies, account requests; Super+C
+hides/shows them). Talking here is talking to Cypher (novad -> cypher_link).
+Client of novad (http://127.0.0.1:8765). The internal names stay (nova_native.py,
+Wayland app_id "nova-shell") so the sway rules, the Super toggle and novad's focus
+watcher keep working. No on-screen keyboard by design."""
 import argparse, json, os, sys, threading, time, urllib.request, urllib.error
 import gi
 gi.require_version("Gtk", "3.0"); gi.require_version("Gdk", "3.0")
@@ -12,8 +16,16 @@ import cairo
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from avatar import Avatar
 import avatar_shapes as AS
+for _d in (os.environ.get("CYPHER_LIB"), "/usr/share/grokbot/cypher",
+           os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cypher")):
+    if _d and os.path.exists(os.path.join(_d, "cypher_panels.py")):
+        sys.path.insert(0, _d); break
+try:
+    import cypher_panels as CP              # Cypher's HUD; the avatar works without it
+except Exception as _e:
+    CP = None; print("cypher panels unavailable:", type(_e).__name__, file=sys.stderr, flush=True)
 
-NET_ERR = "I can't reach my helper service right now (novad)."
+NET_ERR = "I can't reach my voice service right now."
 CSS = b"""
 window, .nova { background: #000; }
 #reply { color: #d1fae5; font-size: 24px; }
@@ -128,6 +140,12 @@ class Nova:
             self.da = Gtk.DrawingArea(); self.da.connect("draw", self.on_draw); self.redraw = self.da.queue_draw
         ov.add(self.da)
         self.surf = None
+        # Cypher's HUD around the avatar: drawn into a cache only when dash.json changes
+        self.hud = None; self.hud_key = None; self.base_h = self.av.lay["h"]
+        if CP is not None and not a.no_panels:
+            self.hud_cache = CP.Cache(); self.hud = Gtk.DrawingArea()
+            self.hud.connect("draw", self.on_hud_draw)
+            ov.add_overlay(self.hud); ov.set_overlay_pass_through(self.hud, True)
         # bottom bar
         bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, halign=Gtk.Align.CENTER, valign=Gtk.Align.END); self.bar = bar
         self.reply = Gtk.Label(name="reply", wrap=True, justify=Gtk.Justification.CENTER, halign=Gtk.Align.CENTER, margin_bottom=12)
@@ -170,7 +188,7 @@ class Nova:
         self.cfg_mtime = self._cfg_mtime(); GLib.timeout_add_seconds(2, self._watch_cfg)
         w.connect("size-allocate", self.on_size)
         w.connect("key-press-event", self.on_key); w.connect("key-release-event", self.on_key_up)
-        w.show_all(); self.mute.hide(); self.mic.hide(); self.picker.hide()
+        w.show_all(); self.mute.hide(); self.mic.hide(); self.picker.hide(); self._watch_hud()
         if a.renderer == "gl":
             print("renderer gl:", getattr(self.da, "info", None), "failed:", self.da.failed, file=sys.stderr, flush=True)
             if self.da.failed: os.execv(sys.executable, [sys.executable] + sys.argv + ["--renderer", "cairo"])
@@ -253,12 +271,33 @@ class Nova:
         m = self._cfg_mtime()
         if m != self.cfg_mtime:
             self.cfg_mtime = m; self.apply_look(AS.load())
+        self._watch_hud()
         return True
+    def _watch_hud(self):    # Super+C (panels-hidden) and new snapshots from cypherd
+        if self.hud is None: return
+        key = (CP.hidden(), CP.snapshot_mtime(), int(time.time() // 60))
+        if key != self.hud_key:
+            shown_changed = self.hud_key is None or key[0] != self.hud_key[0]
+            self.hud_key = key
+            self.hud.set_visible(not key[0]); self.hud.queue_draw()
+            if shown_changed: self.on_size(self.win, self.win.get_allocation())
+    def on_hud_draw(self, w, cr):      # runs every frame the window redraws: one cached blit, no file reads
+        if not self.hud_key or self.hud_key[0]: return False
+        W, H = w.get_allocated_width(), w.get_allocated_height()
+        try:
+            cr.set_source_surface(self.hud_cache.surface(W, H, key=self.hud_key), 0, 0); cr.paint()
+        except Exception as e:
+            print("hud:", type(e).__name__, e, file=sys.stderr, flush=True)
+        return False
 
     # ---------- layout / rendering ----------
     def on_size(self, w, alloc):
         W, H = alloc.width, alloc.height
-        self.bar.set_size_request(min(720, int(W * .8)), -1); self.bar.set_margin_bottom(int(H * .035))
+        bw = min(720, int(W * .8))
+        panels = self.hud is not None and not CP.hidden()
+        if panels: bw = min(bw, CP.bar_width(W, H))                     # never under a panel
+        self.av.lay["h"] = CP.avatar_h(W, H) if panels else self.base_h  # avatar fits between the columns
+        self.bar.set_size_request(bw, -1); self.bar.set_margin_bottom(int(H * .035))
         self.vnote.set_margin_bottom(int(H * .035) + 62)
         self.reply.set_max_width_chars(60)
 
@@ -479,6 +518,7 @@ def main():
     p.add_argument("--picker", action="store_true", help="open the look picker at startup")
     p.add_argument("--ask", help="type this prompt at startup (self-test)")
     p.add_argument("--quit-after", type=float, help="exit after N seconds and print frames drawn (tests)")
+    p.add_argument("--no-panels", action="store_true", help="avatar only, without Cypher's HUD panels")
     a = p.parse_args()
     app = Nova(a)
     if a.quit_after:

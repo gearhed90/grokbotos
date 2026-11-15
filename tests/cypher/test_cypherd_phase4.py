@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 4 tests: two-way ntfy (Zack's replies are messages, never approvals), the
-display-only dashboard snapshot (no secrets, first names only), the dashboard
-renderer (when pycairo is installed), ntfy-qr's refusals and the CLI. Fake proxy
+display-only dashboard snapshot (no secrets, first names only), the HUD panel
+renderer around the avatar (when pycairo is installed), ntfy-qr's refusals and the CLI. Fake proxy
 and fake ntfy; no display, root or network."""
 import contextlib, importlib.util, io, json, os, socket, stat, subprocess, sys, tempfile, threading, time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -234,30 +234,37 @@ os.remove(os.path.join(T, "cfg", "pause_until"))
 check("standby shows in activity", "Alpha" in C.dash_snapshot(L, st, False, now)["activity"])
 check("Alpha never writes a dash file", (A.write_dash(LA, A.new_state(), True, now) is None))
 
-# ---- dashboard renderer ----
-spec = importlib.util.spec_from_file_location("cypher_dash", os.path.join(SRC, "cypher-dash.py"))
+# ---- HUD panels around the avatar (cypher_panels; the old workspace-9 dashboard is gone) ----
+check("the separate dashboard is gone", not os.path.exists(os.path.join(SRC, "cypher-dash.py"))
+      and not os.path.exists(os.path.join(SRC, "grokbot-cypher-dash")))
 try:
     import cairo  # noqa: F401
     have_cairo = True
 except ImportError:
     have_cairo = False
 if have_cairo:
+    spec = importlib.util.spec_from_file_location("cypher_panels", os.path.join(SRC, "cypher_panels.py"))
     D = importlib.util.module_from_spec(spec); spec.loader.exec_module(D)
-    check("renderer scrubs again", all(x not in D.safe("%s %s a@b.co https://q.r 10.0.0.1 switch.gate" % (TOPIC, TOKEN))
-                                       for x in (TOPIC, TOKEN, "a@b.co", "https://", "10.0.0.1", "switch.gate")))
+    check("panels scrub again", all(x not in D.safe("%s %s a@b.co https://q.r 10.0.0.1 switch.gate" % (TOPIC, TOKEN))
+                                    for x in (TOPIC, TOKEN, "a@b.co", "https://", "10.0.0.1", "switch.gate")))
+    aw = D.avatar_h(1280, 720) * 1.9 * 720
+    check("avatar fits between the columns, text bar too", aw <= 1280 - 2 * (D.MARGIN + D.COL_W) and D.bar_width(1280, 720) <= 1280 - 2 * (D.MARGIN + D.COL_W)
+          and D.avatar_h(3000, 720) == D.AVATAR_H, (aw, D.bar_width(1280, 720)))
     out = os.environ.get("CYPHER_DASH_PREVIEW") or os.path.join(T, "dash.png")
     D.render_png(out, snap, now=now + 5)
     with open(out, "rb") as f: head = f.read(24)
     w, h = int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
-    check("renders a 1280x720 PNG (Touch Display 2, landscape)", head[:8] == b"\x89PNG\r\n\x1a\n" and (w, h) == (1280, 720), (w, h))
+    check("avatar + panels render a 1280x720 PNG (Touch Display 2, landscape)", head[:8] == b"\x89PNG\r\n\x1a\n" and (w, h) == (1280, 720), (w, h))
     D.render_png(os.path.join(T, "stale.png"), snap, now=now + 3600)
     D.render_png(os.path.join(T, "empty.png"), None, now=now)
-    check("renders stale and empty snapshots without errors", os.path.getsize(os.path.join(T, "empty.png")) > 1000)
+    D.render_png(os.path.join(T, "noav.png"), snap, now=now, avatar=False)
+    check("renders stale, empty and panel-only frames without errors", os.path.getsize(os.path.join(T, "empty.png")) > 1000
+          and os.path.getsize(os.path.join(T, "noav.png")) > 1000)
     print("preview:", out)
 else:
     print("SKIP renderer tests (no pycairo here)")
-src = open(os.path.join(SRC, "cypher-dash.py")).read()
-check("cypher-dash.py never opens a secret file", not any(x in src for x in ("cypher-ntfy-topic", "cypher-brain-token", "xai_key", "read_secret")))
+src = open(os.path.join(SRC, "cypher_panels.py")).read()
+check("cypher_panels.py never opens a secret file", not any(x in src for x in ("cypher-ntfy-topic", "cypher-brain-token", "xai_key", "read_secret")))
 
 # ---- CLI ----
 buf = io.StringIO()

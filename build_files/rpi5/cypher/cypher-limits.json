@@ -104,7 +104,7 @@
     "max_result_chars": 300
   },
   "dashboard": {
-    "_comment": "Phase 4: cypherd writes a display-only snapshot (~/.local/state/cypher/dash.json) for cypher-dash on its own sway workspace (Super+C). Secrets, addresses, links, tokens and house device ids are stripped; camera lines carry first names only.",
+    "_comment": "Phase 4: cypherd writes a display-only snapshot (~/.local/state/cypher/dash.json) for the HUD panels around the avatar (cypher_panels; Super+C hides/shows) and for the avatar's conversations (cypher_link). Secrets, addresses, links, tokens and house device ids are stripped; camera lines carry first names only.",
     "enabled": true,
     "phase": 4
   },
