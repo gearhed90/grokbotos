@@ -11,4 +11,4 @@ curl -fsSL --retry 3 -o "${dir}/${name}.part" "$url"
 echo "${sha}  ${dir}/${name}.part" | sha256sum -c --quiet
 chmod 0644 "${dir}/${name}.part"
 mv "${dir}/${name}.part" "${dir}/${name}"
-systemctl --no-block start cypher-llm.service
+systemctl --no-block restart cypher-llm.service || true

@@ -1,0 +1,34 @@
+# Cypher's local fallback model: Qwen2.5 3B Q4_K_M on the official llama.cpp
+# server image (pinned by digest). Fedora's llama-cpp build is generic armv8 and
+# ran 3x slower on the Pi 5 (pp512 5.0 vs 14.2 t/s); this image picks the
+# armv8.2 dotprod CPU backend at runtime. Loopback only, read-only model mount,
+# no capabilities, 3 GB / 3 CPU caps.
+[Unit]
+Description=Cypher local fallback model (Qwen2.5 3B on llama.cpp, 127.0.0.1:8081 only)
+ConditionPathExists=/var/lib/cypher-llm/models/qwen2.5-3b-instruct-q4_k_m.gguf
+After=cypher-llm-fetch.service network-online.target
+Wants=network-online.target
+
+[Container]
+ContainerName=cypher-llm
+Image=ghcr.io/ggml-org/llama.cpp@sha256:89fe93c2ef53ea2d09ca9f53db8878a8f57bb6b143eb63c76a9c218fb583b392
+Pull=missing
+Volume=/var/lib/cypher-llm/models:/models:ro
+SecurityLabelDisable=true
+PublishPort=127.0.0.1:8081:8080
+User=65534:65534
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+PodmanArgs=--memory=3g --cpus=3
+Exec=-m /models/qwen2.5-3b-instruct-q4_k_m.gguf --host 0.0.0.0 --port 8080 -c 4096 -t 3 -np 1
+
+[Service]
+Restart=on-failure
+RestartSec=30
+TimeoutStartSec=900
+MemoryMax=3200M
+Nice=15
+
+[Install]
+WantedBy=multi-user.target
