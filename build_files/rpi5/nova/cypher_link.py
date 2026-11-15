@@ -74,14 +74,34 @@ def _read_json(p, default=None):
         return default
 
 # ---------- what Cypher knows right now ----------
+CHAR_SECTIONS = ("voice", "cares_about", "quirks", "self_image")    # same as cypherd; the shipped sheet stays locked
+
 def persona():
+    base = None
     for p in (os.path.join(CFG_DIR, "persona.md"), PERSONA_SYS):
         try:
             with open(p) as f:
-                return f.read().strip()[:1500]
+                base = f.read().strip()[:1500]; break
         except OSError:
             pass
-    return "You are Cypher, the mind living in Zack's Raspberry Pi 5 cyberdeck. Terse, dry, street-tech."
+    base = base or "You are Cypher, the mind living in Zack's Raspberry Pi 5 cyberdeck. Terse, dry, street-tech."
+    c = _read_json(os.path.join(CFG_DIR, "character.json"), {}) or {}
+    add = [(k, scrub(c[k], 200)) for k in CHAR_SECTIONS if isinstance(c, dict) and isinstance(c.get(k), str)]
+    if add:
+        base += ("\n\nYour own additions to your character sheet (you wrote these; Zack approved them; the sheet above stays locked):\n"
+                 + "\n".join("- %s: %s" % (k.replace("_", " "), v) for k, v in add))
+    return base
+
+# ---------- decide, then speak (from Pino): no claiming an action that was not started ----------
+_CLAIM = re.compile(r"\b(?:pulling|looking (?:it |that |him |her )?up|searching|checking|scanning|reading up|on it|"
+                    r"(?:i'?ll|i will|let me|gonna|going to) (?:pull|look|check|search|read|scan|find|visit|grab|open|lock))\b", re.I)
+
+def unbacked_claim(reply, tools_used):
+    """True when a reply says Cypher is doing/about to do something but no tool was called this turn."""
+    return bool(isinstance(reply, str) and _CLAIM.search(reply) and not tools_used)
+
+CLAIM_NUDGE = ("You just said you are doing something, but you called no tool, so nothing is happening. Decide first: "
+               "call the tool for it now, or reply again without claiming to do it (say plainly if you can't).")
 
 def state_lines(now=None):
     """A few lines about Cypher's own state for the conversation prompt ('' if unknown)."""
@@ -95,6 +115,13 @@ def state_lines(now=None):
         d = s.get("drives") or {}
         out.append("your mood: %s; drives: %s" % (scrub(md.get("label"), 16) or "?",
                    ", ".join("%s %.2f" % (k, float(v)) for k, v in d.items() if isinstance(v, (int, float)))))
+        if s.get("place"):
+            out.append("where you are in Night City: " + scrub(s["place"], 24))
+        if s.get("body"):
+            out.append("your body (your own design, approved by Zack): " + scrub(s["body"], 300))
+        th = [scrub(t, 110) for t in s.get("threads") or [] if isinstance(t, str)]
+        if th:
+            out.append("your threads (ongoing goals): " + " | ".join(th))
         if s.get("activity"):
             out.append("what you were doing: " + scrub(s["activity"], 80))
         j = [r for r in s.get("journal") or [] if isinstance(r, list) and len(r) == 3][-5:]
@@ -132,6 +159,8 @@ RULES = ("This is you talking with Zack on your own screen (typed or by voice). 
          "What you can reach: your journal; your avatar (shape and color); Wikipedia (look_up); a web search "
          "(web_search); public X accounts by handle (x_lookup: bio and latest posts, read-only); Pino's public feed at "
          "pinos.world (visit_pino, read-only); the grid report (check_grid); asking Zack for an account (request_account); "
+         "your own life in Night City (walking around, eating at the noodle stall, simulated for now) and proposing your "
+         "own body design at your nightly sleep (only Zack approves it); "
          "and the deck tools listed below. Look-ups, searches and visits are queued: the result reaches you within a minute "
          "or two under 'what you found recently'. Say you've started it, and never state a result you don't have yet.\n"
          "What you cannot reach: Instagram, TikTok, Telegram or Discord; logging in or signing up anywhere; posting, replying, "

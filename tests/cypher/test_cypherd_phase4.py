@@ -64,7 +64,7 @@ def journal_text():
     return "".join(open(os.path.join(d, f)).read() for f in os.listdir(d)) if os.path.isdir(d) else ""
 
 # ---- limits ----
-check("phase_max is 5", L["phase_max"] == 5)
+check("phase_max is 6 (build 12)", L["phase_max"] == 6)
 on, I = C.inbox_cfg(L)
 check("inbox on for the deck, phase 4, capped", on and I["phase"] == 4 and I["max_per_poll"] >= 1 and I["per_hour"] <= 20
       and I["per_day"] <= 60 and I["poll_s"] >= 30, I)
@@ -115,7 +115,7 @@ check("reply scrubbed: no topic, link, email or control chars", not any(TOPIC in
 check("since moves to the last message id", st["inbox_since"] == "msg000005", st["inbox_since"])
 rows = C.load_account_requests()
 check("NEVER an approval: the account request stays pending", rows and all(r["status"] == "pending" for r in rows), rows)
-check("NEVER an approval: limits untouched", C.current_limits(C.new_state())["phase_max"] == 5)
+check("NEVER an approval: limits untouched", C.current_limits(C.new_state())["phase_max"] == 6)
 J = journal_text()
 ev = [json.loads(l) for l in J.splitlines() if '"zack_message"' in l]
 check("journal has zack_message events marked message-only", len(ev) == 2 and all("never an approval" in e["note"] for e in ev), ev)

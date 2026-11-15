@@ -11,12 +11,12 @@ NEXT = T + "/next_transcript"; RECLOG = T + "/rec.log"; open(RECLOG, "w").close(
 SPEECH = T + "/speech.wav"; subprocess.check_call([sys.executable, HERE + "/make_wav.py", SPEECH, "s0.6,v1.2,s0.2"])
 QUIET = T + "/quiet.wav"; subprocess.check_call([sys.executable, HERE + "/make_wav.py", QUIET, "s0.5"])
 STTLOG = T + "/stt.log"; open(STTLOG, "w").close()
-base = dict(os.environ, NOVA_API_BASE="http://127.0.0.1:8799/v1", NOVA_DRY_RUN="1", NOVA_KEY_FILE=key,
+base = dict(os.environ, NOVA_API_BASE="http://127.0.0.1:8799/v1", NOVA_DRY_RUN="1", NOVA_TEST_SOURCES="[]", NOVA_KEY_FILE=key,
             GROKBOT_API_SOCK=T + "/none.sock", XDG_RUNTIME_DIR=RUN, NOVA_TEST_WAV=WAV, NOVA_TEST_RECLOG=RECLOG,
             NOVA_REC_CMD="%s %s/fake_rec.py {out}" % (sys.executable, HERE),
             NOVA_PLAY_CMD="%s %s/fake_play.py {in}" % (sys.executable, HERE), NOVA_TEST_SPK="1")
 A = dict(base, NOVA_PORT="8766", NOVA_TEST_MIC="1", NOVA_REC_CAP="1.5", NOVA_VOICE_CFG=T + "/cfgA/nova-voice.json")
-Bn = dict(base, NOVA_PORT="8767", NOVA_TEST_MIC="0", NOVA_VOICE_CFG=T + "/cfgB/nova-voice.json")
+Bn = dict(base, NOVA_PORT="8767", NOVA_TEST_MIC="0", NOVA_TEST_SOURCES="[]", NOVA_VOICE_CFG=T + "/cfgB/nova-voice.json")
 C = dict(base, NOVA_PORT="8768", NOVA_TEST_MIC="1", NOVA_REC_CAP="10", NOVA_VOICE_CFG=T + "/cfgC/nova-voice.json",
          NOVA_TEST_STREAM="1", NOVA_TEST_WAV=SPEECH, NOVA_VAD_SILENCE="0.8")
 D = dict(base, NOVA_PORT="8769", NOVA_TEST_MIC="1", NOVA_REC_CAP="3", NOVA_VOICE_CFG=T + "/cfgD/nova-voice.json",
@@ -120,7 +120,7 @@ try:
     r = J(8769, "/api/voice/stop", {}); check("auto_stop off: tap ends it", r.get("end") == "tap", r)
     # no mic
     s = J(8767, "/api/voice/status"); check("no-mic status", s["mic"] is False, s)
-    r = J(8767, "/api/voice/start", {}); check("no-mic start -> 'No microphone found.'", r.get("error") == "nomic" and r["text"] == "No microphone found.", r)
+    r = J(8767, "/api/voice/start", {}); check("no-mic start -> 'No microphone found.'", r.get("error") == "nomic" and r["text"].startswith("No microphone found."), r)
     a = ask(8767, "what time is it", via="typed"); check("typing unaffected without mic", "Mock reply" in a.get("reply", ""), a)
     # security
     check("voice bad Origin 403", req(8766, "/api/voice/start", {}, {"Origin": "http://evil.com"}) == "HTTP 403")

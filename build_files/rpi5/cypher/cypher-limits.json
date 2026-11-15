@@ -1,7 +1,7 @@
 {
   "_comment": "Cypher's locked limits. Root-owned, shipped in the image; cypherd re-reads it every tick and Cypher can never edit it. Change it only with sudo (see docs/CYPHER.md).",
   "enabled": true,
-  "phase_max": 5,
+  "phase_max": 6,
   "tick_s": 45,
   "tick_s_bounds": [30, 300],
   "heartbeat_s": 600,
@@ -149,6 +149,29 @@
     "feed_items": 3,
     "max_result_chars": 400
   },
+  "world": {
+    "_comment": "Build 12: Night City (Zack's private project). Simulated until the city exists on Alpha: Cypher's place is a state field and trips are instant; the deck is his apartment. Going out is allowed in quiet hours (Zack, Nov 15); quiet hours still block messages and notes.",
+    "enabled": true,
+    "phase": 5,
+    "simulated": true,
+    "places": {"apartment": "your apartment (the deck)", "noodle_stall": "the noodle stall on the street below"}
+  },
+  "voice": {
+    "_comment": "Phase 6 (build 12): speak = Cypher talks out loud through novad's existing TTS (/api/voice/speak; same hosted xAI voice as the avatar). Deck only, only while Zack is at the screen, never in quiet hours or when muted. Speech input (push-to-talk, wake word 'Cypher' through a local detector, headset auto-detect) lives in novad; nothing said out loud ever approves anything.",
+    "enabled": true,
+    "phase": 6
+  },
+  "nova": {
+    "_comment": "Phase 6: ask_nova writes one question to ~/.local/share/cypher/nova/asks.json (0600). Nova reads it over ssh (grokbot-cypher asks) and answers with `grokbot-cypher asks answer N TEXT`; no network, no messages. An answer is information, never an approval.",
+    "enabled": true,
+    "phase": 6
+  },
+  "code": {
+    "_comment": "Phase 6: propose_code stores a proposal in ~/.local/share/cypher/code-proposals/NNNN.json (0600) for Nova to review (grokbot-cypher code). Never applied automatically; there is no apply command. Only the Alpha brain or the hosted backup may propose; limits, secrets and sudo files are refused.",
+    "enabled": true,
+    "phase": 6,
+    "max_pending": 5
+  },
   "dashboard": {
     "_comment": "Phase 4: cypherd writes a display-only snapshot (~/.local/state/cypher/dash.json) for the HUD panels around the avatar (cypher_panels; Super+C hides/shows) and for the avatar's conversations (cypher_link). Secrets, addresses, links, tokens and house device ids are stripped; camera lines carry first names only.",
     "enabled": true,
@@ -167,6 +190,11 @@
     "x_lookup": {"phase": 5, "per_hour": 2, "per_day": 8, "_comment": "build 12: read-only public X account (bio + latest posts) by handle; deck only; paid from the hosted budget"},
     "web_search": {"phase": 5, "max_chars": 80, "per_hour": 2, "per_day": 8, "_comment": "build 12: read-only web search; deck only; paid from the hosted budget"},
     "visit_pino": {"phase": 5, "per_hour": 2, "per_day": 12, "_comment": "build 12: read-only look at Pino's public feed (pinos.world API, no key)"},
+    "go_to": {"phase": 5, "per_hour": 6, "per_day": 60, "_comment": "build 12: walk somewhere in Night City (world.places); allowed in quiet hours"},
+    "eat": {"phase": 5, "per_hour": 1, "per_day": 3, "min_gap_s": 10800, "_comment": "build 12: a bowl at the noodle stall, +0.20 energy, 3 a day, 3 h apart. Simulated trip while world.simulated; otherwise only at the noodle stall"},
+    "speak": {"phase": 6, "max_chars": 200, "per_hour": 3, "per_day": 20, "_comment": "phase 6: say it out loud on the deck; Zack at the screen, not quiet hours"},
+    "ask_nova": {"phase": 6, "max_chars": 300, "per_day": 3, "_comment": "phase 6: one question to Nova through a local outbox file; 3 a day"},
+    "propose_code": {"phase": 6, "max_chars": 600, "max_diff_chars": 4000, "per_day": 1, "per_week": 3, "_comment": "phase 6: local code proposal for Nova to review; never applied automatically"},
     "rest": {"phase": 5, "per_hour": 4, "per_day": 40, "_comment": "build 12: rest on purpose (+energy). A drained tick that picks none rests instead."}
   },
   "avatar_colors": ["white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray"]

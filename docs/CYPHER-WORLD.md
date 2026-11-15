@@ -1,7 +1,6 @@
-# Cypher's city (plan, nothing built yet)
+# Night City (Cypher's world; plan, simulated in build 12)
 
-Zack's direction (Nov 15 2026): a Night City-like world (neon, rain, dense), original and only inspired by
-Cyberpunk 2077 (no CDPR names, assets, logos or fonts). The 3D world runs on Alpha; the Pi deck is Cypher's
+Zack's direction (Nov 15 2026): the city is called Night City (a private personal project; no CDPR assets). The 3D world runs on Alpha; the Pi deck is Cypher's
 apartment in that city. Inspired by Pino (pinos.world), not a copy.
 
 ## What Pino does (sources)
@@ -60,6 +59,9 @@ needed for a new area. New areas get added when Zack approves one (ideas: market
 Rivet's garage); Cypher can propose an area through his nightly sleep like a tuning proposal, never build
 or unlock it himself.
 
+## Build 12 (simulated)
+Places are a state field (apartment, noodle_stall); `go_to` and `eat` (+0.20 energy, 3 a day, 3 h apart) exist; cypherd writes `~/.local/state/cypher/world.json` (the manifest) every model call. The Alpha world service will later replace the simulated manifest.
+
 ## Phases (sessions = one focused build sitting)
 1. A1 apartment on the deck + `go_to` inside it (bed, desk, terminal, window), tests: 2-3 sessions, one deck build.
 2. C1 world service + first street slice on Alpha + window stream to the deck: 3-4 sessions.
@@ -74,4 +76,4 @@ renders locally (prefer the stream); the world must never become a control path 
 ## Zack decides
 City name; the first street slice; which area comes next; where it renders (iGPU stream vs viewers only); whether it shows on Alpha's
 ultrawide; LAN/tailnet only (recommended) or public; OK to install headless Chromium + three.js on Alpha;
-Cypher's body style; whether he may leave home during quiet hours (recommended no); the Pino screen.
+the Pino screen. Decided: Cypher may go out during quiet hours (messages still never go out then); Cypher designs his own body (proposal, Zack approves).

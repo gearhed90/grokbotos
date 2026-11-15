@@ -24,6 +24,12 @@
   grokbot-cypher tuning            Cypher's self-tuning proposals
   grokbot-cypher tuning approve|deny|revert N
                                    apply, refuse or undo proposal N (Nova, only after Zack says so)
+  grokbot-cypher asks              Cypher's questions for Nova (3 a day)
+  grokbot-cypher asks answer N TEXT
+                                   answer question N (Nova; an answer is never an approval)
+  grokbot-cypher code [show N]     Cypher's code proposals (never applied automatically)
+  grokbot-cypher code reviewed|rejected N [NOTE]
+                                   mark proposal N reviewed or rejected (Nova)
   grokbot-cypher limits [show]     the locked caps and quiet hours
   grokbot-cypher limits set ACTION per_hour|per_day|per_week N|none
                                    change one cap (sudo; live at cypherd's next loop, no restart)
@@ -127,12 +133,12 @@ def main(argv):
         return subprocess.run([*pre, helper, *argv[3:6]]).returncode
     elif cmd == "panels":
         return subprocess.run([E("CYPHER_PANELS_TOGGLE", "/usr/local/bin/grokbot-cypher-panels"), *argv[2:]]).returncode
-    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests", "inbox", "ntfy-qr", "tuning", "grid", "limits"):
+    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests", "inbox", "ntfy-qr", "tuning", "grid", "limits", "asks", "code"):
         if cmd == "prefs" and len(argv) > 3 and argv[2] == "rollback":
             args = ["prefs-rollback", argv[3]]
         elif cmd == "limits":
             args = ["limits"]
-        elif cmd in ("requests", "inbox", "ntfy-qr", "tuning", "grid"):
+        elif cmd in ("requests", "inbox", "ntfy-qr", "tuning", "grid", "asks", "code"):
             args = [cmd, *argv[2:]]
         else:
             args = [cmd]

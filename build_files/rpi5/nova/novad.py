@@ -538,8 +538,8 @@ def handle_prompt(prompt, emit, via="typed"):
     with hlock:
         convo = [{"role": "system", "content": sysmsg}] + history[-HISTORY_MAX:] + [{"role": "user", "content": prompt}]
     try:
-        pend = None
-        for _ in range(MAX_TOOL_ROUNDS + 1):
+        pend = None; nudged = False
+        for _ in range(MAX_TOOL_ROUNDS + 2):
             if pend:   # stop here: only the user's Yes on /api/confirm runs it
                 with hlock:
                     history.extend([{"role": "user", "content": prompt}, {"role": "assistant", "content": pend["question"]}])
@@ -550,6 +550,14 @@ def handle_prompt(prompt, emit, via="typed"):
             calls = m.get("tool_calls") or []
             if not calls:
                 text = (m.get("content") or "").strip() or "Done."
+                # Decide, then speak: a reply that claims an action with no tool behind it gets one
+                # chance to call the tool or take the claim back.
+                if not nudged and cypher_link.enabled() and cypher_link.unbacked_claim(text, used):
+                    nudged = True
+                    convo += [{"role": "assistant", "content": text}, {"role": "system", "content": cypher_link.CLAIM_NUDGE}]
+                    continue
+                if nudged and cypher_link.unbacked_claim(text, used):
+                    text += " (Nothing started yet. Ask me again and I'll run it.)"
                 with hlock:
                     history.extend([{"role": "user", "content": prompt}, {"role": "assistant", "content": text}])
                     del history[:-HISTORY_MAX]
@@ -597,7 +605,8 @@ VAD_DEFAULTS = {"auto_stop": os.environ.get("NOVA_VAD", "1") != "0",
                 "no_speech_s": float(os.environ.get("NOVA_VAD_NO_SPEECH", "7")),   # give up if nothing said
                 "speech_rms": float(os.environ.get("NOVA_VAD_MIN_RMS", "200"))}    # quietest frame counted as speech (s16 RMS)
 VOICE_DEFAULTS = {"muted": False, "voice_id": "eve", "language": "en",
-                  "wake_word": None,   # wake_word: reserved hook, see wake_word_hook()
+                  "wake_word": None,   # "cypher" turns the local wake word on (see wake_word_hook())
+                  "input_device": "auto",   # "auto" (a headset if one is plugged in, else the default) or a source name
                   **VAD_DEFAULTS}
 YES_RE = re.compile(r"^\W*(yes|yeah|yep|yup|sure|ok|okay|do it|go ahead|confirm|please do)\b", re.I)
 NO_RE = re.compile(r"^\W*(no|nope|nah|cancel|don'?t|stop|never ?mind)\b", re.I)
@@ -634,6 +643,48 @@ def _wpctl_real(target):
     out = p.stdout.lower()
     return p.returncode == 0 and "node.name" in out and "auto_null" not in out and "dummy" not in out
 
+# ---------- input device (headset over USB or Bluetooth; no built-in mic on the deck) ----------
+_HEADSET = re.compile(r"headset|headphone|bluez|usb|hands.?free|hfp|hsp|earbud|airpods", re.I)
+
+def list_sources():
+    """Capture sources PipeWire knows (monitors excluded): [{"name", "desc"}]."""
+    if os.environ.get("NOVA_TEST_SOURCES") is not None:
+        try: rows = json.loads(os.environ["NOVA_TEST_SOURCES"])
+        except ValueError: rows = []
+    else:
+        try:
+            p = subprocess.run(["pactl", "-f", "json", "list", "sources"], capture_output=True, text=True, timeout=4)
+            rows = json.loads(p.stdout) if p.returncode == 0 else []
+        except Exception:
+            rows = []
+    out = []
+    for r in rows if isinstance(rows, list) else []:
+        if not isinstance(r, dict): continue
+        name = str(r.get("name") or "")
+        if not name or name.endswith(".monitor") or "auto_null" in name: continue
+        out.append({"name": name[:120], "desc": str(r.get("description") or name)[:80]})
+    return out
+
+def pick_source(c=None):
+    """The source to record from, or None for PipeWire's default. A chosen device that is gone falls
+    back to auto; auto prefers a headset (USB or Bluetooth)."""
+    c = c or voice_cfg()
+    srcs = list_sources(); want = c.get("input_device") or "auto"
+    if want != "auto" and any(x["name"] == want for x in srcs):
+        return want
+    head = [x for x in srcs if _HEADSET.search(x["name"] + " " + x["desc"])]
+    return head[0]["name"] if head else None
+
+def have_mic(c=None):
+    return _wpctl_real("SOURCE") or pick_source(c) is not None
+
+def rec_argv(path, c=None):
+    argv = [a.replace("{out}", path) for a in shlex.split(REC_CMD)]
+    src = pick_source(c)
+    if src and argv and os.path.basename(argv[0]) == "pw-record":
+        argv[1:1] = ["--target", src]
+    return argv
+
 def vad_params(c=None):
     c = c or voice_cfg()
     def num(k, lo, hi):
@@ -644,9 +695,10 @@ def vad_params(c=None):
 
 def voice_status():
     c = voice_cfg(); s = SESS["cur"]
-    return {"mic": _wpctl_real("SOURCE"), "speaker": _wpctl_real("SINK"), "muted": bool(c["muted"]),
-            "recording": bool(s and not s.finishing), "cap_s": REC_CAP, "wake_word": None,
-            "auto_stop": vad_params(c)["auto_stop"]}
+    return {"mic": have_mic(c), "speaker": _wpctl_real("SINK"), "muted": bool(c["muted"]),
+            "recording": bool(s and not s.finishing), "cap_s": REC_CAP, "wake_word": wake_status(c),
+            "auto_stop": vad_params(c)["auto_stop"], "input": pick_source(c) or "default",
+            "inputs": [x["name"] for x in list_sources()][:8]}
 
 def _spool():
     d = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir(), "nova-voice")
@@ -734,7 +786,7 @@ class _Take:
         import secrets
         self.sid = secrets.token_hex(6); self.proc, self.path, self.vad = proc, path, vad
         self.t0 = time.time(); self.timer = None; self.finishing = False; self.reason = None
-        self.secs = 0.0; self.result = None; self.claimed = False
+        self.secs = 0.0; self.result = None; self.claimed = False; self.source = "ptt"
         self.ended = threading.Event(); self.done = threading.Event()
 
 SESS = {"cur": None}   # the current (or last) take
@@ -772,20 +824,20 @@ def _watch(t):
                 _finish(t, out); return
 
 def voice_start(source="ptt"):
-    if not _wpctl_real("SOURCE"):
-        return {"error": "nomic", "text": "No microphone found."}
+    if not have_mic():
+        return {"error": "nomic", "text": "No microphone found. Plug in a headset (USB or Bluetooth) to talk to me."}
     vp = vad_params()
     with rlock:
         cur = SESS["cur"]
         if cur is not None and not cur.finishing:
             return {"error": "busy", "text": "Already listening."}
         fd, path = tempfile.mkstemp(suffix=".wav", dir=_spool()); os.close(fd)
-        argv = [a.replace("{out}", path) for a in shlex.split(REC_CMD)]
+        argv = rec_argv(path)
         try:
             p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError:
             _rm(path); return {"error": "nomic", "text": "No microphone found."}
-        t = _Take(p, path, vp)
+        t = _Take(p, path, vp); t.source = source
         t.timer = threading.Timer(REC_CAP, _finish, (t, "cap")); t.timer.daemon = True; t.timer.start()
         SESS["cur"] = t
     if vp["auto_stop"]:
@@ -863,6 +915,8 @@ def _finish(t, reason):
     except Exception as e:                       # never leave a waiter hanging
         log("voice: finish error", type(e).__name__); _rm(t.path)
         r = {"error": "net", "text": "Something went wrong with the recording."}
+    if getattr(t, "source", "ptt") == "wake" and isinstance(r, dict):
+        r = dict(r, intent=None, wake=True)   # a wake-word take can't answer a Yes/No: tap to confirm
     t.result = dict(r, sid=t.sid, end=reason); t.ended.set(); t.done.set()
     return t.result
 
@@ -929,15 +983,47 @@ def voice_hush():   # stop speaking now (new press, mute)
     p = PLAYING["proc"]
     if p and p.poll() is None: p.terminate()
 
+# ---------- wake word "Cypher" (phase 6 groundwork; local only) ----------
+# A local detector program (NOVA_WAKE_CMD) reads the mic itself and prints one line "wake" each time it
+# hears "Cypher". Its audio never leaves it and is never stored. novad then starts a normal take
+# (voice_start("wake")): end-of-speech, the REC_CAP, deletion after transcription all apply, and a
+# wake take can never answer a Yes/No. No detector installed or no mic -> the wake word stays off.
+WAKE_CMD = os.environ.get("NOVA_WAKE_CMD", "/usr/libexec/grokbot/cypher-wake")
+WAKE = {"proc": None, "last": None, "events": 0}
+
+def wake_status(c=None):
+    c = c or voice_cfg()
+    if (c.get("wake_word") or "").lower() != "cypher": return "off"
+    if not have_mic(c): return "waiting for a mic"
+    if not os.access(shlex.split(WAKE_CMD)[0] if WAKE_CMD else "", os.X_OK): return "unavailable: no local wake detector installed"
+    return "listening" if WAKE["proc"] and WAKE["proc"].poll() is None else "ready"
+
+def wake_line(line):
+    """One line from the detector. Returns the voice_start result for a wake, else None."""
+    if line.strip().lower() != "wake" or voice_cfg().get("muted"):
+        return None
+    WAKE["last"] = time.time(); WAKE["events"] += 1
+    voice_hush()
+    return voice_start("wake")
+
 def wake_word_hook():
-    """Reserved for a later wake word ("Cypher"). Not implemented on purpose.
-    A future detector (always-on, local-only, e.g. a small keyword model reading a
-    pw-record stream that is never stored or sent) should call voice_start("wake")
-    and signal the page through a GET /api/voice/events stream so it can show
-    'listening'; the take then ends on its own via the end-of-speech watcher and the
-    page picks up the result with /api/voice/wait. Enabled only when nova-voice.json
-    has "wake_word": "cypher"."""
-    return None
+    """Start the local detector if the wake word is on and everything it needs exists. Safe to call again."""
+    if wake_status() != "ready":
+        return None
+    src = pick_source()
+    argv = shlex.split(WAKE_CMD) + (["--source", src] if src else [])
+    try:
+        p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    except OSError:
+        return None
+    WAKE["proc"] = p
+    def run():
+        for line in p.stdout:
+            try: wake_line(line)
+            except Exception as e: log("wake:", type(e).__name__)
+    threading.Thread(target=run, daemon=True).start()
+    audit("voice", {"event": "wake_detector"}, "started")
+    return p
 
 # ---------- http ----------
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
@@ -1004,6 +1090,12 @@ class H(BaseHTTPRequestHandler):
             if v == "wait": return self._json(voice_wait(str(b.get("sid", ""))[:64], until=b.get("until")))
             if v == "speak": return self._json(voice_speak(str(b.get("text", ""))))
             if v == "hush": voice_hush(); return self._json({"ok": True})
+            if v == "input":
+                d = str(b.get("device") or "auto")[:120]
+                if d != "auto" and not any(x["name"] == d for x in list_sources()):
+                    return self._json({"error": "unknown device", "inputs": [x["name"] for x in list_sources()]})
+                c = save_voice_cfg(input_device=d); audit("voice", {"event": "input"}, "set")
+                return self._json({"input": pick_source(c) or "default", "chosen": d})
             if v == "mute":
                 m = b.get("muted") is True
                 if m: voice_hush()
@@ -1059,5 +1151,7 @@ def watch_focus():
 
 if __name__ == "__main__":
     watch_focus()
+    if not DRY_RUN:
+        wake_word_hook()          # local wake word, only if turned on and a detector + mic exist
     log(f"novad on http://127.0.0.1:{PORT}/ model={MODEL} dry_run={DRY_RUN}")
     ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
