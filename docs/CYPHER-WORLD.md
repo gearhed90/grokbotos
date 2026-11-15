@@ -30,8 +30,7 @@ apartment in that city. Inspired by Pino (pinos.world), not a copy.
   ultrawide, a phone over Tailscale. For the deck, a headless Chromium on Alpha's **Raphael iGPU** (the RX
   9060 XT's 16 GB VRAM is ~15 GB used by Qwen3-VL and games) renders a 1280x720 at 10-15 fps stream (MJPEG or
   WebRTC) only while someone watches. In gaming mode it pauses and the deck shows "city offline".
-- **The deck is home.** When Cypher is home, the deck shows the current avatar in his apartment (HUD stays).
-  When he is out, a "window" panel on the deck shows the city stream with "OUT: <district>". If Alpha is down,
+- **The deck is home.** The apartment renders on the deck itself; the city lives on Alpha. If Alpha is down,
   he is simply home.
 
 ## Engine
@@ -42,26 +41,29 @@ wants to build the city in an editor (better tooling, navmesh, animation, native
 is heavier). Either way: low-poly blockout, instanced buildings, emissive neon signs and bloom, height fog,
 GPU rain particles, wet-street reflections faked with cubemaps/SSR-lite. A 1080p target fits easily on the iGPU.
 
-## The city (original names, placeholders)
-| Place | Feel | Drive / mood that sends him | What he does there |
-|---|---|---|---|
-| Apartment, unit 9C (the deck) | small, warm, rain on the window | drained, quiet hours, low energy | rest, sleep, journal |
-| Lantern Row (night market, noodle stalls) | crowds, steam, chatter | social high / lonely | people-watch, NPC small talk (no real people) |
-| The Archive Spire (data library) | cold blue, terminals | curiosity | look_up / web_search shown as reading terminals |
-| Signal Roof (antenna farm, billboards) | wind, skyline | check_grid, x_lookup | watches the grid; X posts on giant billboards |
-| Static Alley (arcade, glitch neon) | loud, flickering | boredom / restless | games, graffiti of his mood (like Pino's art) |
-| Rivet's Garage (workshop) | sparks, tools | focus / locked-in | tinkering; later the tank and Rivet |
-| Mag-line platform | trains passing | visit_pino | a station screen shows Pino's live feed ("Pino, from pinos.world") |
+## Start small: the apartment first
+**Apartment (unit 9C, the deck).** Rendered on the deck itself as a small low-poly room (one scene, a few
+hundred triangles, 30 fps at 1280x720 on the Pi 5; no Alpha needed): bed/charging nook, desk terminal,
+shelf, a big rain-streaked window with neon light spilling in. Mood and drives place him: drained or
+quiet hours = bed/nook, curiosity = terminal (look-ups, searches, X), check_grid = window, journal = desk;
+mood sets the room light and the rain on the glass. The HUD panels stay around it.
 
-Mood -> world: drained = heavy rain, dim neon, heads home; content = light drizzle, warm signs; restless =
-flicker, crowds; lonely = empty streets. Real Eastern time drives day/night; in quiet hours he is home asleep.
+**First city slice (on Alpha): one block outside his window.** The street below his building: a noodle
+stall (social), a mag-line platform screen showing Pino's live feed (visit_pino), and the rooftop antenna
+(check_grid). Fog, rain, neon, a few NPC silhouettes. The deck's window shows this street (iGPU stream)
+when Alpha is up; when Cypher goes "out" he appears there and the deck shows an empty room with "OUT".
 
-## Phases and effort (sessions = one focused build sitting)
-1. W0 design + greybox of 3 places, camera, rain/fog/neon look on Alpha: 1-2 sessions.
-2. W1 world service + manifest + all 7 places, Cypher's body (a floating node/drone, "a node, not a pet"), walking between places: 3-5.
-3. W2 cypherd `go_to` + place-aware manifest + world perception, tests: 2 (one deck image build).
-4. W3 deck window stream + HUD "OUT" state, iGPU headless renderer with memory cap: 2.
-5. W4 polish: dithering shaders, NPC crowds, billboards, Pino screen, weather from mood: ongoing.
+**Adding areas later.** Each new area is one self-contained module: a scene file plus a manifest entry
+(name, places, moves it offers, which drives draw him there, how it connects to existing areas). The world
+service loads whatever modules are installed; cypherd only ever sees the manifest, so no deck rebuild is
+needed for a new area. New areas get added when Zack approves one (ideas: market, archive, arcade,
+Rivet's garage); Cypher can propose an area through his nightly sleep like a tuning proposal, never build
+or unlock it himself.
+
+## Phases (sessions = one focused build sitting)
+1. A1 apartment on the deck + `go_to` inside it (bed, desk, terminal, window), tests: 2-3 sessions, one deck build.
+2. C1 world service + first street slice on Alpha + window stream to the deck: 3-4 sessions.
+3. C2+ one new area per approval: about 1-2 sessions each.
 
 ## Risks
 VRAM and gaming contention (mitigated by iGPU rendering and pausing); headless Chromium RAM (systemd memory
@@ -70,6 +72,6 @@ from X/web/Pino text shown in the world (display-only, labelled, never instructi
 renders locally (prefer the stream); the world must never become a control path (no house, battery or tank).
 
 ## Zack decides
-City name and districts; where it renders (iGPU stream vs viewers only); whether it shows on Alpha's
+City name; the first street slice; which area comes next; where it renders (iGPU stream vs viewers only); whether it shows on Alpha's
 ultrawide; LAN/tailnet only (recommended) or public; OK to install headless Chromium + three.js on Alpha;
 Cypher's body style; whether he may leave home during quiet hours (recommended no); the Pino screen.
