@@ -131,6 +131,16 @@ if grep -n 'Pixel' "${nova}"/*.py "${nova}"/*.html | grep -v devicePixelRatio; t
 fi
 python3 tests/cypher/test_cypherd.py
 python3 tests/cypher/test_cypherd_phase2.py
+python3 tests/cypher/test_cypherd_phase3.py
+# Phase 3: ntfy topic made on the device, never in the image; touch retry enabled.
+bash -n "${cy}/grokbot-set-cypher-ntfy"
+assert_contains build_files/rpi5-nova.sh '/usr/local/sbin/grokbot-set-cypher-ntfy'
+assert_contains build_files/rpi5-nova.sh '[[ ! -e /etc/grokbot/cypher-ntfy-topic ]]'
+if bash "${cy}/grokbot-set-cypher-ntfy" </dev/null >/dev/null 2>&1; then
+    fail "grokbot-set-cypher-ntfy ran without root"
+fi
+assert_contains build_files/rpi5-nova.sh 'systemctl enable grokbot-touch-retry.service'
+bash tests/test-rpi5-touch-retry.sh
 # Phase 2 local model: installed, enabled, capped, loopback only, model fetched with a pinned sha256.
 for f in cypher-llm.container cypher-llm-fetch.service cypher-llm-fetch cypher-llm.tmpfiles; do
     [[ -f "${cy}/${f}" ]] || fail "missing ${cy}/${f}"

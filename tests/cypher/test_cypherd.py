@@ -67,8 +67,9 @@ C = importlib.util.module_from_spec(spec); spec.loader.exec_module(C)
 
 # ---- shipped limits ----
 shipped = C.load_limits(os.path.join(SRC, "cypher-limits.json"))
-check("shipped limits load", shipped["phase_max"] == 2 and shipped["tick_s"] == 45)
-check("v1 actions are exactly none/journal/note/avatar", sorted(C.allowed_actions(shipped)) == ["journal_thought", "none", "set_avatar_color", "show_note"])
+check("shipped limits load", shipped["phase_max"] == 3 and shipped["tick_s"] == 45)
+check("phase 3 actions are exactly none/journal/note/avatar/phone/glance/look-up", sorted(C.allowed_actions(shipped)) ==
+      ["glance_screen", "journal_thought", "look_up", "message_zack", "none", "set_avatar_color", "show_note"])
 check("quiet hours 11 PM to 6 AM, off Friday and Saturday nights",
       shipped["quiet_hours"] == {"default": ["23:00", "06:00"], "nights": {"fri": None, "sat": None}})
 check("hosted backup capped at $0.50/day", shipped["brain"]["hosted_backup"]["daily_budget_usd"] == 0.5)
@@ -147,7 +148,7 @@ st = C.new_state(); now = at(14)
 V = lambda ch, p=P: C.validate(L, st, p, ch, now)
 check("none ok", V({"action": "none"})[2] == "ok")
 check("unknown action -> none", V({"action": "rm_rf"})[:1] == ("none",) and "unknown" in V({"action": "rm_rf"})[2])
-check("phase-2 action refused", "unknown" in V({"action": "message_zack", "params": {"text": "hi"}})[2])
+check("phase-3 action refused at phase 1", "not unlocked" in V({"action": "message_zack", "params": {"text": "hi"}})[2])
 L2 = json.loads(json.dumps(L)); L2["actions"]["message_zack"] = {"phase": 3}
 check("action above phase_max refused", "not unlocked" in C.validate(L2, st, P, {"action": "message_zack"}, now)[2])
 a, pr, v = V({"action": "journal_thought", "params": {"text": "  line\x00one\n two  "}})

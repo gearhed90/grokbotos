@@ -28,6 +28,20 @@ Phase 2:
   * Nightly sleep: the day's journal condensed into memories; preference notes
     and drift adjusted within the locked limits, every change versioned.
 
+Phase 2.1: the manifest only offers actions that would pass right now (caps,
+mute, DND, quiet hours, presence); refused attempts show in "your last
+actions"; the avatar color only changes when the mood does.
+
+Phase 3 (all capped in the limits file; deck only unless noted):
+  * message_zack: a short ntfy.sh push to Zack's phone (secret topic in a
+    root:grokbot 0640 file, never logged); never in quiet hours.
+  * glance_screen: one low-res grim screenshot of the deck's own screen, sent
+    only to Alpha's proxy (Qwen3-VL) for a short description, deleted at once.
+    Never the hosted backup. Only while Zack is at the screen, never on a window
+    whose title looks private.
+  * look_up: a Wikipedia summary (allowlisted hosts only, read-only), on the
+    deck or Alpha. Findings go to the journal and the next prompts.
+
 Switches (all in ~/.config/cypher, see the cypher CLI):
   KILL         present -> cypherd exits at the next tick and stays off
   muted        present -> no on-screen notes
@@ -47,6 +61,7 @@ DATA_DIR = E("CYPHER_DATA_DIR", os.path.join(E("XDG_DATA_HOME") or os.path.join(
 PERSONA_SYS = E("CYPHER_PERSONA", "/usr/share/grokbot/cypher/persona.md")
 NOVAD = E("CYPHER_NOVAD", "http://127.0.0.1:8765")
 DRY_RUN = E("CYPHER_DRY_RUN") == "1"          # tests: executor logs instead of acting
+NTFY_TOPIC_FILE = E("CYPHER_NTFY_TOPIC_FILE", "/etc/grokbot/cypher-ntfy-topic")
 INSECURE_OK = E("CYPHER_LIMITS_INSECURE_OK") == "1"   # tests only: limits/token files not root-owned
 HOST = E("CYPHER_HOST", "deck")              # "deck" (the Pi) or "alpha" (the standby on Alpha)
 HOLDER = "alpha" if HOST == "alpha" else "cypher"
@@ -59,12 +74,18 @@ EVENT_NUDGES = {"user_active": {"social": -0.15, "boredom": -0.20, "focus": 0.10
                 "user_away": {"focus": -0.10}}
 ACTION_EFFECTS = {"journal_thought": {"boredom": -0.05, "curiosity": -0.03},
                   "show_note": {"social": -0.10, "boredom": -0.05},
-                  "set_avatar_color": {"boredom": -0.05}}
+                  "set_avatar_color": {"boredom": -0.02},     # small: not the default boredom outlet
+                  "message_zack": {"social": -0.15, "boredom": -0.03},
+                  "glance_screen": {"curiosity": -0.08, "boredom": -0.05},
+                  "look_up": {"curiosity": -0.10, "boredom": -0.06}}
+DECK_ONLY = ("show_note", "set_avatar_color", "message_zack", "glance_screen")
+BLOCKS = ("camera", "sleep", "failover", "ntfy", "screen", "lookup")
 EX_CONFIG = 78
 CAMERA_NUDGES = {"family": {"social": -0.10, "boredom": -0.05}, "person": {"curiosity": 0.05, "focus": 0.03},
                  "stranger": {"curiosity": 0.10, "focus": 0.10, "energy": -0.02},
                  "alert": {"focus": 0.10, "curiosity": 0.05}, "vehicle": {"curiosity": 0.03},
-                 "arrival_start": {"curiosity": 0.05}, "arrival_end": {"social": -0.03}}
+                 "arrival_start": {"curiosity": 0.05}, "arrival_end": {"social": -0.03},
+                 "unconfirmed": {"curiosity": 0.02}}
 # Never an action, whatever the limits file says.
 HOUSE_WORDS = re.compile(r"camera|light|lock|door|garage|alarm|siren|ptz|record|thermostat|scene|hass|home.?assistant|switch", re.I)
 _OUTBOX = []          # journal entries not yet pushed to Alpha
@@ -148,7 +169,7 @@ def validate_limits(L):
             raise ConfigError("action %s lacks a phase" % a)
         if HOUSE_WORDS.search(a):
             raise ConfigError("action %s looks like a camera or house control; never allowed" % a)
-    for blk in ("camera", "sleep", "failover"):
+    for blk in BLOCKS:
         if blk in L and not isinstance(L[blk], dict):
             raise ConfigError(blk + " must be an object")
     if isinstance(L.get("sleep"), dict):
@@ -161,7 +182,7 @@ def host_overrides(L):
     if HOST != "alpha":
         return L
     L = json.loads(json.dumps({k: v for k, v in L.items() if k != "_quiet_nights"}))
-    for a in ("show_note", "set_avatar_color"):
+    for a in DECK_ONLY:
         if a in L["actions"]:
             L["actions"][a]["phase"] = 99
     L["brain"].setdefault("hosted_backup", {})["enabled"] = False
@@ -181,7 +202,7 @@ def current_limits(st):
     return host_overrides(L)
 
 def phase_on(L, block):
-    b = L.get(block) if block in ("camera", "sleep", "failover") else (L["brain"].get(block) or {})
+    b = L.get(block) if block in BLOCKS else (L["brain"].get(block) or {})
     return isinstance(b, dict) and bool(b.get("enabled")) and L["phase_max"] >= b.get("phase", 2)
 
 def clamp(v, lo, hi):
@@ -256,7 +277,8 @@ def new_state():
             "presence": None, "recent": [], "budget": {"date": None, "usd": 0.0},
             "alpha_backoff_until": 0, "last_actions": [], "local_backoff_until": 0,
             "cam_seq": None, "last_sleep": None, "lease_epoch": None, "holding": False,
-            "merged_since": "", "outbox": [], "deck_limits": None}
+            "merged_since": "", "outbox": [], "deck_limits": None,
+            "avatar_color": None, "color_mood": None, "found": []}
 
 def apply_delta(drives, delta):
     for k, v in delta.items():
@@ -376,6 +398,7 @@ def alpha_api(L, method, path, body=None, timeout=6):
 _CAM_RE = re.compile(r"^[a-z][a-z0-9_]{0,19}$")
 _NAME_RE = re.compile(r"^[A-Z][a-z]{1,15}$")
 _T_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+_REASON_RE = re.compile(r"^[a-z ,/-]{1,60}$")
 
 def clean_event(e):
     """Re-check every field the feed sends; anything odd drops the event."""
@@ -390,6 +413,10 @@ def clean_event(e):
     names = [n for n in (e.get("names") or []) if isinstance(n, str) and _NAME_RE.match(n)][:4]
     if names:
         out["names"] = names
+    if e.get("guess") in ("person", "vehicle", "motion"):
+        out["guess"] = e["guess"]
+    if isinstance(e.get("reason"), str) and _REASON_RE.match(e["reason"]):
+        out["reason"] = e["reason"]
     return out
 
 def camera_step(L, st, now):
@@ -410,7 +437,7 @@ def camera_step(L, st, now):
     keep = []
     for e in j.get("events") or []:
         e = clean_event(e)
-        if not e or e["kind"] not in C.get("react_kinds", list(CAMERA_NUDGES)):
+        if not e or e["kind"] == "nothing" or e["kind"] not in C.get("react_kinds", list(CAMERA_NUDGES)):
             continue
         try:
             t = time.mktime(time.strptime(e["time"], "%Y-%m-%d %H:%M:%S"))
@@ -423,7 +450,12 @@ def camera_step(L, st, now):
 def camera_line(evs):
     out = []
     for e in evs:
-        bits = [e["time"][11:16], e["camera"], e["kind"].replace("_", " ")]
+        kind = e["kind"].replace("_", " ")
+        if e["kind"] == "unconfirmed":
+            kind = "unconfirmed motion (detector guess: %s; not checked, nobody identified)" % e.get("guess", "motion")
+        elif e["kind"] == "nothing":
+            kind = "nothing (no one came or went%s)" % ("; " + e["reason"] if e.get("reason") else "")
+        bits = [e["time"][11:16], e["camera"], kind]
         if e.get("names"): bits.append("(" + ", ".join(e["names"]) + ")")
         if e.get("alerted") is True: bits.append("- Zack was alerted")
         out.append(" ".join(bits))
@@ -561,13 +593,21 @@ MANIFEST_TEXT = {
     "none": "none - do nothing this tick (often right). params: {}",
     "journal_thought": "journal_thought - write a private thought in your journal. params: {\"text\": max %(max_chars)s chars}",
     "show_note": "show_note - show Zack a short note on screen. Only when he is active and it is worth it. params: {\"text\": max %(max_chars)s chars}",
-    "set_avatar_color": "set_avatar_color - recolor your on-screen avatar to match your mood. params: {\"color\": one of %(colors)s}",
+    "set_avatar_color": "set_avatar_color - recolor your on-screen avatar, only when your mood has really changed. params: {\"color\": one of %(colors)s}",
+    "message_zack": "message_zack - push a short message to Zack's phone. Rare: only something he would want to know now "
+                    "(something broken, a finding worth his time). Never small talk, greetings or mood updates. params: {\"text\": max %(max_chars)s chars}",
+    "glance_screen": "glance_screen - take one look at what is on your own screen right now; a short description comes back next tick. params: {}",
+    "look_up": "look_up - look a topic up on Wikipedia; the summary comes back next tick. params: {\"topic\": max %(max_chars)s chars}",
 }
+CAMERA_RULES = ("Only what the line says happened. 'unconfirmed' means motion nobody has checked: do not guess who it was. "
+                "Never invent doors opening, people coming or going, or who someone is (or is not) unless a name is in the line.")
 
-def build_messages(L, st, p):
+def build_messages(L, st, p, now=None):
+    now = now or time.time()
     acts = allowed_actions(L)
     if p.get("camera"):            # camera ticks: journal or nothing (the validator enforces it too)
         acts = {a: s for a, s in acts.items() if a in ("none", "journal_thought")}
+    acts = {a: s for a, s in acts.items() if not blocked(L, st, p, a, now)}   # only what would pass right now
     lines = []
     for a, spec in acts.items():
         if a in MANIFEST_TEXT:
@@ -588,9 +628,10 @@ def build_messages(L, st, p):
             + "drives: " + ", ".join("%s %.2f" % (k, d[k]) for k in DRIVES) + "\n"
             + "mood: %s\n" % md["label"]
             + "your last actions: %s\n" % last
+            + found_lines(st, now)
             + ("cameras (read-only feed; you cannot control cameras, lights or anything in the house): %s\n"
-               "The cameras saw something. If it matters to you, write a short journal_thought about it "
-               "(who came or went, how it sits with your mood); otherwise none.\n" % camera_line(p["camera"]) if p.get("camera") else "")
+               "If it matters to you, write a short journal_thought about it; otherwise none. %s\n"
+               % (camera_line(p["camera"]), CAMERA_RULES) if p.get("camera") else "")
             + memory_lines()
             + "Choose.")
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -614,6 +655,41 @@ _CTRL = re.compile(r"[\x00-\x1f\x7f]")
 def count_recent(st, action, seconds, now):
     return sum(1 for t, a in st["recent"] if a == action and now - t < seconds)
 
+PRIVATE_TITLE = re.compile(r"pass(word|phrase)|1password|bitwarden|keepass|vault|bank|log ?in|sign ?in|wallet|token|secret|private|incognito|otp|2fa", re.I)
+
+def mood_label(st):
+    return (st.get("mood") or mood(st["drives"]))["label"]
+
+def blocked(L, st, p, a, now):
+    """Why action a would be refused right now whatever its params (caps, switches, presence), or None.
+    The manifest leaves such actions out; the validator refuses them with the same words."""
+    spec = L["actions"].get(a) or {}
+    if spec.get("per_hour") is not None and count_recent(st, a, 3600, now) >= spec["per_hour"]:
+        return "%s hourly cap" % a
+    if spec.get("per_day") is not None and count_recent(st, a, 86400, now) >= spec["per_day"]:
+        return "%s daily cap" % a
+    if a == "show_note":
+        if p.get("muted"): return "notes muted"
+        if p.get("dnd"): return "do not disturb"
+        if p.get("quiet_hours"): return "quiet hours"
+        if p.get("presence") != "active": return "zack is away"
+    if a == "set_avatar_color" and st.get("color_mood") is not None and mood_label(st) == st["color_mood"]:
+        return "no mood change since the last color"
+    if a == "message_zack":
+        if not phase_on(L, "ntfy"): return "phone messages off"
+        if p.get("quiet_hours"): return "quiet hours"
+        if not read_secret(NTFY_TOPIC_FILE): return "no phone topic set up"
+    if a == "glance_screen":
+        if not phase_on(L, "screen"): return "screen glances off"
+        if p.get("presence") != "active": return "zack is away"
+        if PRIVATE_TITLE.search(p.get("window_title") or "") or PRIVATE_TITLE.search(p.get("focused_app") or ""):
+            return "private window"
+    if a == "look_up" and not phase_on(L, "lookup"):
+        return "look-ups off"
+    return None
+
+_TOPIC_RE = re.compile(r"^[\w][\w '().,:-]*$", re.U)
+
 def validate(L, st, p, choice, now=None):
     """(action, params, verdict). verdict is "ok" or "rejected: why"; rejected -> none."""
     now = now or time.time()
@@ -631,36 +707,48 @@ def validate(L, st, p, choice, now=None):
         return "none", {}, "ok"
     if p.get("camera") and a != "journal_thought":
         return "none", {}, "rejected: camera events get journal and mood reactions only"
-    if spec.get("per_hour") is not None and count_recent(st, a, 3600, now) >= spec["per_hour"]:
-        return "none", {}, "rejected: %s hourly cap" % a
-    if spec.get("per_day") is not None and count_recent(st, a, 86400, now) >= spec["per_day"]:
-        return "none", {}, "rejected: %s daily cap" % a
-    if a in ("journal_thought", "show_note"):
+    why = blocked(L, st, p, a, now)
+    if why:
+        return "none", {}, "rejected: " + why
+    if a in ("journal_thought", "show_note", "message_zack"):
         text = params.get("text")
         if not isinstance(text, str) or not _CTRL.sub(" ", text).strip():
             return "none", {}, "rejected: %s needs text" % a
         text = re.sub(r"\s+", " ", _CTRL.sub(" ", text)).strip()
         if len(text) > spec["max_chars"]:
             return "none", {}, "rejected: %s text over %d chars" % (a, spec["max_chars"])
-        if a == "show_note":
-            if p.get("muted"): return "none", {}, "rejected: notes muted"
-            if p.get("dnd"): return "none", {}, "rejected: do not disturb"
-            if p.get("quiet_hours"): return "none", {}, "rejected: quiet hours"
-            if p.get("presence") != "active": return "none", {}, "rejected: zack is away"
         return a, {"text": text}, "ok"
     if a == "set_avatar_color":
         c = params.get("color")
         if c not in L["avatar_colors"]:
             return "none", {}, "rejected: color %r not allowed" % (str(c)[:20],)
+        if c == st.get("avatar_color"):
+            return "none", {}, "rejected: already %s" % c
         return a, {"color": c}, "ok"
+    if a == "glance_screen":
+        return a, {}, "ok"
+    if a == "look_up":
+        t = params.get("topic")
+        t = re.sub(r"\s+", " ", _CTRL.sub(" ", t)).strip() if isinstance(t, str) else ""
+        if not t or len(t) > spec.get("max_chars", 60) or not _TOPIC_RE.match(t) or _URL.search(t):
+            return "none", {}, "rejected: look_up needs a plain topic (max %d chars)" % spec.get("max_chars", 60)
+        return a, {"topic": t}, "ok"
     return "none", {}, "rejected: no executor for %s" % a
 
 # ---------- act ----------
-def execute(action, params):
+def execute(action, params, L=None, st=None, p=None):
+    """Run a validated action. Returns the result string; look_up and glance_screen
+    also leave what they found in st["found"]."""
     if action in ("none", "journal_thought"):
         return "ok"
+    if action == "look_up":
+        return do_look_up(L, st, params["topic"])
+    if action == "glance_screen":
+        return do_glance(L, st, p)
     if DRY_RUN:
         log("DRY-RUN", action, json.dumps(params)); return "ok (dry run)"
+    if action == "message_zack":
+        return send_ntfy(L, params["text"])
     if action == "show_note":
         r = subprocess.run(["notify-send", "-a", "Cypher", "-t", "9000", "Cypher", params["text"]],
                            capture_output=True, timeout=5)
@@ -672,6 +760,117 @@ def execute(action, params):
         except Exception as e:
             return "avatar failed: " + type(e).__name__
     return "no executor"
+
+# ---------- phase 3: phone, screen glances, look-ups ----------
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **kw):
+        return None
+
+def _http(url, data=None, headers=None, timeout=10, hosts=None, cap=65536):
+    """(status, bytes). Only https, only allowlisted hosts, no redirects."""
+    u = urllib.parse.urlsplit(url)
+    if u.scheme != "https" or (hosts is not None and u.hostname not in hosts):
+        raise ValueError("host not allowed")
+    req = urllib.request.Request(url, data=data, method="POST" if data is not None else "GET",
+                                 headers=dict({"User-Agent": "grokbotos-cypher/3 (personal cyberdeck)"}, **(headers or {})))
+    try:
+        with urllib.request.build_opener(_NoRedirect).open(req, timeout=timeout) as r:
+            return r.status, r.read(cap)
+    except urllib.error.HTTPError as e:
+        return e.code, b""
+
+def send_ntfy(L, text, title=None):
+    """Push text to Zack's phone. The topic is a secret: never logged, journaled or returned."""
+    N = L.get("ntfy") or {}
+    topic = read_secret(NTFY_TOPIC_FILE)
+    if not topic or not re.match(r"^[A-Za-z0-9_-]{16,64}$", topic):
+        return "no phone topic"
+    base = str(N.get("url", "https://ntfy.sh")).rstrip("/")
+    try:
+        code, _ = _http(base + "/" + topic, data=text.encode("utf-8"), timeout=float(N.get("timeout_s", 10)),
+                        hosts=[urllib.parse.urlsplit(base).hostname],
+                        headers={"Title": title or N.get("title", "Cypher"), "Tags": "robot", "Priority": "default"})
+    except Exception as e:
+        return "phone failed: " + type(e).__name__
+    return "ok" if code == 200 else "phone failed: http %d" % code
+
+def _found(st, kind, text, now=None):
+    if st is None:
+        return
+    st.setdefault("found", []).append([now or st.get("last_tick") or time.time(), kind, text])
+    del st["found"][:-4]
+
+def found_lines(st, now):
+    f = [x for x in st.get("found") or [] if isinstance(x, list) and len(x) == 3 and now - x[0] < 6 * 3600][-2:]
+    if not f:
+        return ""
+    return "you recently found out: " + " | ".join("[%s %s] %s" % (time.strftime("%-I:%M", time.localtime(t)), k, x)
+                                                 for t, k, x in f)[:600] + "\n"
+
+def _plain(t, n):
+    t = re.sub(r"https?://\S+|www\.\S+", "", _CTRL.sub(" ", t or ""))
+    return re.sub(r"\s+", " ", t).strip()[:n]
+
+def do_look_up(L, st, topic):
+    K = L.get("lookup") or {}
+    hosts = K.get("hosts") or ["en.wikipedia.org"]
+    url = "https://%s/api/rest_v1/page/summary/%s?redirect=true" % (hosts[0], urllib.parse.quote(topic.replace(" ", "_"), safe=""))
+    try:
+        code, body = _http(url, timeout=float(K.get("timeout_s", 10)), hosts=hosts, headers={"Accept": "application/json"})
+    except Exception as e:
+        return "look_up failed: " + type(e).__name__
+    if code == 404:
+        _found(st, "look_up " + topic, "no article found"); return "not found"
+    if code != 200:
+        return "look_up failed: http %d" % code
+    try:
+        j = json.loads(body.decode("utf-8", "replace"))
+    except ValueError:
+        return "look_up failed: bad reply"
+    text = _plain(j.get("extract") if isinstance(j.get("extract"), str) else "", int(K.get("max_result_chars", 300)))
+    _found(st, "look_up " + topic, text or "empty article")
+    return "ok"
+
+def _grab_screen(path, S):
+    r = subprocess.run(["grim", "-s", str(float(S.get("scale", 0.5))), "-t", "jpeg", "-q", str(int(S.get("jpeg_quality", 60))), path],
+                       capture_output=True, timeout=10, env=_sway_env())
+    return r.returncode == 0
+
+def do_glance(L, st, p):
+    """One low-res screenshot, described by Alpha's vision model through the proxy, then deleted.
+    Never sent anywhere else (no hosted backup for images)."""
+    S = L.get("screen") or {}
+    if (p or {}).get("presence") != "active":
+        return "skipped: zack is away"
+    d = _private_dir(os.path.join(E("XDG_RUNTIME_DIR") or STATE_DIR, "cypher-glance"))
+    path = os.path.join(d, "glance-%d.jpg" % os.getpid())
+    try:
+        if not _grab_screen(path, S):
+            return "glance failed: screenshot"
+        with open(path, "rb") as f:
+            img = f.read(int(S.get("max_bytes", 400000)) + 1)
+    except Exception as e:
+        return "glance failed: " + type(e).__name__
+    finally:
+        try: os.remove(path)
+        except OSError: pass
+    if len(img) > int(S.get("max_bytes", 400000)):
+        return "glance failed: image too big"
+    import base64
+    body = {"image_b64": base64.b64encode(img).decode(), "mime": "image/jpeg",
+            "max_tokens": int(S.get("max_output_tokens", 80))}
+    del img
+    try:
+        code, j = alpha_api(L, "POST", "/v1/vision/describe", body, timeout=float(S.get("timeout_s", 60)))
+    except BrainBusy as b:
+        return "glance failed: " + b.reason
+    if code != 200 or not isinstance(j, dict):
+        return "glance failed: %s" % ((j or {}).get("busy") if isinstance(j, dict) and j.get("busy") else "http %d" % code)
+    text = _plain(j.get("description") if isinstance(j.get("description"), str) else "", 240)
+    if not text:
+        return "glance failed: empty description"
+    _found(st, "screen", text)
+    return "ok"
 
 # ---------- journal ----------
 def journal(entry, now=None, outbox=True):
@@ -717,7 +916,7 @@ def tick(L, st, now=None, perceive_fn=None, camera_fn=None):
         return None
     st["last_sig"] = sig; st["last_call"] = now
     before = dict(st["drives"])
-    messages = build_messages(L, st, p)
+    messages = build_messages(L, st, p, now)
     entry = {"ts": iso(now), "tick": st["tick"], "perception": {k: p[k] for k in
              ("local_time", "presence", "focused_app", "window_title", "dnd", "muted", "quiet_hours")},
              "host": HOLDER,
@@ -741,19 +940,39 @@ def tick(L, st, now=None, perceive_fn=None, camera_fn=None):
                       "result": "skipped"})
         journal(entry, now); return entry
     action, params, verdict = validate(L, st, p, choice, now)
-    result = execute(action, params) if verdict == "ok" else "skipped"
+    last_found = (st.get("found") or [None])[-1]
+    result = execute(action, params, L, st, p) if verdict == "ok" else "skipped"
     if verdict == "ok" and action != "none":
         st["recent"].append([now, action])
         apply_delta(st["drives"], ACTION_EFFECTS.get(action, {}))
-    st["last_actions"] = (st["last_actions"] + [action])[-10:]
+        if action == "set_avatar_color" and result in ("ok", "ok (dry run)"):
+            st["avatar_color"] = params["color"]; st["color_mood"] = st["mood"]["label"]
+    st["last_actions"] = (st["last_actions"] + [action_label(choice, action, params, verdict, result)])[-10:]
     st["mood"] = mood(st["drives"])
     reason = choice.get("reason") if isinstance(choice.get("reason"), str) else ""
     entry.update({"choice": {"action": action, "params": params}, "reason": _CTRL.sub(" ", reason)[:300],
                   "validator": verdict, "result": result, "drives_after": dict(st["drives"])})
     if verdict != "ok":
         entry["model_choice"] = str(choice.get("action"))[:40]
+    if st.get("found") and st["found"][-1] is not last_found:
+        entry["found"] = st["found"][-1][2]
     journal(entry, now)
     return entry
+
+def action_label(choice, action, params, verdict, result):
+    """What 'your last actions' shows: refusals and failures included, so the model learns from them."""
+    if verdict != "ok":
+        a = str(choice.get("action"))[:24]
+        pr = choice.get("params") if isinstance(choice.get("params"), dict) else {}
+        arg = pr.get("color") or pr.get("topic")
+        why = verdict.replace("rejected: ", "", 1)
+        if why.startswith(a + " "): why = why[len(a) + 1:]
+        return ("%s%s (refused: %s)" % (a, " " + str(arg)[:20] if isinstance(arg, str) else "", why))[:80]
+    arg = params.get("color") or params.get("topic")
+    lab = action + (" " + arg[:24] if arg else "")
+    if result not in ("ok", "ok (dry run)", "skipped") and action != "none":
+        lab += " (" + result[:30] + ")"
+    return lab[:80]
 
 # ---------- memory and nightly sleep ----------
 MEM_FILE = os.path.join(DATA_DIR, "memory", "memories.json")
@@ -890,7 +1109,7 @@ def maybe_sleep(L, st, now=None, force=False):
     thoughts = []
     for e in entries:
         ch = e.get("choice") or {}
-        t = (ch.get("params") or {}).get("text") if ch.get("action") == "journal_thought" else None
+        t = (ch.get("params") or {}).get("text") if ch.get("action") == "journal_thought" else e.get("found")
         if t or e.get("reason"):
             thoughts.append("%s %s" % (str(e.get("ts", ""))[11:16], t or e.get("reason")))
     notes = (read_json(PREFS_FILE, {}) or {}).get("notes") or []
@@ -951,7 +1170,7 @@ def adopt_state(st, s):
     if isinstance(s.get("recent"), list):
         st["recent"] = [r for r in s["recent"] if isinstance(r, list) and len(r) == 2][-300:]
     if isinstance(s.get("last_actions"), list):
-        st["last_actions"] = [str(a)[:40] for a in s["last_actions"]][-10:]
+        st["last_actions"] = [str(a)[:80] for a in s["last_actions"]][-10:]
     for k in ("cam_seq",):
         if isinstance(s.get(k), int):
             st[k] = max(st.get(k) or 0, s[k])
@@ -1116,7 +1335,7 @@ def save_state(path, st):
     write_json(path, st)
 
 def cli(argv):
-    """cypherd.py prefs | prefs-rollback N | sleep-now  (used by grokbot-cypher)"""
+    """cypherd.py prefs | prefs-rollback N | sleep-now | ntfy-test  (used by grokbot-cypher)"""
     if argv[0] == "prefs":
         prefs = read_json(PREFS_FILE, {}) or {}
         print("current version:", prefs.get("version", 0))
@@ -1133,6 +1352,16 @@ def cli(argv):
         _private_dir(CFG_DIR)
         with open(os.path.join(CFG_DIR, "sleep_now"), "w") as f: f.write(iso(time.time()))
         print("Cypher will sleep (condense today) at its next tick"); return 0
+    if argv[0] == "ntfy-test":
+        try:
+            L = load_limits()
+        except ConfigError as e:
+            print("limits:", e); return 1
+        if not read_secret(NTFY_TOPIC_FILE):
+            print("no phone topic: run sudo grokbot-set-cypher-ntfy first"); return 1
+        r = send_ntfy(L, "Test from Cypher: phone messages work. Real ones are rare (max %s a day, never in quiet hours)."
+                      % (L["actions"].get("message_zack") or {}).get("per_day", "?"))
+        print("sent a test message to Zack's phone" if r == "ok" else r); return 0 if r == "ok" else 1
     print(cli.__doc__); return 2
 
 def main(argv=None):

@@ -1,0 +1,32 @@
+#!/bin/bash
+# Make the secret ntfy.sh topic Cypher's message_zack uses to reach Zack's phone:
+# /etc/grokbot/cypher-ntfy-topic, owned root:grokbot, mode 0640.
+# Run as an admin:
+#   sudo grokbot-set-cypher-ntfy           make a random topic if there is none
+#   sudo grokbot-set-cypher-ntfy --rotate  replace it with a new random topic
+#   sudo grokbot-set-cypher-ntfy --remove  delete it (message_zack turns itself off)
+# Never prints the topic. To subscribe in the ntfy app, read it with
+#   sudo cat /etc/grokbot/cypher-ntfy-topic
+set -euo pipefail
+dest=${GROKBOT_CYPHER_NTFY_FILE:-/etc/grokbot/cypher-ntfy-topic}
+group=${GROKBOT_CYPHER_NTFY_GROUP:-grokbot}
+if (( EUID != 0 )); then
+    echo "grokbot-set-cypher-ntfy: run with sudo" >&2
+    exit 2
+fi
+case ${1:-} in
+    --remove) rm -f "$dest"; echo "Removed ${dest}."; exit 0 ;;
+    --rotate) ;;
+    "") if [[ -s $dest ]]; then echo "${dest} already exists (use --rotate for a new topic)."; exit 0; fi ;;
+    *) echo "usage: grokbot-set-cypher-ntfy [--rotate|--remove]" >&2; exit 2 ;;
+esac
+topic="cypher-$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))')"
+install -d -m 0755 "$(dirname "$dest")"
+tmp=$(mktemp "${dest}.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+printf '%s\n' "$topic" >"$tmp"
+chown "root:${group}" "$tmp"
+chmod 0640 "$tmp"
+mv -f "$tmp" "$dest"
+trap - EXIT
+echo "Saved a new random topic in ${dest} (root:${group}, 0640). Read it with sudo cat to subscribe."

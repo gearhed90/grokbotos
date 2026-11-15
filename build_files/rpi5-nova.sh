@@ -67,10 +67,16 @@ install -m 0644 "${csrc}/persona.md" "${cypher}/persona.md"
 install -m 0644 "${csrc}/cypher-limits.json" /etc/grokbot/cypher-limits.json
 install -m 0755 "${csrc}/grokbot-cypher" /usr/local/bin/grokbot-cypher
 install -m 0755 "${csrc}/grokbot-set-cypher-token" /usr/local/sbin/grokbot-set-cypher-token
+# Phase 3: message_zack's ntfy topic is a secret made on the device with
+# sudo grokbot-set-cypher-ntfy (/etc/grokbot/cypher-ntfy-topic, root:grokbot
+# 0640); never in the image. glance_screen uses grim (already in the image).
+install -m 0755 "${csrc}/grokbot-set-cypher-ntfy" /usr/local/sbin/grokbot-set-cypher-ntfy
+command -v grim >/dev/null
 install -m 0644 "${csrc}/cypherd.service" /usr/lib/systemd/user/cypherd.service
 systemctl --global enable cypherd.service
 python3 -m py_compile "${cypher}/cypherd.py"
 [[ ! -e /etc/grokbot/cypher-brain-token ]]
+[[ ! -e /etc/grokbot/cypher-ntfy-topic ]]
 
 # Phase 2: local fallback model, a podman quadlet on the official llama.cpp
 # server image (pinned by digest; ~3x faster on the Pi 5 than Fedora's generic
@@ -128,6 +134,13 @@ fi
 install -D -m 0644 "${ctx}/rpi5/fonts/Nunito[wght].ttf" "/usr/share/fonts/nunito/Nunito[wght].ttf"
 install -D -m 0644 "${ctx}/rpi5/fonts/OFL.txt" /usr/share/licenses/nunito/OFL.txt
 fc-cache -f /usr/share/fonts/nunito >/dev/null 2>&1 || true
+
+# --- touch: retry the Goodix controller if it missed its boot probe ---------
+# (Nov 15 2026: probe of 11-005d failed with -121 before the panel was ready;
+# a later bind brought it back.) Oneshot, logs to the journal, never fails boot.
+install -D -m 0755 "${ctx}/rpi5/touch/grokbot-touch-retry" /usr/libexec/grokbot/grokbot-touch-retry
+install -m 0644 "${ctx}/rpi5/touch/grokbot-touch-retry.service" /usr/lib/systemd/system/grokbot-touch-retry.service
+systemctl enable grokbot-touch-retry.service
 
 # The Pi's display/touch fixes no longer need a per-user outputs.conf override
 # (50-rpi5-dsi.conf maps touch to DSI-2) or the temporary dock pkill.

@@ -1,0 +1,49 @@
+#!/bin/bash
+# grokbot-touch-retry - re-probe the DSI screen's Goodix touch controller if it
+# missed its boot probe (seen Nov 15 2026: Goodix-TS probe of 11-005d failed
+# with -121, I2C no ACK, because the chip was not ready yet). Binding the
+# driver again a few seconds later brings the touchscreen back.
+# Looks at every I2C device whose name or modalias says goodix (default
+# 11-005d); for each one with no driver bound and no Goodix input device, it
+# tries the bind up to TRIES times. Logs to the journal; always exits 0.
+set -u
+TRIES=${GROKBOT_TOUCH_TRIES:-5}
+SLEEP=${GROKBOT_TOUCH_SLEEP:-3}
+SYS=${GROKBOT_TOUCH_SYSFS:-/sys}
+INPUT=${GROKBOT_TOUCH_INPUT:-/proc/bus/input/devices}
+DRIVER=${GROKBOT_TOUCH_DRIVER:-$SYS/bus/i2c/drivers/Goodix-TS}
+say() { echo "grokbot-touch-retry: $*"; }
+
+has_input() { grep -qi 'Name=.*Goodix' "$INPUT" 2>/dev/null; }
+
+devs=()
+for d in "$SYS"/bus/i2c/devices/*; do
+    [[ -e $d ]] || continue
+    if grep -qi goodix "$d/name" "$d/modalias" 2>/dev/null; then devs+=("$(basename "$d")"); fi
+done
+[[ ${#devs[@]} -gt 0 ]] || { [[ -e $SYS/bus/i2c/devices/11-005d ]] && devs=(11-005d); }
+if [[ ${#devs[@]} -eq 0 ]]; then
+    say "no Goodix I2C device on this board, nothing to do"; exit 0
+fi
+
+for dev in "${devs[@]}"; do
+    if [[ -e $SYS/bus/i2c/devices/$dev/driver ]] && has_input; then
+        say "$dev: touch is up"; continue
+    fi
+    if [[ ! -w $DRIVER/bind ]]; then
+        say "$dev: no driver bind file at $DRIVER, cannot retry"; continue
+    fi
+    for ((i = 1; i <= TRIES; i++)); do
+        say "$dev: no driver bound, retry $i of $TRIES"
+        echo "$dev" > "$DRIVER/bind" 2>/dev/null
+        sleep 1
+        if [[ -e $SYS/bus/i2c/devices/$dev/driver ]] && has_input; then
+            say "$dev: touch is back after retry $i"; break
+        fi
+        (( i < TRIES )) && sleep "$SLEEP"
+    done
+    if ! [[ -e $SYS/bus/i2c/devices/$dev/driver ]]; then
+        say "$dev: still no answer after $TRIES tries; check the touch ribbon cable"
+    fi
+done
+exit 0

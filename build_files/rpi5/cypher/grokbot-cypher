@@ -12,6 +12,7 @@
   grokbot-cypher prefs             preference notes and their versions
   grokbot-cypher prefs rollback N  make version N current again (as a new version)
   grokbot-cypher sleep-now         condense today at the next tick
+  grokbot-cypher ntfy-test         send one test message to Zack's phone (ntfy)
 """
 import json, os, subprocess, sys, time
 E = os.environ.get
@@ -54,12 +55,13 @@ def fmt(line):
     cam = (j.get("perception") or {}).get("camera") or []
     ch = j.get("choice") or {}
     p = ch.get("params") or {}
-    what = ch.get("action", "?") + ((": " + (p.get("text") or p.get("color") or "")) if p else "")
+    what = ch.get("action", "?") + ((": " + (p.get("text") or p.get("color") or p.get("topic") or "")) if p else "")
     v = j.get("validator", "")
     host = " @alpha" if j.get("host") == "alpha" else ""
     return "%s  %-6s %s%s%s%s\n          why: %s" % (j.get("ts", "")[11:19], j.get("brain", ""), what,
                                               "" if v in ("ok", "skipped") else "  (" + v + ")", host,
-                                              ("  [cameras: %d]" % len(cam)) if cam else "", j.get("reason", ""))
+                                              ("  [cameras: %d]" % len(cam)) if cam else "", j.get("reason", "")) \
+        + (("\n          found: " + j["found"]) if j.get("found") else "")
 
 def main(argv):
     cmd = argv[1] if len(argv) > 1 else "status"
@@ -103,7 +105,7 @@ def main(argv):
         except (OSError, ValueError): mem = []
         for m in mem[-20:]: print("%s  %s" % (m.get("day", ""), m.get("text", "")))
         if not mem: print("no memories yet (Cypher sleeps at 4 AM)")
-    elif cmd in ("prefs", "sleep-now"):
+    elif cmd in ("prefs", "sleep-now", "ntfy-test"):
         args = ["prefs-rollback", argv[3]] if cmd == "prefs" and len(argv) > 3 and argv[2] == "rollback" else [cmd]
         return subprocess.run([sys.executable, CYPHERD, *args]).returncode
     else:

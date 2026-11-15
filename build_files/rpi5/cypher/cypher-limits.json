@@ -1,7 +1,7 @@
 {
   "_comment": "Cypher's locked limits. Root-owned, shipped in the image; cypherd re-reads it every tick and Cypher can never edit it. Change it only with sudo (see docs/CYPHER.md).",
   "enabled": true,
-  "phase_max": 2,
+  "phase_max": 3,
   "tick_s": 45,
   "tick_s_bounds": [30, 300],
   "heartbeat_s": 600,
@@ -44,7 +44,8 @@
     "_comment": "Read-only, sanitized events from cypher-camfeed on Alpha. Cypher reacts in its journal and mood only; camera, light and house actions never exist.",
     "enabled": true,
     "phase": 2,
-    "react_kinds": ["person", "stranger", "family", "alert", "vehicle", "arrival_start", "arrival_end"],
+    "_kinds_comment": "nothing (the reviewer found no one) is never reacted to; unconfirmed = motion the reviewer has not checked yet.",
+    "react_kinds": ["person", "stranger", "family", "alert", "vehicle", "arrival_start", "arrival_end", "unconfirmed"],
     "max_age_s": 1800,
     "first_lookback_s": 43200,
     "max_per_tick": 5
@@ -63,11 +64,40 @@
     "max_drift_step": 0.02,
     "keep_versions": 30
   },
+  "ntfy": {
+    "_comment": "Phase 3: message_zack pushes to ntfy.sh. The topic is a secret in /etc/grokbot/cypher-ntfy-topic (root:grokbot 0640, made by grokbot-set-cypher-ntfy); never in the image or logs.",
+    "enabled": true,
+    "phase": 3,
+    "url": "https://ntfy.sh",
+    "title": "Cypher",
+    "timeout_s": 10
+  },
+  "screen": {
+    "_comment": "Phase 3: glance_screen. One low-res grim screenshot of the deck's own screen, described only by Alpha's Qwen3-VL through cypher-brain-proxy, deleted right after. Never the hosted backup. Only while Zack is at the screen.",
+    "enabled": true,
+    "phase": 3,
+    "scale": 0.5,
+    "jpeg_quality": 60,
+    "max_bytes": 400000,
+    "max_output_tokens": 80,
+    "timeout_s": 60
+  },
+  "lookup": {
+    "_comment": "Phase 3: look_up. Read-only Wikipedia summaries from these hosts only, no redirects.",
+    "enabled": true,
+    "phase": 3,
+    "hosts": ["en.wikipedia.org"],
+    "timeout_s": 10,
+    "max_result_chars": 300
+  },
   "actions": {
     "none": {"phase": 1},
     "journal_thought": {"phase": 1, "max_chars": 280, "per_hour": 20},
     "show_note": {"phase": 1, "max_chars": 120, "per_hour": 3, "per_day": 12},
-    "set_avatar_color": {"phase": 1, "per_hour": 2}
+    "set_avatar_color": {"phase": 1, "per_hour": 2, "_comment": "also only when the mood label changed since the last color, never the same color"},
+    "message_zack": {"phase": 3, "max_chars": 200, "per_hour": 1, "per_day": 3, "_comment": "never in quiet hours"},
+    "glance_screen": {"phase": 3, "per_hour": 3, "per_day": 12},
+    "look_up": {"phase": 3, "max_chars": 60, "per_hour": 2, "per_day": 6}
   },
   "avatar_colors": ["white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray"]
 }

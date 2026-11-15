@@ -1,0 +1,15 @@
+[Unit]
+Description=Retry the DSI touchscreen (Goodix) if it missed its boot probe
+After=systemd-modules-load.service systemd-udevd.service
+ConditionPathExistsGlob=/sys/bus/i2c/devices/*
+
+[Service]
+Type=oneshot
+# Let the panel power up fully before checking.
+ExecStartPre=/usr/bin/sleep 5
+ExecStart=/usr/libexec/grokbot/grokbot-touch-retry
+RemainAfterExit=yes
+TimeoutStartSec=90
+
+[Install]
+WantedBy=multi-user.target
