@@ -98,15 +98,15 @@ for label, t, want in (("Sat 2 PM", at(14, 0, 21), False), ("Sun 1 AM (Sat night
     check("quiet hours %s -> %s" % (label, want), C.in_quiet_hours(L, t) is want)
 st = C.new_state()
 msgs = C.build_messages(L, st, dict(P, quiet_hours=False, local_time="Sat 2:00 PM"), at(14, 0, 21))
-check("prompt says quiet hours NO explicitly, with the schedule", "quiet hours: NO right now (schedule: 11 PM-6 AM" in msgs[1]["content"]
-      and "is a feeling, not this schedule" in msgs[1]["content"], msgs[1]["content"][:400])
-check("prompt says YES in quiet hours", "quiet hours: YES right now" in C.build_messages(L, st, dict(P, quiet_hours=True), now)[1]["content"])
+check("prompt says quiet hours NO explicitly, with the schedule", "Quiet hours: NO. It is NOT quiet hours" in msgs[1]["content"]
+      and "Quiet hours next start Sunday 11:00 PM" in msgs[1]["content"] and "trust the NOW line" in msgs[0]["content"], msgs[1]["content"][:400])
+check("prompt says YES in quiet hours", "Quiet hours: YES, it is quiet hours now" in C.build_messages(L, st, dict(P, quiet_hours=True), now)[1]["content"])
 st = C.new_state(); st["alpha_backoff_until"] = at(15, 0, 21) + 9999
 LX["reply"] = '{"action":"none","params":{},"reason":"weekend"}'
 e = C.tick(L, st, at(15, 0, 21), perceive_fn=perceive(dict(P, local_time="Sat 3:00 PM")), camera_fn=lambda L, s, n: [],
            inbox_fn=lambda L, s, n: [], talk_fn=lambda *a: 0)
 seen = LX["seen"][-1]["messages"][1]["content"] if LX["seen"] else ""
-check("the local 3B gets the same explicit flag (Sat 3 PM: NO)", e["brain"] == "local" and "quiet hours: NO right now" in seen, (e.get("brain"), seen[:200]))
+check("the local 3B gets the same explicit flag (Sat 3 PM: NO)", e["brain"] == "local" and "Quiet hours: NO" in seen, (e.get("brain"), seen[:200]))
 check("tick perception carries quiet_hours false on Saturday", e["perception"]["quiet_hours"] is False)
 
 # ---- request_account: plain domain, known TLD, Alpha or hosted only ----

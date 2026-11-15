@@ -281,18 +281,21 @@ def grid_panel(cr, W, g, stale):
             ("MIND", "on %s%s" % (safe(g.get("mind"), 24) or "?",
                                   (" \u00b7 standby %s" % safe(g.get("standby"), 5)) if g.get("standby") else ""), TXT),
             ("CAMS", "feed %s" % (safe(g.get("cams"), 24) or "?"), TXT if str(g.get("cams", "")).startswith("ok") else AMBER)]
-    y = 394
+    y = 392
     for label, val, col in rows:
         text(cr, 14, y, label, DIM, 10.5, True)
-        text(cr, 62, y, val, col, 12, width=W - 76); y += 20
+        text(cr, 62, y, val, col, 12, width=W - 76); y += 19
+    # Build 13: the commit subject gets up to four lines at a smaller size (two cut it off mid-sentence);
+    # the panel ends at 516, so the last line sits at most at 510.
     for r in [r for r in g.get("repos") or [] if isinstance(r, list) and len(r) == 4][:1]:
-        name, sha, hm, msg = (safe(x, 72) for x in r)
+        name, sha, hm, msg = (safe(x, 120) for x in r)
         text(cr, 14, y, "REPO", DIM, 10.5, True)
-        text(cr, 62, y, ("%s %s %s" % (name, sha, hm)) if sha else "%s %s" % (name, msg), TXT, 12, width=W - 76); y += 17
+        text(cr, 62, y, ("%s %s %s" % (name, sha, hm)) if sha else "%s %s" % (name, msg), TXT, 12, width=W - 76); y += 15
         if sha:
-            font(cr, 11.5)
-            for line in wrap(cr, msg, W - 76, 2):
-                text(cr, 62, y, line, DIM, 11.5); y += 15
+            font(cr, 10.5)
+            for line in wrap(cr, msg, W - 70, 4):
+                if y > 510: break
+                text(cr, 62, y, line, DIM, 10.5); y += 13
 
 def bar_width(w, h):
     """How wide the avatar's text bar may be so it never runs under a column."""

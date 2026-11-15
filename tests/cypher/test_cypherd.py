@@ -222,7 +222,8 @@ e8 = C.tick(Loff, st, t0 + 4100, fake_perceive(app="y"))
 check("forbidden action rejected -> none", e8["choice"]["action"] == "none" and e8["validator"].startswith("rejected") and e8["model_choice"] == "unlock_door", e8)
 BR["alpha"]["reply"] = "I think I will journal"
 e9 = C.tick(Loff, st, t0 + 4200, fake_perceive(app="z"))
-check("unparseable reply -> none", "unparseable" in e9["validator"])
+check("unparseable reply -> one retry, then a clean none", "unparseable" in e9.get("retry", "") and e9["choice"]["action"] == "none"
+      and e9["note"].startswith("fallback"), e9)
 # Pause
 with open(os.path.join(T, "cfg", "pause_until"), "w") as f: f.write(str(t0 + 99999))
 check("paused -> no model call", C.tick(Loff, st, t0 + 4300, fake_perceive(app="paused")) is None)
