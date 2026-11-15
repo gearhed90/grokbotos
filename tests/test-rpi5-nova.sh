@@ -132,6 +132,22 @@ fi
 python3 tests/cypher/test_cypherd.py
 python3 tests/cypher/test_cypherd_phase2.py
 python3 tests/cypher/test_cypherd_phase3.py
+python3 tests/cypher/test_cypherd_phase4.py
+# Phase 4: dashboard on workspace 9 (Super+C), Super+Enter terminal, qrencode for ntfy-qr.
+bash -n "${cy}/grokbot-cypher-dash"
+bash -n "${nova}/grokbot-term"
+python3 -m py_compile "${cy}/cypher-dash.py"
+assert_contains build_files/rpi5-nova.sh '/usr/local/bin/grokbot-cypher-dash'
+assert_contains build_files/rpi5-nova.sh '"${cypher}/cypher-dash.py"'
+assert_contains build_files/rpi5-nova.sh '/usr/local/bin/grokbot-term'
+assert_contains build_files/rpi5-nova.sh 'dnf5 install -y qrencode'
+assert_contains "${nova}/sway-rpi5-nova.conf" 'bindsym Mod4+Return exec /usr/local/bin/grokbot-term'
+assert_contains "${nova}/sway-rpi5-nova.conf" 'assign [app_id="cypher-dash"] workspace number 9'
+assert_contains "${nova}/sway-rpi5-nova.conf" 'for_window [app_id="cypher-dash"] inhibit_idle none'
+assert_contains "${nova}/sway-rpi5-nova.conf" 'bindsym Mod4+c exec /usr/local/bin/grokbot-cypher-dash'
+if grep -E 'cypher-ntfy-topic|cypher-brain-token|xai_key' "${cy}/cypher-dash.py" >/dev/null; then
+    fail "cypher-dash.py must never open a secret file"
+fi
 # Phase 3: ntfy topic made on the device, never in the image; touch retry enabled.
 bash -n "${cy}/grokbot-set-cypher-ntfy"
 assert_contains build_files/rpi5-nova.sh '/usr/local/sbin/grokbot-set-cypher-ntfy'

@@ -36,6 +36,7 @@ ln -sf "${nova}/grokbot-lock-keypad.py" /usr/local/bin/grokbot-lock-keypad
 install -m 0755 "${src}/grokbot-nova" /usr/local/bin/grokbot-nova
 install -m 0755 "${src}/grokbot-desktop-app" /usr/local/bin/grokbot-desktop-app
 install -m 0755 "${src}/grokbot-cadpad-token" /usr/local/bin/grokbot-cadpad-token
+install -m 0755 "${src}/grokbot-term" /usr/local/bin/grokbot-term
 # Onshape pad (cadpad.py -> onshape-pad-helper on the CAD PC over the LAN).
 # Host and port only; the shared token is never in the image (each user saves
 # it with grokbot-cadpad-token into ~/.config/grokbot/cadpad.token, 0600).
@@ -71,10 +72,16 @@ install -m 0755 "${csrc}/grokbot-set-cypher-token" /usr/local/sbin/grokbot-set-c
 # sudo grokbot-set-cypher-ntfy (/etc/grokbot/cypher-ntfy-topic, root:grokbot
 # 0640); never in the image. glance_screen uses grim (already in the image).
 install -m 0755 "${csrc}/grokbot-set-cypher-ntfy" /usr/local/sbin/grokbot-set-cypher-ntfy
+# Phase 4: the dashboard (cypher-dash.py on sway workspace 9, Super+C) and
+# qrencode for grokbot-cypher ntfy-qr (a terminal QR of the topic, on screen only).
+install -m 0644 "${csrc}/cypher-dash.py" "${cypher}/cypher-dash.py"
+install -m 0755 "${csrc}/grokbot-cypher-dash" /usr/local/bin/grokbot-cypher-dash
+dnf5 install -y qrencode
+command -v qrencode >/dev/null
 command -v grim >/dev/null
 install -m 0644 "${csrc}/cypherd.service" /usr/lib/systemd/user/cypherd.service
 systemctl --global enable cypherd.service
-python3 -m py_compile "${cypher}/cypherd.py"
+python3 -m py_compile "${cypher}/cypherd.py" "${cypher}/cypher-dash.py"
 [[ ! -e /etc/grokbot/cypher-brain-token ]]
 [[ ! -e /etc/grokbot/cypher-ntfy-topic ]]
 

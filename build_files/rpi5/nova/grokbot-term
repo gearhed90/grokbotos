@@ -1,0 +1,20 @@
+#!/bin/bash
+# Super+Enter (Raspberry Pi 5): a foot terminal on its own workspace (8), so it
+# never fights Nova's fullscreen window. When the last terminal there closes,
+# go back to where you were. A tap of Super also gets you back to Nova.
+set -uo pipefail
+ws="8"
+if [[ -z "${SWAYSOCK:-}" ]]; then
+    SWAYSOCK=$(ls -t "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/sway-ipc.*.sock 2>/dev/null | head -1 || true)
+    export SWAYSOCK
+fi
+swaymsg -q workspace number "$ws"
+foot --app-id=grokbot-term "$@"
+# foot exited: if we are still on the (now empty) terminal workspace, leave it.
+left=$(swaymsg -r -t get_workspaces | python3 -c 'import json,sys
+w = next((w for w in json.load(sys.stdin) if w.get("focused")), {})
+print("%s %d" % (w.get("name", ""), len(w.get("nodes") or []) + len(w.get("floating_nodes") or [])))')
+if [[ "$left" == "$ws 0" ]]; then
+    swaymsg -q workspace back_and_forth
+fi
+exit 0
