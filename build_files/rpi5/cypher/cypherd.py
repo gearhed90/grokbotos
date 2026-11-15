@@ -885,6 +885,8 @@ def maybe_sleep(L, st, now=None, force=False):
         st["last_sleep"] = day        # set first: a failed sleep is not retried all morning
     entries = day_entries(L, day)
     stats = day_stats(entries)
+    if not stats["ticks"] and not force:
+        return None                       # nothing lived that day (deck off, or before Cypher existed)
     thoughts = []
     for e in entries:
         ch = e.get("choice") or {}

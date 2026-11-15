@@ -178,6 +178,7 @@ check("prefs version 1 saved", D.read_json(D.PREFS_FILE)["version"] == 1 and os.
 check("tunables follow, still clamped on load", D.load_tunables(L)["drift_per_hour"]["boredom"] == round(D.DEFAULT_DRIFT["boredom"] - 0.02, 4))
 check("stats count camera and ticks", s1["stats"]["ticks"] == 6 and s1["stats"]["camera"] == {"family": 1}, s1["stats"])
 check("sleep only once a day", D.maybe_sleep(L, st5, at4 + 600) is None)
+check("a day with no ticks is skipped", D.maybe_sleep(L, D.new_state(), time.mktime((2026, 10, 2, 4, 5, 0, 0, 0, -1))) is None)
 check("no sleep before 4 AM", D.maybe_sleep(L, D.new_state(), time.mktime((2026, 11, 15, 3, 59, 0, 0, 0, -1))) is None)
 check("memories reach the prompt", "Zack came home" in D.memory_lines() and "Quiet evenings" in D.memory_lines())
 LOCAL["reply"] = json.dumps({"memories": [], "add_notes": ["Another note"], "drop_notes": [0]})
