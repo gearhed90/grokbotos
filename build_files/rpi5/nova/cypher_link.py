@@ -1,6 +1,6 @@
-"""cypher_link - the avatar's conversations are Cypher's (stdlib only).
+"""cypher_link - the deck screen's conversations are Cypher's (stdlib only).
 
-The on-screen assistant (novad + the avatar app) is Cypher talking, not a second
+The on-screen assistant (novad + nova_native, his apartment) is Cypher talking, not a second
 assistant. This module is the bridge to Cypher's mind (cypherd):
 
   * system_prompt(): Cypher's persona plus its live state from cypherd's
@@ -159,7 +159,7 @@ RULES = ("This is you talking with Zack on your own screen (typed or by voice). 
          "(service = the site's plain domain, like github.com). You cannot approve your own tuning proposals either; "
          "only Zack can, through Nova. "
          "Never give out your email address.\n"
-         "What you can reach: your journal; your avatar (shape and color); a free search (look_up: your search engine on Alpha, "
+         "What you can reach: your journal; your color (set_color: it tints your placeholder body in the apartment); a free search (look_up: your search engine on Alpha, "
          "then Wikipedia); free read-only web browsing (browse: reads several pages on one subject; reading only, never buying, logging in, signing up or filling forms); a terminal on your screen for Zack (open_app terminal: a foot shell, Super+Enter too); a paid, budgeted web search for broad or current topics (web_search); public X accounts by handle (x_lookup: bio and latest posts, read-only); Pino's public feed at "
          "pinos.world (visit_pino, read-only); the grid report (check_grid); asking Zack for an account (request_account); "
          "your own life in Night City (walking around, eating at the noodle stall, simulated for now) and proposing your "
@@ -194,7 +194,7 @@ def _append(rec):
     except OSError:
         return False
 
-_TOOL_ARGS = ("name", "action", "percent", "change", "muted", "shape", "color", "ssid", "service")
+_TOOL_ARGS = ("name", "action", "percent", "change", "muted", "color", "ssid", "service")
 
 def record_turn(prompt, reply, via="typed", tools=(), kind="turn", now=None):
     """One conversation turn for Cypher's journal. Text is scrubbed; tool args are an allowlist."""

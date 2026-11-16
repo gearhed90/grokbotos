@@ -9,11 +9,20 @@ source "${root}/tests/assert.sh"
 cd "$root"
 nova=build_files/rpi5/nova
 
-for f in avatar.py avatar_shapes.py glview.py apartment.py apartment_gl.py apartment_body_placeholder.json nova_native.py novad.py shell.html lockscene.py pamauth.py \
+for f in look.py apartment.py apartment_gl.py apartment_body_placeholder.json nova_native.py novad.py lockscene.py pamauth.py \
     nova-web-user.js grokbot-lock-keypad.py grokbot-nova grokbot-set-xai-key cadpad.py grokbot-cadpad-token \
     novad.service grokbot-lock.pam sway-rpi5-nova.conf; do
     assert_file "${nova}/${f}"
 done
+# Build 16: the flat avatar is archived (archive/avatar-v1), not on the deck.
+for f in avatar.py avatar_shapes.py glview.py shell.html lock.html; do
+    [[ ! -e "${nova}/${f}" ]] || fail "${nova}/${f} is archived in archive/avatar-v1; it must not ship"
+    assert_file "archive/avatar-v1/nova/${f}"
+done
+assert_file archive/avatar-v1/README.md
+if grep -nE '^\s*(from|import)\s+(avatar|avatar_shapes|glview)\b' "${nova}"/*.py build_files/rpi5/cypher/*.py; then
+    fail "a deck file still loads the flat avatar"
+fi
 assert_file "build_files/rpi5/fonts/Nunito[wght].ttf"
 assert_file build_files/rpi5/fonts/OFL.txt
 python3 -m py_compile "${nova}"/*.py
@@ -126,16 +135,16 @@ fi
 # The on-screen voice is Cypher itself (was Pixel, then a separate "Cypher" assistant).
 assert_contains "${nova}/novad.py" 'You are Cypher, the mind living in'
 assert_contains "${nova}/novad.py" 'cypher_link.system_prompt(TOOL_RULES)'
-assert_contains "${nova}/shell.html" 'placeholder="Ask Cypher…"'
-if grep -n 'Pixel' "${nova}"/*.py "${nova}"/*.html | grep -v -e devicePixelRatio -e glReadPixels; then
+assert_contains "${nova}/nova_native.py" 'placeholder="Ask Cypher…"'
+if grep -n 'Pixel' "${nova}"/*.py | grep -v -e devicePixelRatio -e glReadPixels; then
     fail "the assistant is still called Pixel somewhere"
 fi
 python3 tests/cypher/test_cypherd.py
 python3 tests/cypher/test_cypherd_phase2.py
 python3 tests/cypher/test_cypherd_phase3.py
 python3 tests/cypher/test_cypherd_phase4.py
-# Phase 4: one mind. HUD panels around the avatar (Super+C hides/shows), the
-# avatar's conversations go to cypherd (cypher_link), Super+Enter terminal, qrencode.
+# Phase 4: one mind. HUD panels over the room (Super+C hides/shows), the
+# deck chat's conversations go to cypherd (cypher_link), Super+Enter terminal, qrencode.
 python3 tests/cypher/test_cypher_one_mind.py
 # Phase 5: gridwatch, strict request_account, limits command, self-tuning proposals.
 python3 tests/cypher/test_cypherd_phase5.py
@@ -147,7 +156,7 @@ python3 tests/cypher/test_cypherd_build14b.py
 python3 tests/cypher/test_cypherd_build15.py
 python3 tests/cypher/test_cypherd_build16.py
 python3 tests/nova/test_apartment.py
-assert_contains build_files/rpi5-nova.sh 'apartment.py apartment_gl.py apartment_body_placeholder.json'
+assert_contains build_files/rpi5-nova.sh 'look.py apartment.py apartment_gl.py apartment_body_placeholder.json'
 python3 -m py_compile "${cy}/grokbot-set-cypher-limit"
 assert_contains build_files/rpi5-nova.sh '/usr/local/sbin/grokbot-set-cypher-limit'
 assert_contains "${cy}/cypher-limits.json" '"message_zack": {"phase": 3, "max_chars": 200, "per_hour": 3, "per_day": null'

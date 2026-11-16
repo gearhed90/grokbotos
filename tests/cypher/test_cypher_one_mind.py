@@ -201,7 +201,7 @@ check("errors are journaled turns too", spool_rows()[-1]["kind"] == "error" and 
 src = open(os.path.join(NOVA, "cypher_link.py")).read()
 check("cypher_link never opens a secret file", not any(x in src for x in ("cypher-ntfy-topic", "cypher-brain-token", "xai_key", "read_secret")))
 nat = open(os.path.join(NOVA, "nova_native.py")).read()
-check("avatar app draws the HUD panels with a hide toggle", "import cypher_panels as CP" in nat and "CP.hidden()" in nat
+check("screen app draws the HUD panels with a hide toggle", "import cypher_panels as CP" in nat and "CP.hidden()" in nat
       and "set_overlay_pass_through(self.hud, True)" in nat)
 print("one-mind tests: %d passed, %d failed" % (ok, fail))
 sys.exit(1 if fail else 0)

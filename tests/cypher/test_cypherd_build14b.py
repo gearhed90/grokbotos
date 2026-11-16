@@ -331,7 +331,7 @@ sys.path.insert(0, sys.argv[1]); sys.argv = sys.argv[:1]
 import nova_native as N
 from gi.repository import Gtk, Gdk
 a = types.SimpleNamespace(base="http://127.0.0.1:9", offline=True, fullscreen=False, size=(1280, 720), dpr=.5, renderer="cairo",
-    state=None, sim=None, blink=None, confirm=None, reply=None, q=None, mic="none", shape=None, color=None, picker=False, ask=None,
+    state=None, sim=None, confirm=None, reply=None, q=None, mic="none", ask=None,
     quit_after=None, no_panels=False, journal=False)
 def pump(n=40):
     for _ in range(n):

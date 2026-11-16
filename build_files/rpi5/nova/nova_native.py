@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Cypher's face for grokbotos (GTK3 + pycairo): his apartment (build 16, apartment.py: the default screen; the
-round avatar when the `apartment` feature is off or --view avatar), the text bar and voice,
-and Cypher's HUD panels around the avatar (cypher_panels: mood, drives, brain,
+"""Cypher's face for grokbotos (GTK3 + pycairo): his apartment (build 16, apartment.py + apartment_gl.py: the deck's
+only visual; the old flat avatar is archived in archive/avatar-v1), the text bar and voice,
+and Cypher's HUD panels over the room (cypher_panels: mood, drives, brain,
 activity, journal, actions, camera line, phone replies, account requests; Super+C
 hides/shows them). Super+J opens the journal, Super+H the full conversation (build 15). Talking here is talking to Cypher (novad -> cypher_link).
 Client of novad (http://127.0.0.1:8765). The internal names stay (nova_native.py,
@@ -16,14 +16,14 @@ gi.require_version("Pango", "1.0")
 from gi.repository import Gtk, Gdk, Pango
 import cairo
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from avatar import Avatar
-import avatar_shapes as AS
+import apartment
+import look
 for _d in (os.environ.get("CYPHER_LIB"), "/usr/share/grokbot/cypher",
            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cypher")):
     if _d and os.path.exists(os.path.join(_d, "cypher_panels.py")):
         sys.path.insert(0, _d); break
 try:
-    import cypher_panels as CP              # Cypher's HUD; the avatar works without it
+    import cypher_panels as CP              # Cypher's HUD; the room works without it
 except Exception as _e:
     CP = None; print("cypher panels unavailable:", type(_e).__name__, file=sys.stderr, flush=True)
 try:
@@ -56,11 +56,8 @@ button.vb { min-width: 42px; min-height: 42px; padding: 0; border-radius: 21px; 
   background: rgba(20,24,22,.7); background-image: none; color: #d1fae5; box-shadow: none; }
 button.vb.off { opacity: .35; }
 button.vb.on { background: #14C370; color: #04140b; border-color: #14C370; }
-button#look { min-width: 52px; min-height: 52px; padding: 0; border-radius: 26px; border: 1px solid rgba(255,255,255,.14);
-  background: rgba(20,24,22,.55); background-image: none; box-shadow: none; opacity: .7; }
 button#pad { min-width: 52px; min-height: 52px; padding: 0 10px; border-radius: 26px; border: 1px solid rgba(255,255,255,.14);
   background: rgba(20,24,22,.55); background-image: none; box-shadow: none; opacity: .7; color: #d1fae5; font-size: 15px; font-weight: 700; }
-#picker { background: rgba(0,0,0,.94); }
 #jview { background: rgba(0,0,0,.55); }
 #jcard { background: rgba(6,12,14,.95); border: 1px solid rgba(34,211,238,.45); border-radius: 14px; padding: 10px 14px; }
 #jcard label.jttl { color: #22d3ee; font-size: 18px; font-weight: 700; }
@@ -71,12 +68,6 @@ button#pad { min-width: 52px; min-height: 52px; padding: 0 10px; border-radius: 
 #jcard label.jdim { color: rgba(255,255,255,.45); font-size: 13px; }
 #jcard button#jclose { font-size: 15px; padding: 4px 14px; border-radius: 16px; background: rgba(255,255,255,.1); background-image: none;
   color: #fff; border: 1px solid rgba(255,255,255,.25); box-shadow: none; text-shadow: none; }
-#picker label.ttl { color: #fff; font-size: 26px; font-weight: 700; }
-#picker label.sub { color: rgba(255,255,255,.55); font-size: 16px; }
-#picker button.pick { padding: 0; border: 0; border-radius: 22px; background: transparent; background-image: none; box-shadow: none; }
-#picker button.pick:hover, #picker button.pick:active { background: rgba(255,255,255,.06); }
-#picker button#done { font-size: 20px; min-width: 160px; padding: 12px 26px; border-radius: 26px; background: rgba(255,255,255,.12);
-  background-image: none; color: #fff; border: 1px solid rgba(255,255,255,.25); box-shadow: none; text-shadow: none; }
 """
 
 class ChatInput:
@@ -134,14 +125,6 @@ def confirm_click(pid, yes, path=None, timeout=10):
     finally:
         s.close()
 
-def apartment_wanted(view):
-    """Build 16: the apartment is the default screen unless --view avatar, or cypherd's `apartment` feature is off
-    (dash.json "apartment": false). A snapshot without the key (older cypherd, or none yet) means on."""
-    if view in ("apartment", "avatar"): return view == "apartment"
-    if CP is None: return True
-    s = CP.load_snapshot()
-    return not (isinstance(s, dict) and s.get("apartment") is False)
-
 def column(W, H, panels):
     """(x, width) of the centre text column: cypher_panels.text_column when the HUD is up."""
     if CP is not None:
@@ -150,7 +133,7 @@ def column(W, H, panels):
     return (W - bw) // 2, bw
 
 class Fader:
-    """Opacity tween for a widget (the CSS transitions in shell.html)."""
+    """Opacity tween for a widget."""
     def __init__(self, w, dur): self.w, self.dur, self.src, self.v = w, dur, 0, 0.0; w.set_opacity(0)
     def to(self, target, dur=None, instant=False):
         if self.src: GLib.source_remove(self.src); self.src = 0
@@ -180,40 +163,11 @@ def icon_draw(kind, get_state):
                 cr.arc(12, 12, 4.95, -0.785, 0.785); cr.stroke(); cr.arc(12, 12, 9.2, -0.785, 0.785); cr.stroke()
     return draw
 
-def draw_shape_thumb(cr, W, H, shape, color, ring=False):
-    """A still avatar (shape, color, eyes) for the picker grid."""
-    s = min(W, H) * .27; cx, cy = W / 2, H / 2
-    if shape == "capsule": s = min(W, H) * .5 / (2 * AS.CAPSULE_H) * .62
-    if ring:
-        cr.set_source_rgba(1, 1, 1, .9); cr.set_line_width(3)
-        cr.arc(cx, cy, min(W, H) * .47, 0, 6.2832); cr.stroke()
-    col = AS.color_rgb(color); pts = AS.outline(shape, 120)
-    for i, (x, y, _) in enumerate(pts): (cr.line_to if i else cr.move_to)(cx + x * s, cy + y * s)
-    cr.close_path(); cr.set_source_rgb(*col); cr.fill()
-    dx, dy, es = AS.EYES.get(shape, (0, 0, 1))
-    h0 = s / AS.SIZE if shape != "capsule" else s * 2 * AS.CAPSULE_H
-    if shape != "capsule": es *= AS.EYE_K
-    ew, eh, ex = h0 * .25 * es, h0 * .46 * es, h0 * .25 * es
-    for sd in (-1, 1):
-        x, y = cx + dx * s + sd * ex, cy + dy * s
-        cr.new_path(); r = ew / 2
-        cr.arc(x, y - eh / 2 + r, r, 3.1416, 0); cr.arc(x, y + eh / 2 - r, r, 0, 3.1416); cr.close_path()
-        cr.set_source_rgb(0, 0, 0); cr.fill()
-
-def draw_swatch(cr, W, H, color, ring=False):
-    cx, cy, r = W / 2, H / 2, min(W, H) * .32
-    if ring:
-        cr.set_source_rgba(1, 1, 1, .95); cr.set_line_width(3); cr.arc(cx, cy, r + 7, 0, 6.2832); cr.stroke()
-    cr.arc(cx, cy, r, 0, 6.2832); cr.set_source_rgb(*AS.color_rgb(color)); cr.fill_preserve()
-    cr.set_source_rgba(1, 1, 1, .18); cr.set_line_width(1); cr.stroke()
-
 class Nova:
     def __init__(self, a):
         self.a, self.base, self.live = a, a.base.rstrip("/"), not a.offline
-        self.style = AS.load()
-        if a.shape or a.color: self.style = AS.clean({**self.style, **({"shape": a.shape} if a.shape else {}), **({"color": a.color} if a.color else {})})
-        self.av = Avatar(style=self.style); self.dpr = a.dpr
-        if a.blink is not None: self.av.forceBlink = a.blink
+        self.style = look.load()
+        self.apt = apartment.Apartment(style=self.style); self.dpr = a.dpr
         self.busy, self.pend, self.pendT, self.tms = False, None, 0, []
         self.V = dict(mic=False, speaker=False, muted=False, cap=30, rec=False, speaking=False, downAt=0, tap=False, capT=0, noteT=0)
         self.first_status = True; self.frames = 0
@@ -223,28 +177,15 @@ class Nova:
         w = self.win = Gtk.Window(title="Cypher"); w.get_style_context().add_class("nova")
         w.set_default_size(*a.size); w.connect("destroy", Gtk.main_quit)
         ov = Gtk.Overlay(); w.add(ov)
-        self.apt = None
-        if apartment_wanted(getattr(a, "view", "auto")):
-            try:
-                import apartment
-                self.apt = self.av = apartment.Apartment(style=self.style)
-            except Exception as ex:                 # the round avatar still works if the room cannot load
-                print("apartment unavailable:", type(ex).__name__, ex, file=sys.stderr, flush=True); self.apt = None
-                self.av = Avatar(style=self.style)
-        self.view = "apartment" if self.apt is not None else "avatar"
-        if a.renderer == "gl" and self.apt is not None:
+        if a.renderer == "gl":
             from apartment_gl import AptGLView
             self.da = AptGLView(self.apt); self.redraw = self.da.queue_render
-        elif a.renderer == "gl":
-            from glview import GLView, GLAvatar
-            self.av = GLAvatar(style=self.style); self.da = GLView(self.av); self.redraw = self.da.queue_render
-            if a.blink is not None: self.av.forceBlink = a.blink
         else:
             self.da = Gtk.DrawingArea(); self.da.connect("draw", self.on_draw); self.redraw = self.da.queue_draw
         ov.add(self.da)
         self.surf = None
-        # Cypher's HUD around the avatar: drawn into a cache only when dash.json changes
-        self.hud = None; self.hud_key = None; self.base_h = self.av.lay["h"]
+        # Cypher's HUD over the room: drawn into a cache only when dash.json changes
+        self.hud = None; self.hud_key = None
         if CP is not None and not a.no_panels:
             self.hud_cache = CP.Cache(); self.hud = Gtk.DrawingArea()
             self.hud.connect("draw", self.on_hud_draw)
@@ -286,24 +227,15 @@ class Nova:
         ov.add_overlay(self.aptcap); ov.set_overlay_pass_through(self.aptcap, True)   # "Out in Night City" while he is out
         self.vnote = Gtk.Label(name="vnote", halign=Gtk.Align.CENTER, valign=Gtk.Align.END); self.fv = Fader(self.vnote, .6)
         ov.add_overlay(self.vnote); ov.set_overlay_pass_through(self.vnote, True)
-        # look picker: a small button top-right opens a grid of shapes and a row of colors
-        self.look = Gtk.Button(name="look", halign=Gtk.Align.END, valign=Gtk.Align.START, margin_top=16, margin_end=16)
-        self.look.set_can_focus(False); self.look.set_tooltip_text("Change my look")
-        ld = Gtk.DrawingArea(); ld.set_size_request(30, 30)
-        ld.connect("draw", lambda w, cr: draw_shape_thumb(cr, w.get_allocated_width(), w.get_allocated_height(),
-                                                         self.style["shape"], self.style["color"]) or False)
-        self.look.add(ld); self.look_icon = ld
-        self.look.connect("clicked", lambda *_: self.open_picker()); ov.add_overlay(self.look)
         # Onshape pad: a second corner button (top-left) opens cadpad.py (app_id nova-cadpad)
         self.pad = Gtk.Button(name="pad", label="CAD", halign=Gtk.Align.START, valign=Gtk.Align.START, margin_top=16, margin_start=16)
         self.pad.set_can_focus(False); self.pad.set_tooltip_text("Onshape pad")
         self.pad.connect("clicked", lambda *_: self.open_pad()); ov.add_overlay(self.pad)
-        self.picker = self._build_picker(); ov.add_overlay(self.picker)
         self.jv = self._build_journal(); ov.add_overlay(self.jv)          # build 14: read-only journal viewer
         self.cfg_mtime = self._cfg_mtime(); GLib.timeout_add_seconds(2, self._watch_cfg)
         w.connect("size-allocate", self.on_size)
         w.connect("key-press-event", self.on_key); w.connect("key-release-event", self.on_key_up)
-        w.show_all(); self.mute.hide(); self.mic.hide(); self.picker.hide(); self.jv.hide(); self._watch_hud()
+        w.show_all(); self.mute.hide(); self.mic.hide(); self.jv.hide(); self._watch_hud()
         if a.renderer == "gl":
             print("renderer gl:", getattr(self.da, "info", None), "failed:", self.da.failed, file=sys.stderr, flush=True)
             if self.da.failed: os.execv(sys.executable, [sys.executable] + sys.argv + ["--renderer", "cairo"])
@@ -317,9 +249,8 @@ class Nova:
         w.connect("button-press-event", self.on_hud_tap)    # the HUD is pass-through: map a tap on its JOURNAL panel
         if getattr(a, "journal", False): self.open_journal()
         GLib.timeout_add_seconds(5, self.doze_check)
-        if a.picker: self.open_picker()
-        if a.state: self.av.set_state(a.state)
-        if a.sim: self.av.simulate(a.sim)
+        if a.state: self.apt.set_state(a.state)
+        if a.sim: self.apt.simulate(a.sim)
         if a.confirm:
             self.ask_confirm({"id": "demo", "text": a.confirm, "ttl": 3600}); self.set_echo(a.q or "")
         if a.reply:
@@ -335,31 +266,6 @@ class Nova:
         b = Gtk.Button(); b.get_style_context().add_class("vb"); b.set_can_focus(False)
         d = Gtk.DrawingArea(); d.set_size_request(20, 20); d.connect("draw", icon_draw(kind, st)); b.add(d); return b
 
-    # ---------- look picker (shape + color, saved to ~/.config/grokbot/avatar.json) ----------
-    def _build_picker(self):
-        eb = Gtk.EventBox(name="picker", visible_window=True)
-        eb.connect("button-press-event", lambda w, e: (self.close_picker(), True)[1] if e.window == w.get_window() else False)
-        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
-        t = Gtk.Label(label="Choose my look"); t.get_style_context().add_class("ttl"); col.add(t)
-        sub = Gtk.Label(label="Tap a shape and a color"); sub.get_style_context().add_class("sub"); col.add(sub)
-        grid = Gtk.Grid(column_spacing=8, row_spacing=8, halign=Gtk.Align.CENTER, margin_top=8)
-        self.pick_shapes, self.pick_colors = {}, {}
-        for i, (sid, label) in enumerate(AS.SHAPES):
-            b = self._pick_btn(104, lambda w, cr, sid=sid: draw_shape_thumb(cr, w.get_allocated_width(), w.get_allocated_height(),
-                               sid, self.style["color"], sid == self.style["shape"]) or False)
-            b.set_tooltip_text(label); b.connect("clicked", lambda _b, sid=sid: self.set_look(shape=sid))
-            grid.attach(b, i % 5, i // 5, 1, 1); self.pick_shapes[sid] = b
-        col.add(grid)
-        row = Gtk.Box(spacing=2, halign=Gtk.Align.CENTER, margin_top=10)
-        for cid, _hex in AS.COLORS:
-            b = self._pick_btn(60, lambda w, cr, cid=cid: draw_swatch(cr, w.get_allocated_width(), w.get_allocated_height(),
-                               cid, cid == self.style["color"]) or False)
-            b.set_tooltip_text(cid.title()); b.connect("clicked", lambda _b, cid=cid: self.set_look(color=cid))
-            row.add(b); self.pick_colors[cid] = b
-        col.add(row)
-        done = Gtk.Button(label="Done", name="done", halign=Gtk.Align.CENTER, margin_top=14); done.set_can_focus(False)
-        done.connect("clicked", lambda *_: self.close_picker()); col.add(done)
-        eb.add(col); return eb
     # ---------- journal viewer (build 14): tap the JOURNAL panel, or Super+J; Esc, Close or a tap outside closes ----------
     JOURNAL_PAGE = 40
     def _build_journal(self):
@@ -398,7 +304,7 @@ class Nova:
         self.jcard.set_margin_bottom(int(H * .035) + max(48, self.inp.widget.get_allocated_height()) + 16)
     def open_journal(self, chat=False):
         """chat=True (Super+H, build 15): only the conversations and interviews, in full."""
-        if CJ is None or self.picker.get_visible(): return
+        if CJ is None: return
         self.jkinds = getattr(CJ, "CHAT_KINDS", ("talk",)) if chat else None
         self.jttl.set_text("CHAT \u00b7 newest first" if chat else "JOURNAL \u00b7 newest first")
         self._place_journal()
@@ -425,9 +331,9 @@ class Nova:
         if self.hud is None or CP.hidden(): return
         try: CP.toggle_collapsed(side)
         except (OSError, ValueError) as ex: print("panels:", type(ex).__name__, file=sys.stderr, flush=True); return
-        self._watch_hud()                                  # new key: redraw the HUD, re-place the bar and avatar
+        self._watch_hud()                                  # new key: redraw the HUD, re-place the bar
     def on_hud_tap(self, w, e):
-        if self.hud is None or CP.hidden() or self.picker.get_visible() or self.jv.get_visible(): return False
+        if self.hud is None or CP.hidden() or self.jv.get_visible(): return False
         if not (self.hud_key and not self.hud_key[0]): return False
         gw = w.get_window()
         if gw is None: return False
@@ -439,41 +345,23 @@ class Nova:
         if CP.in_journal(w.get_allocated_width(), w.get_allocated_height(), x, y):
             self.open_journal(); return True
         return False
-    def _pick_btn(self, size, draw):
-        b = Gtk.Button(); b.get_style_context().add_class("pick"); b.set_can_focus(False)
-        d = Gtk.DrawingArea(); d.set_size_request(size, size); d.connect("draw", draw); b.add(d); return b
     def open_pad(self):
         if self.a.offline: return
         import subprocess
         subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cadpad.py"), "--fullscreen"],
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-    def open_picker(self):
-        self.picker.show_all(); self.look.hide(); self.pad.hide()
-    def close_picker(self):
-        self.picker.hide(); self.look.show(); self.pad.show(); self.inp.grab_focus_without_selecting()
-    def apply_look(self, st):
-        self.style = AS.clean(st); self.av.set_style(self.style)
-        self.picker.queue_draw(); self.look_icon.queue_draw(); self.redraw()
-    def set_look(self, shape=None, color=None):
-        try: st = AS.save(shape=shape, color=color)
-        except (OSError, ValueError) as e:
-            print("avatar.json:", e, file=sys.stderr, flush=True)
-            st = {**self.style, **({"shape": shape} if shape else {}), **({"color": color} if color else {})}
-        self.apply_look(st); self.cfg_mtime = self._cfg_mtime()
+    def apply_look(self, st):                  # his color (look.py) tints the placeholder body
+        self.style = look.clean(st); self.apt.set_style(self.style); self.redraw()
     def _cfg_mtime(self):
-        try: return os.stat(AS.CONFIG).st_mtime_ns
+        try: return os.stat(look.CONFIG).st_mtime_ns
         except OSError: return None
-    def _watch_cfg(self):   # novad (POST /api/avatar, the set_avatar tool) writes the file; pick it up
+    def _watch_cfg(self):   # novad (set_color tool, POST /api/avatar from cypherd's set_avatar_color) writes the file
         m = self._cfg_mtime()
         if m != self.cfg_mtime:
-            self.cfg_mtime = m; self.apply_look(AS.load())
+            self.cfg_mtime = m; self.apply_look(look.load())
         self._watch_hud()
         return True
     def _watch_hud(self):    # Super+C (panels-hidden) and new snapshots from cypherd
-        if getattr(self.a, "view", "auto") == "auto" and apartment_wanted("auto") != (self.view == "apartment"):
-            print("view: apartment feature changed; restarting the face as", "apartment" if self.view == "avatar" else "avatar",
-                  file=sys.stderr, flush=True)
-            os.execv(sys.executable, [sys.executable] + sys.argv)
         if self.hud is None: return
         key = (CP.hidden(), CP.snapshot_mtime(), int(time.time() // 60), tuple(sorted(CP.collapsed().items())))
         if key != self.hud_key:
@@ -495,7 +383,6 @@ class Nova:
         W, H = alloc.width, alloc.height
         panels = self.hud is not None and not CP.hidden()
         x, bw = column(W, H, panels)                                      # never under a panel
-        self.av.lay["h"] = CP.avatar_h(W, H) if panels else self.base_h  # avatar fits between the columns
         if (x, bw) != getattr(self, "_col", None):                        # margins, not a minimum width: text wraps inside
             self._col = (x, bw); self.bar.set_margin_start(x); self.bar.set_margin_end(W - x - bw)
         self.bar.set_margin_bottom(int(H * .035))
@@ -512,12 +399,11 @@ class Nova:
         now = time.monotonic()
         if now >= self.next_due:
             dt = now - self.last; self.last = now
-            self.next_due = max(self.next_due + self.av.frame_interval(), now - .01)
-            self.av.tick(dt); self.redraw(); self.frames += 1
-            if self.apt is not None:
-                cap = self.apt.caption()
-                if cap != self.aptcap.get_text():
-                    self.aptcap.set_text(cap); self.aptcap.set_visible(bool(cap))
+            self.next_due = max(self.next_due + self.apt.frame_interval(), now - .01)
+            self.apt.tick(dt); self.redraw(); self.frames += 1
+            cap = self.apt.caption()
+            if cap != self.aptcap.get_text():
+                self.aptcap.set_text(cap); self.aptcap.set_visible(bool(cap))
         return True
 
     def on_draw(self, w, cr):
@@ -525,7 +411,7 @@ class Nova:
         sw, sh = max(1, int(W * self.dpr)), max(1, int(H * self.dpr))
         if not self.surf or self.surf.get_width() != sw or self.surf.get_height() != sh:
             self.surf = cairo.ImageSurface(cairo.FORMAT_RGB24, sw, sh)
-        c = cairo.Context(self.surf); c.scale(self.dpr, self.dpr); self.av.draw(c, W, H)
+        c = cairo.Context(self.surf); c.scale(self.dpr, self.dpr); self.apt.draw(c, W, H)
         cr.scale(1 / self.dpr, 1 / self.dpr); cr.set_source_surface(self.surf, 0, 0)
         cr.get_source().set_filter(cairo.FILTER_BILINEAR); cr.paint()
         return False
@@ -533,16 +419,16 @@ class Nova:
     # ---------- helpers ----------
     def set_state(self, s):
         if s != "sleeping": self.act = time.monotonic(); self.dozing = False
-        self.av.set_state(s)
+        self.apt.set_state(s)
     DOZE_SECS = int(os.environ.get("NOVA_DOZE", "120"))
     def on_activity(self, *_):
         self.act = time.monotonic()
-        if self.dozing: self.dozing = False; self.av.set_state("idle")
+        if self.dozing: self.dozing = False; self.apt.set_state("idle")
         return False
     def doze_check(self):
         if (not self.dozing and not self.busy and not self.pend and not self.V["rec"] and not self.V["speaking"]
                 and time.monotonic() - self.act > self.DOZE_SECS):
-            self.dozing = True; self.av.set_state("sleeping")
+            self.dozing = True; self.apt.set_state("sleeping")
         return True
     def later(self, ms, fn):
         def run(): fn(); return False
@@ -571,7 +457,7 @@ class Nova:
             GLib.idle_add(lambda: (done(res), False)[1])
         threading.Thread(target=run, daemon=True).start()
 
-    # ---------- prompt flow (mirrors shell.html) ----------
+    # ---------- prompt flow ----------
     def say(self, t, err=False, instant=False):
         if self.a.ask: print("say:", "ERR" if err else "OK", t, file=sys.stderr, flush=True)
         if not err: self.speak(t)
@@ -642,9 +528,6 @@ class Nova:
     # ---------- keys ----------
     def on_key(self, w, e):
         k = Gdk.keyval_name(e.keyval)
-        if self.picker.get_visible():
-            if k in ("Escape", "Return", "KP_Enter"): self.close_picker()
-            return True
         if k in ("bracketleft", "bracketright") and e.state & Gdk.ModifierType.SUPER_MASK:   # build 14b: fold a column
             self.toggle_panel("left" if k == "bracketleft" else "right"); return True
         if k in ("j", "J") and e.state & Gdk.ModifierType.SUPER_MASK:          # build 14: Super+J toggles the journal
@@ -751,19 +634,14 @@ def main():
     p.add_argument("--offline", action="store_true", help="demo mode, no novad")
     p.add_argument("--fullscreen", action="store_true")
     p.add_argument("--size", type=lambda s: tuple(map(int, s.split("x"))), default=(1280, 720))
-    p.add_argument("--dpr", type=float, default=.5, help="avatar render scale (0.5 = half resolution)")
+    p.add_argument("--dpr", type=float, default=.5, help="cairo fallback render scale (0.5 = half resolution)")
     p.add_argument("--renderer", choices=["gl", "cairo"], default=os.environ.get("NOVA_RENDERER", "gl"))
-    p.add_argument("--view", choices=["auto", "apartment", "avatar"], default=os.environ.get("NOVA_VIEW", "auto"),
-                   help="apartment (build 16 default screen) or the round avatar; auto follows cypherd's apartment feature")
-    p.add_argument("--state"); p.add_argument("--sim", type=float); p.add_argument("--blink", type=float)
+    p.add_argument("--state"); p.add_argument("--sim", type=float)
     p.add_argument("--confirm"); p.add_argument("--reply"); p.add_argument("--q"); p.add_argument("--mic", choices=["on", "off", "none"])
-    p.add_argument("--shape", choices=AS.SHAPE_IDS, help="show this shape (not saved)")
-    p.add_argument("--color", choices=AS.COLOR_IDS, help="show this color (not saved)")
-    p.add_argument("--picker", action="store_true", help="open the look picker at startup")
     p.add_argument("--journal", action="store_true", help="open the journal viewer at startup (tests)")
     p.add_argument("--ask", help="type this prompt at startup (self-test)")
     p.add_argument("--quit-after", type=float, help="exit after N seconds and print frames drawn (tests)")
-    p.add_argument("--no-panels", action="store_true", help="avatar only, without Cypher's HUD panels")
+    p.add_argument("--no-panels", action="store_true", help="the room only, without Cypher's HUD panels")
     a = p.parse_args()
     app = Nova(a)
     if a.quit_after:

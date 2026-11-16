@@ -244,7 +244,7 @@ check("grokbot-cypher lessons (cypherd lessons) works", r.returncode == 0 and "n
 try:
     import cairo  # noqa
     PN = load(os.path.join(SRC, "cypher_panels.py"), "panels_b14")
-    out = os.path.join(T, "p.png"); PN.render_png(out, dict(dash, epoch=now), size=(1280, 720), now=now, avatar=False)
+    out = os.path.join(T, "p.png"); PN.render_png(out, dict(dash, epoch=now), size=(1280, 720), now=now, room=False)
     check("panel renders with the lesson count", os.path.getsize(out) > 1000)
     check("text column sits between the panels at 1280x720", PN.text_column(1280, 720)[0] >= PN.MARGIN + PN.COL_W
           and sum(PN.text_column(1280, 720)) <= 1280 - PN.MARGIN - PN.COL_W, PN.text_column(1280, 720))
@@ -442,7 +442,7 @@ check("panel: says it can be tapped", "TAP TO READ" in pn)
 nn = open(os.path.join(NOVA, "nova_native.py")).read()
 import re as _re
 check("viewer is read-only (no file access in the viewer; cypher_journal only reads)", "import cypher_journal as CJ" in nn
-      and not _re.search(r"\bopen\(", nn[nn.index("JOURNAL_PAGE"):nn.index("def _pick_btn")])
+      and not _re.search(r"\bopen\(", nn[nn.index("JOURNAL_PAGE"):nn.index("def open_pad")])
       and not _re.search(r"open\([^)]*[\"'][wa]", open(os.path.join(SRC, "cypher_journal.py")).read()))
 check("installed with the image", '"${csrc}/cypher_journal.py" "${cypher}/cypher_journal.py"' in open(os.path.join(ROOT, "build_files", "rpi5-nova.sh")).read())
 
@@ -575,7 +575,7 @@ sys.path.insert(0, sys.argv[1]); sys.argv = sys.argv[:1]
 import nova_native as N
 from gi.repository import Gtk
 a = types.SimpleNamespace(base="http://127.0.0.1:9", offline=True, fullscreen=False, size=(1280, 720), dpr=.5, renderer="cairo",
-    state=None, sim=None, blink=None, confirm=None, reply=None, q=None, mic="none", shape=None, color=None, picker=False, ask=None,
+    state=None, sim=None, confirm=None, reply=None, q=None, mic="none", ask=None,
     quit_after=None, no_panels=False)
 app = N.Nova(a)
 app.say("Pino was walking to the studio to draw and planning a track for Dot while the drizzle keeps falling on Night City and "

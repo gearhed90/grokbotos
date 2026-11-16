@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 4 tests: two-way ntfy (Zack's replies are messages, never approvals), the
 display-only dashboard snapshot (no secrets, first names only), the HUD panel
-renderer around the avatar (when pycairo is installed), ntfy-qr's refusals and the CLI. Fake proxy
+renderer over the apartment (when pycairo is installed), ntfy-qr's refusals and the CLI. Fake proxy
 and fake ntfy; no display, root or network."""
 import contextlib, importlib.util, io, json, os, socket, stat, subprocess, sys, tempfile, threading, time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -235,7 +235,7 @@ os.remove(os.path.join(T, "cfg", "pause_until"))
 check("standby shows in activity", "Alpha" in C.dash_snapshot(L, st, False, now)["activity"])
 check("Alpha never writes a dash file", (A.write_dash(LA, A.new_state(), True, now) is None))
 
-# ---- HUD panels around the avatar (cypher_panels; the old workspace-9 dashboard is gone) ----
+# ---- HUD panels over the apartment (cypher_panels; the old workspace-9 dashboard is gone) ----
 check("the separate dashboard is gone", not os.path.exists(os.path.join(SRC, "cypher-dash.py"))
       and not os.path.exists(os.path.join(SRC, "grokbot-cypher-dash")))
 try:
@@ -248,17 +248,18 @@ if have_cairo:
     D = importlib.util.module_from_spec(spec); spec.loader.exec_module(D)
     check("panels scrub again", all(x not in D.safe("%s %s a@b.co https://q.r 10.0.0.1 switch.gate" % (TOPIC, TOKEN))
                                     for x in (TOPIC, TOKEN, "a@b.co", "https://", "10.0.0.1", "switch.gate")))
-    aw = D.avatar_h(1280, 720) * 1.9 * 720
-    check("avatar fits between the columns, text bar too", aw <= 1280 - 2 * (D.MARGIN + D.COL_W) and D.bar_width(1280, 720) <= 1280 - 2 * (D.MARGIN + D.COL_W)
-          and D.avatar_h(3000, 720) == D.AVATAR_H, (aw, D.bar_width(1280, 720)))
+    check("text bar fits between the columns; the avatar sizing is gone", D.bar_width(1280, 720) <= 1280 - 2 * (D.MARGIN + D.COL_W)
+          and not hasattr(D, "avatar_h") and not hasattr(D, "AVATAR_H"), D.bar_width(1280, 720))
     out = os.environ.get("CYPHER_DASH_PREVIEW") or os.path.join(T, "dash.png")
     D.render_png(out, snap, now=now + 5)
     with open(out, "rb") as f: head = f.read(24)
     w, h = int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
-    check("avatar + panels render a 1280x720 PNG (Touch Display 2, landscape)", head[:8] == b"\x89PNG\r\n\x1a\n" and (w, h) == (1280, 720), (w, h))
+    check("apartment + panels render a 1280x720 PNG (Touch Display 2, landscape)", head[:8] == b"\x89PNG\r\n\x1a\n" and (w, h) == (1280, 720), (w, h))
     D.render_png(os.path.join(T, "stale.png"), snap, now=now + 3600)
     D.render_png(os.path.join(T, "empty.png"), None, now=now)
-    D.render_png(os.path.join(T, "noav.png"), snap, now=now, avatar=False)
+    D.render_png(os.path.join(T, "noav.png"), snap, now=now, room=False)
+    check("render_png draws the room, never the flat avatar", "avatar" not in sys.modules and "avatar_shapes" not in sys.modules
+          and "apartment" in sys.modules)
     check("renders stale, empty and panel-only frames without errors", os.path.getsize(os.path.join(T, "empty.png")) > 1000
           and os.path.getsize(os.path.join(T, "noav.png")) > 1000)
     print("preview:", out)

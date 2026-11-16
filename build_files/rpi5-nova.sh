@@ -1,6 +1,6 @@
 #!/bin/bash
 # Raspberry Pi 5 image only (Containerfile.rpi5, after rpi5-prepare.sh).
-# Nova becomes the main screen: native GTK avatar app + novad, a touch keypad
+# Nova becomes the main screen: native GTK app (Cypher's 3D apartment) + novad, a touch keypad
 # lock screen, H.264 video for Firefox, English web apps and the Nunito
 # font (no built-in admin account). See PI5-STATUS.md and docs/NOVA.md.
 # Never puts a key, password or Wi-Fi secret in the image.
@@ -28,10 +28,11 @@ rpm -q libavcodec-freeworld gtk4-layer-shell >/dev/null
 
 # --- Nova app + novad -----------------------------------------------------
 install -d -m 0755 "$nova"
-for f in avatar.py avatar_shapes.py glview.py apartment.py apartment_gl.py apartment_body_placeholder.json nova_native.py novad.py cypher_link.py shell.html lockscene.py pamauth.py cadpad.py nova-web-user.js; do
+for f in look.py apartment.py apartment_gl.py apartment_body_placeholder.json nova_native.py novad.py cypher_link.py lockscene.py pamauth.py cadpad.py nova-web-user.js; do
     install -m 0644 "${src}/${f}" "${nova}/${f}"
 done
-# Build 16: Cypher's apartment is the default screen (apartment.py + apartment_gl.py). His body is one asset:
+# Build 16: Cypher's apartment is the deck's only screen (apartment.py + apartment_gl.py; look.py is his color).
+# The flat avatar (avatar.py, avatar_shapes.py, glview.py, shell.html) is no longer installed: archive/avatar-v1. His body is one asset:
 # the placeholder above until Zack approves his own design, which goes in /usr/share/grokbot/cypher/apartment/body.json.
 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "${nova}/apartment_body_placeholder.json"
 install -m 0755 "${src}/grokbot-lock-keypad.py" "${nova}/grokbot-lock-keypad.py"
@@ -78,7 +79,7 @@ install -m 0755 "${csrc}/grokbot-set-cypher-ntfy" /usr/local/sbin/grokbot-set-cy
 # Phase 5: `grokbot-cypher limits set` changes one cap through this root helper
 # (bounds-checked, validated, atomic; cypherd reloads the file live).
 install -m 0755 "${csrc}/grokbot-set-cypher-limit" /usr/local/sbin/grokbot-set-cypher-limit
-# Phase 4: Cypher's HUD panels around the avatar (cypher_panels.py, drawn by
+# Phase 4: Cypher's HUD panels over his apartment (cypher_panels.py, drawn by
 # nova_native.py; Super+C hides/shows them) and qrencode for grokbot-cypher
 # ntfy-qr (a terminal QR of the topic, on screen only).
 install -m 0644 "${csrc}/cypher_panels.py" "${cypher}/cypher_panels.py"
@@ -146,7 +147,7 @@ if [[ -e "${src}/local-nova-sudo" ]]; then
     visudo -cf /etc/sudoers.d/nova-grokbot
 fi
 
-# --- Nunito (SIL OFL 1.1, Google Fonts) for the avatar's z's and the lock --
+# --- Nunito (SIL OFL 1.1, Google Fonts) for the lock screen ---------------
 install -D -m 0644 "${ctx}/rpi5/fonts/Nunito[wght].ttf" "/usr/share/fonts/nunito/Nunito[wght].ttf"
 install -D -m 0644 "${ctx}/rpi5/fonts/OFL.txt" /usr/share/licenses/nunito/OFL.txt
 fc-cache -f /usr/share/fonts/nunito >/dev/null 2>&1 || true

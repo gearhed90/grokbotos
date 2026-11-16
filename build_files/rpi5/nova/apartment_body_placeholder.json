@@ -1,7 +1,7 @@
 {
   "name": "placeholder",
   "temporary": true,
-  "note": "Stand-in body until Cypher designs his own (his proposal, Zack approves). Swap: put the approved design in /usr/share/grokbot/cypher/apartment/body.json (image) or ~/.config/cypher/body-model.json (this user). Units are meters, feet at the origin, facing +z. Parts are boxes; 'group' leg_l/leg_r/arm_l/arm_r lets legs and arms swing and fold; 'color' (#rrggbb) overrides his avatar color; 'emit' 0-2 is glow.",
+  "note": "Stand-in body until Cypher designs his own (his proposal, Zack approves). Swap: put the approved design in /usr/share/grokbot/cypher/apartment/body.json (image) or ~/.config/cypher/body-model.json (this user). Units are meters, feet at the origin, facing +z. Parts are boxes; 'group' leg_l/leg_r/arm_l/arm_r lets legs and arms swing and fold; 'color' (#rrggbb) overrides his color (look.py); 'emit' 0-2 is glow.",
   "emit": 0.3,
   "parts": [
     {"box": [-0.15, 0.0, -0.08, -0.03, 0.82, 0.08], "group": "leg_l"},

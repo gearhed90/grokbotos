@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """novad - Cypher's on-screen voice and hands for grokbotos (stdlib only).
 
-There is no separate chat assistant: talking to the avatar (typed or by voice) is
+There is no separate chat assistant: talking on the deck's screen (typed or by voice) is
 talking to Cypher. The system prompt is Cypher's persona and live state
 (cypher_link.system_prompt: mood, drives, journal, phone replies, memories), and
 every turn goes back into Cypher's journal through cypherd (cypher_link.record_turn).
@@ -10,7 +10,8 @@ an account request or changes a limit. The internal names (novad, nova-shell,
 NOVA_* settings, ~/.config/grokbot/nova-voice.json) are kept so sway rules, the
 lock screen and the toggle keep working.
 
-Serves shell.html on http://127.0.0.1:PORT/ and handles prompts via the xAI
+Serves a small JSON API on http://127.0.0.1:PORT/ (nova_native is the only screen; the old shell.html page
+was archived with the flat avatar in archive/avatar-v1) and handles prompts via the xAI
 chat completions API with a small allowlisted toolset. No shell-exec tool.
 Key: /etc/grokbot/xai_key (root-owned, group grokbot, mode 0640; set with
 sudo grokbot-set-xai-key), else ~/.config/grokbot/xai_key (mode 600). Never logged.
@@ -19,7 +20,7 @@ import json, os, re, shutil, stat, subprocess, sys, threading, time, urllib.requ
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import avatar_shapes   # avatar shape/color choice (~/.config/grokbot/avatar.json); nova_native watches the file
+import look            # his color (~/.config/grokbot/avatar.json): tints the apartment's placeholder body
 import cypher_link     # the conversation is Cypher's: persona, state, journal (see module doc)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -315,7 +316,7 @@ PENDING = {}; plock = threading.Lock(); CONFIRM_TTL = int(os.environ.get("NOVA_C
 
 def make_pending(tool, args, text, run, physical=False, ttl=None):
     """A Yes/No the user answers on the deck. physical=True (power_off): only a click on Confirm in the
-    avatar app, sent over the owner-only confirm socket, can say yes; HTTP, voice and Enter cannot."""
+    screen app (nova_native), sent over the owner-only confirm socket, can say yes; HTTP, voice and Enter cannot."""
     import secrets
     pid = secrets.token_urlsafe(12)
     ttl = int(ttl or CONFIRM_TTL)
@@ -369,7 +370,7 @@ def _confirm(pid, yes, physical=False):
 
 # ---------- power_off (build 14) ----------
 # Zack: "power down" in the deck chat -> the model calls power_off -> a Confirm/Cancel dialog on the deck's
-# own screen (30 s, then it cancels itself) -> only a click on Confirm, sent by the avatar app over
+# own screen (30 s, then it cancels itself) -> only a click on Confirm, sent by the screen app over
 # CONFIRM_SOCK (owner-only unix socket, peer uid checked), runs it. Then: a shutdown request file for
 # cypherd (it journals "shutdown requested by Zack" on its way down), a clean `systemctl --user stop
 # cypherd` (state saved, lease released as deck_stopped so Alpha takes over), and `systemctl poweroff`,
@@ -428,7 +429,7 @@ def do_power_off():
     return "Shutting down. Alpha keeps me going until the deck is back."
 
 def serve_confirm_socket():
-    """The avatar app's Confirm/Cancel clicks: one JSON line {"id", "yes", "via": "click"} per connection.
+    """The screen app's Confirm/Cancel clicks: one JSON line {"id", "yes", "via": "click"} per connection.
     Owner-only (0700 dir, 0600 socket, peer uid must be ours)."""
     import socketserver, socket as _s, struct
     d = os.path.dirname(CONFIRM_SOCK)
@@ -538,11 +539,9 @@ def call_tool(name, a):
                 else:
                     r = make_pending("wifi_connect", {"ssid": ssid}, "Switch WiFi to %s%s?" % (ssid, "" if net["saved"] else " (open network)"),
                                      lambda: (rpc("network.wifi.connect", {"ssid": ssid}, timeout=60), "Connected to %s." % ssid)[1])
-        elif name == "set_avatar":
-            shape, color = a.get("shape"), a.get("color")
-            if shape is None and color is None: raise ValueError("give shape and/or color")
-            c = avatar_shapes.save(shape=shape, color=color)
-            r = {"ok": True, "result": "Avatar is now a %s %s." % (c["color"], c["shape"])}
+        elif name == "set_color":
+            c = look.save(a.get("color"))
+            r = {"ok": True, "result": "Your color is now %s." % c["color"]}
         elif name in cypher_link.QUEUEABLE:
             # Only queued for cypherd: its validator and locked caps decide. Never an approval.
             r = cypher_link.queue_action(name, {k: a.get(k) for k in cypher_link.QUEUEABLE[name]})
@@ -585,8 +584,8 @@ def tool_schema():
         f("wifi_status", "List WiFi networks in range: connected one, which are saved or open.", {}),
         f("wifi_connect", "Switch to a saved or open WiFi network by name. Takes no password. Asks the user first.",
           {"ssid": {"type": "string", "maxLength": 32}}, ["ssid"]),
-        f("set_avatar", "Change how you (the on-screen avatar) look: shape and/or color.",
-          {"shape": {"type": "string", "enum": avatar_shapes.SHAPE_IDS}, "color": {"type": "string", "enum": avatar_shapes.COLOR_IDS}}),
+        f("set_color", "Change your color: it tints your placeholder body in the apartment until your own design is approved.",
+          {"color": {"type": "string", "enum": look.COLOR_IDS}}, ["color"]),
         f("power", "Lock the screen or restart. Asks the user first. (To shut down use power_off.)", {"action": {"type": "string", "enum": ["lock", "restart", "shutdown"]}}, ["action"]),
         f("power_off", "Shut yourself (this deck) down, only when Zack asks you in this chat to power down or shut down. "
           "It puts a Confirm/Cancel dialog on your screen; nothing happens unless he clicks Confirm there within 30 seconds.", {}),
@@ -1168,17 +1167,12 @@ class H(BaseHTTPRequestHandler):
         return self.headers.get("Host", "") in ALLOWED_HOSTS   # blocks DNS rebinding
     def do_GET(self):
         if not self._host_ok(): return self.send_error(403)
-        if self.path in ("/", "/shell.html") or self.path.startswith("/?"):
-            data = open(os.path.join(HERE, "shell.html"), "rb").read()
-            self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(data))); self.send_header("Cache-Control", "no-store")
-            self.end_headers(); self.wfile.write(data)
-        elif self.path == "/api/health":
+        if self.path == "/api/health":
             self._json({"ok": True, "key": key_present(), "model": MODEL, "dry_run": DRY_RUN})
         elif self.path == "/api/voice/status":
             self._json(voice_status())
-        elif self.path == "/api/avatar":
-            self._json({**avatar_shapes.load(), "shapes": avatar_shapes.SHAPE_IDS, "colors": avatar_shapes.COLOR_IDS})
+        elif self.path == "/api/color":
+            self._json({**look.load(), "colors": look.COLOR_IDS})
         else:
             self.send_error(404)
     def do_POST(self):
@@ -1198,17 +1192,17 @@ class H(BaseHTTPRequestHandler):
             except (ValueError, KeyError, TypeError):
                 return self.send_error(400)
             return self._json(confirm(pid, yes))
-        if self.path == "/api/avatar":
+        if self.path == "/api/color":     # cypherd's set_avatar_color; color only
             if "application/json" not in self.headers.get("Content-Type", ""): return self.send_error(415)
             n = int(self.headers.get("Content-Length", "0") or 0)
             if n > 1024: return self.send_error(413)
             try:
                 b = json.loads(self.rfile.read(n) or b"{}")
                 if not isinstance(b, dict): raise ValueError
-                c = avatar_shapes.save(shape=b.get("shape"), color=b.get("color"))
+                c = look.save(b.get("color"))
             except ValueError:
                 return self.send_error(400)
-            audit("avatar", c, "ok"); return self._json(c)
+            audit("color", c, "ok"); return self._json(c)
         if self.path.startswith("/api/voice/"):
             if "application/json" not in self.headers.get("Content-Type", ""): return self.send_error(415)
             n = int(self.headers.get("Content-Length", "0") or 0)
@@ -1260,7 +1254,7 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(d))); self.end_headers(); self.wfile.write(d)
 
 def watch_focus():
-    # When a web window opened by Nova closes, hand focus back to the avatar
+    # When a web window opened by Nova closes, hand focus back to the screen
     # screen instead of whatever window sway would pick next.
     import threading
     def run():

@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""cypher_panels - Cypher's state drawn as panels around the avatar (phase 4b).
+"""cypher_panels - Cypher's state drawn as panels over his apartment (phase 4b; build 16 room).
 
-The avatar screen (nova_native.py, app_id nova-shell) is Cypher's face; these panels
+The deck screen (nova_native.py, app_id nova-shell: his 3D apartment) is Cypher's face; these panels
 are its HUD: a left column (name, brain badge, mood and five drive meters, what it
 is doing, the camera line, Zack's phone replies and pending account requests) and
 a right column (clock and flags, the journal, recent actions with refusals). The
-centre stays the avatar and the text bar. Super+C hides or shows them
+centre stays the room and the text bar. Super+C hides or shows them
 (~/.config/cypher/panels-hidden).
 
 Data: only ~/.local/state/cypher/dash.json, the display-only snapshot cypherd writes
 every loop with every string scrubbed (cypherd.dash_text). This module scrubs again
-before drawing and never opens a secret file. The avatar app draws the panels into
+before drawing and never opens a secret file. The screen app draws the panels into
 a cached surface only when the snapshot changes (or the minute turns), so the
 per-frame cost is one blit.
 
   python3 cypher_panels.py --render out.png [--snapshot dash.json] [--size 1280x720] [--now EPOCH]
-      one frame (avatar + panels) to a PNG without GTK, for tests and previews
+      one frame (apartment + panels) to a PNG without GTK, for tests and previews; --no-room for panels only
 """
 import json, os, re, sys, time
 import cairo
@@ -381,13 +381,13 @@ def grid_panel(cr, W, g, stale):
                 text(cr, 62, y, line, DIM, 10.5); y += 13
 
 def bar_width(w, h):
-    """How wide the avatar's text bar may be so it never runs under a column."""
+    """How wide the chat bar may be so it never runs under a column."""
     k = h / 720.0
     return int(max(360, w - 2 * (MARGIN + COL_W + 18) * k))
 
 def text_column(w, h, panels=True, col=None):
     """(x, width) of the centre column for the chat bar and Cypher's replies (build 14): between the two
-    columns with a gap, at most 720 px and 80% of the window. The avatar app pins its text bar to exactly
+    columns with a gap, at most 720 px and 80% of the window. The screen app pins its text bar to exactly
     this box (side margins, not a minimum width), so long input and replies wrap instead of running under a panel."""
     bw = min(720, int(w * .8))
     if not panels:
@@ -414,17 +414,8 @@ def in_journal(w, h, x, y, col=None):
     jx, jy, jw, jh = journal_rect(w, h)
     return jx <= x <= jx + jw and jy <= y <= jy + jh
 
-AVATAR_H = .55   # avatar.py's default body height (fraction of the window height); width is 1.9x that
-
-def avatar_h(w, h):
-    """Body height for the avatar so it sits between the two columns instead of under them."""
-    k = h / 720.0
-    col = collapsed()
-    free = w - sum(((STRIP_W + 14) if col[s] else (MARGIN + COL_W + 16)) * k for s in SIDES)
-    return max(.3, min(AVATAR_H, free / (1.9 * h)))
-
 class Cache:
-    """Panels drawn once per snapshot change into an ARGB surface; the avatar blits it each frame."""
+    """Panels drawn once per snapshot change into an ARGB surface; the screen app blits it each frame."""
     def __init__(self):
         self.surf, self.key = None, None
     def surface(self, w, h, now=None, key=None):
@@ -437,22 +428,25 @@ class Cache:
             self.key = key
         return self.surf
 
-def render_png(path, snap, size=(1280, 720), now=None, avatar=True):
-    """Avatar (cairo renderer, if the avatar module is importable) + panels, to a PNG."""
+def render_png(path, snap, size=(1280, 720), now=None, room=True):
+    """His apartment (apartment.py's cairo renderer, if importable) + panels, to a PNG."""
     W, H = size
     surf = cairo.ImageSurface(cairo.FORMAT_RGB24, W, H)
     cr = cairo.Context(surf)
     cr.set_source_rgb(0, 0, 0); cr.paint()
-    if avatar:
+    if room:
         for d in (E("NOVA_DIR"), os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nova"), "/usr/share/grokbot/nova"):
-            if d and os.path.exists(os.path.join(d, "avatar.py")) and d not in sys.path:
+            if d and os.path.exists(os.path.join(d, "apartment.py")) and d not in sys.path:
                 sys.path.insert(0, d)
         try:
-            from avatar import Avatar
-            import avatar_shapes as AS
-            av = Avatar(style=AS.load(), layout={"h": avatar_h(W, H)}); av.tick(0.05); av.draw(cr, W, H)
+            import apartment, tempfile
+            with tempfile.TemporaryDirectory() as tmp:     # the room follows this snapshot (his spot), not the live file
+                dp = os.path.join(tmp, "dash.json")
+                with open(dp, "w") as fh: json.dump(snap if isinstance(snap, dict) else {}, fh)
+                ap = apartment.Apartment(dash_path=dp, world_path=os.path.join(tmp, "world.json"))
+                ap.simulate(12.0); ap.draw(cr, W, H)
         except Exception as e:                    # the preview still shows the panels
-            print("avatar not drawn:", type(e).__name__, e, file=sys.stderr)
+            print("apartment not drawn:", type(e).__name__, e, file=sys.stderr)
     render_panels(cr, W, H, snap, now)
     surf.write_to_png(path)
 
@@ -464,7 +458,7 @@ def main(argv):
         if "--size" in argv:
             a, b = argv[argv.index("--size") + 1].split("x"); size = (int(a), int(b))
         now = float(argv[argv.index("--now") + 1]) if "--now" in argv else None
-        render_png(out, load_snapshot(snap_path), size, now, avatar="--no-avatar" not in argv)
+        render_png(out, load_snapshot(snap_path), size, now, room="--no-room" not in argv)
         return 0
     print(__doc__.strip()); return 2
 

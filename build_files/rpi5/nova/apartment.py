@@ -9,7 +9,7 @@ how he walks between them, the swappable body asset, and a cairo painter's rende
 fallback when GLES is unavailable). apartment_gl.py draws the same triangles with GLES2 on the Pi's V3D.
 
 The body is ONE asset file (JSON primitives, see BODY_PATHS). Until Zack approves Cypher's own design it is the
-placeholder in apartment_body_placeholder.json: a plain block figure in his avatar color. Swapping in his design is
+placeholder in apartment_body_placeholder.json: a plain block figure in his color (look.py). Swapping in his design is
 dropping one file; nothing else changes. The world is display only: it never decides, approves or controls anything."""
 import json, math, os, time
 
@@ -424,13 +424,11 @@ def figure_quads(bq, mv, env, lights, t=0.0):
 
 # ---------------- the scene object (what nova_native drives) ----------------
 class Apartment:
-    """Duck-types the Avatar interface nova_native uses (tick, frame_interval, set_state, set_style, lay, simulate)."""
+    """What nova_native drives: tick, frame_interval, set_state (conversation states), set_style (his color), simulate."""
     IDLE_FRAME, WALK_FRAME, NIGHT_FRAME = 1 / 12, 1 / 30, 1 / 8
 
     def __init__(self, style=None, dash_path=None, world_path=None, body_paths=None):
         self.dash_path, self.world_path = dash_path or DASH, world_path or WORLD
-        self.lay = {"cx": .5, "cy": .43, "h": .55}
-        self.forceBlink = None
         self.t = 0.0; self.state = "idle"
         self.dash, self.world, self._mt = None, None, (None, None); self._poll = 0.0
         self.body, self.body_path = load_body(body_paths)
@@ -444,9 +442,10 @@ class Apartment:
         self.version = 0                   # bumps when the room needs re-lighting (GL re-uploads, cairo re-caches)
 
     def set_style(self, style=None, **_):
+        """His color (look.py: set_avatar_color / novad's set_color) tints the placeholder body."""
         try:
-            import avatar_shapes as AS
-            st = AS.clean(style or AS.load()); self.tint = AS.color_rgb(st["color"]); self.style = st
+            import look
+            st = look.clean(style or look.load()); self.tint = look.color_rgb(st["color"]); self.style = st
         except Exception:
             self.style = style or {}
         self.bq = body_quads(self.body, self.tint)

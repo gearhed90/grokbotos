@@ -21,7 +21,7 @@
   grokbot-cypher inbox [N]         Zack's replies from the phone (messages only, never approvals)
   grokbot-cypher ntfy-qr [--text]  show the phone topic as a QR code (a terminal on Cypher's own
                                    screen only; refuses over SSH or a pipe)
-  grokbot-cypher panels [show|hide] hide or show the HUD panels around the avatar (same as Super+C)
+  grokbot-cypher panels [show|hide] hide or show the HUD panels over the apartment (same as Super+C)
   grokbot-cypher grid [--refresh]  the gridwatch report (read-only: Alpha, proxy, mind, cameras, repo)
   grokbot-cypher tuning            Cypher's self-tuning proposals
   grokbot-cypher tuning approve|deny|revert N
@@ -55,7 +55,6 @@
   grokbot-cypher body              his body: approved design, pending design, body-first status, the apartment's 3D asset
   grokbot-cypher body propose [--hosted]   ask him for his body design now (interview); it becomes a PENDING proposal
                                    (Zack approves with tuning approve N; nothing applies on its own)
-  grokbot-cypher features off apartment    the round avatar instead of the apartment (the face restarts by itself)
 """
 import json, os, shutil, subprocess, sys, time
 E = os.environ.get

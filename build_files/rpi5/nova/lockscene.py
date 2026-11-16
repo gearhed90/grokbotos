@@ -1,10 +1,10 @@
-"""Nova lock screen scene: sleeping Nova on the left, clock, PIN dots and a phone-style
-keypad on the right. Pure cairo, so it renders headless for tests and screenshots;
-grokbot-lock-keypad puts it on a session-lock surface. Based on nova-shell/lock.html."""
-import math, time
+"""Deck lock screen scene: Cypher asleep in his apartment (build 16: one still apartment.py frame of the bed,
+drawn once per size and dimmed), the clock, PIN dots and a phone-style keypad on the right. Pure cairo, so it
+renders headless for tests and screenshots; grokbot-lock-keypad puts it on a session-lock surface. (Until build
+16 this was the sleeping flat avatar; that version is archived in archive/avatar-v1.)"""
+import json, math, os, tempfile, time
 import cairo
-from avatar import Avatar
-import avatar_shapes
+import apartment
 
 KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "del", "0", "ok"]
 MAX_DOTS = 12
@@ -13,15 +13,46 @@ FONT = "Nunito"
 
 class LockScene:
     def __init__(self, rng=None):
-        self.av = Avatar(layout={"cx": .25, "cy": .52, "h": .36}, rng=rng, style=avatar_shapes.load())
-        self.av.set_state("sleeping")
-        self.av.simulate(3.0)
+        self.ap = self._bed_scene()
+        self.state = "sleeping"
+        self.bg = None          # (W, H, surface): the room is still, so it is drawn once per size
         self.n = 0              # typed characters (the secret lives in the window, not here)
         self.hint = "Enter PIN"
         self.pressed = None
         self.shake_t = -1.0
         self.busy = False
         self.W = self.H = 0
+
+    @staticmethod
+    def _bed_scene():
+        """His room with him asleep on the mattress, whatever he was doing (the lock is the deck asleep). Lights
+        and weather still come from his live world.json; dash.json's spot is replaced by the bed."""
+        try:
+            with open(apartment.DASH) as fh: d = json.load(fh)
+            d = d if isinstance(d, dict) else {}
+        except (OSError, ValueError):
+            d = {}
+        d["spot"] = "bed"
+        with tempfile.TemporaryDirectory() as tmp:
+            dp = os.path.join(tmp, "dash.json")
+            with open(dp, "w") as fh: json.dump(d, fh)
+            ap = apartment.Apartment(dash_path=dp, world_path=apartment.WORLD)
+            ap.dash_path = dp + ".gone"          # never re-reads the temp file once it is removed
+        ap.mv = apartment.Mover("bed"); ap.set_state("sleeping"); ap.simulate(0.5)
+        return ap
+
+    def _background(self, W, H):
+        if self.bg is None or self.bg[:2] != (W, H):
+            surf = cairo.ImageSurface(cairo.FORMAT_RGB24, max(1, W), max(1, H)); c = cairo.Context(surf)
+            c.set_source_rgb(0, 0, 0); c.paint()
+            c.save(); c.translate(-W * .30, 0)        # slide the room left so the mattress sits clear of the keypad
+            self.ap.draw(c, W, H); c.restore()
+            g = cairo.LinearGradient(W * .45, 0, W * .62, 0)          # the keypad side darker so the keys read
+            g.add_color_stop_rgba(0, 0, 0, 0, .25); g.add_color_stop_rgba(1, 0, 0, 0, .72)
+            c.set_source(g); c.paint()
+            c.set_source_rgba(0, 0, 0, .35); c.rectangle(0, 0, W, 112 * min(W / 1280, H / 720)); c.fill()   # behind the clock
+            self.bg = (W, H, surf)
+        return self.bg[2]
 
     # geometry -------------------------------------------------------------
     def _layout(self, W, H):
@@ -52,7 +83,6 @@ class LockScene:
         self.shake_t = 0.0
 
     def tick(self, dt):
-        self.av.tick(dt)
         if self.shake_t >= 0:
             self.shake_t += dt
             if self.shake_t > .42:
@@ -69,7 +99,7 @@ class LockScene:
 
     def draw(self, cr, W, H, now=None):
         self.W, self.H = W, H
-        self.av.draw(cr, W, H)  # paints the black background too
+        cr.set_source_surface(self._background(W, H), 0, 0); cr.paint()   # the still room, cached
         k, r, gx, gy, cx0, top = self._layout(W, H)
         lt = time.localtime(now if now is not None else time.time())
         self._text(cr, time.strftime("%-I:%M", lt), W / 2, 70 * k, 44 * k)

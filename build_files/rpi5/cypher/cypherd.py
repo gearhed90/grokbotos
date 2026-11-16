@@ -30,7 +30,7 @@ Phase 2:
 
 Phase 2.1: the manifest only offers actions that would pass right now (caps,
 mute, DND, quiet hours, presence); refused attempts show in "your last
-actions"; the avatar color only changes when the mood does.
+actions"; his color (the placeholder body's tint) only changes when the mood does.
 
 Phase 3 (all capped in the limits file; deck only unless noted):
   * message_zack: a short ntfy.sh push to Zack's phone (secret topic in a
@@ -54,9 +54,9 @@ Phase 4:
     display-only snapshot (mood, drives, activity, recent journal, actions and
     refusals, camera summary with first names only). Every string in it goes
     through dash_text(), which strips secrets, addresses, URLs and anything that
-    looks like a token or a house device id. The avatar app draws it as HUD
-    panels around the avatar (cypher_panels.py); it never reads secret files.
-  * One mind: the avatar's conversations (typed or voice, via novad) are Cypher
+    looks like a token or a house device id. The screen app draws it as HUD
+    panels over his apartment (cypher_panels.py); it never reads secret files.
+  * One mind: the deck screen's conversations (typed or voice, via novad) are Cypher
     talking. novad builds its prompt from Cypher's persona and this snapshot, and
     spools every turn; talk_step() journals the turns, moves the drives, and runs
     any request_account the conversation queued through the same validator.
@@ -1256,7 +1256,7 @@ def narrate(action, params, verdict, result):
 MIND_DIR = os.path.join(DATA_DIR, "mind")
 FEATURES = ("pino_cooldown", "full_text", "lore", "pino_api", "habituation", "novelty", "beliefs", "loops",
             "working_memory", "library", "makes", "character_adds", "interview", "slim_prompt", "pino_post",
-            "apartment", "body_first")          # build 16: the 3D apartment on the deck; his body proposal first
+            "body_first")          # build 16: his body proposal first (the apartment is the deck's only screen: no flag)
 FEATURE_DEFAULTS = {f: f != "pino_post" for f in FEATURES}
 LOCKED_FEATURES = ("pino_post",)          # posting to someone else's world: only the root-owned limits file turns it on
 FEATURES_FILE = os.path.join(CFG_DIR, "features.json")
@@ -2411,7 +2411,7 @@ MANIFEST_TEXT = {
     "review_lessons": "review_lessons - go over one of your lessons (back next tick). params: {}",
     "journal_thought": "journal_thought - a private journal thought, only when something new happened. params: {\"text\": max %(max_chars)s chars}",
     "show_note": "show_note - a short note on Zack's screen, only if worth it. params: {\"text\": max %(max_chars)s chars}",
-    "set_avatar_color": "set_avatar_color - recolor your avatar when your mood really changed. params: {\"color\": one of %(colors)s}",
+    "set_avatar_color": "set_avatar_color - recolor your placeholder body in the apartment when your mood really changed. params: {\"color\": one of %(colors)s}",
     "message_zack": "message_zack - a short push to Zack's phone. Rare: something broken or a finding worth his time; never small talk or mood. params: {\"text\": max %(max_chars)s chars}",
     "glance_screen": "glance_screen - one look at your own screen; a description comes back next tick. params: {}",
     "browse": "browse - FREE read-only web browsing, 5 pages on a subject; no buying, logins or forms. params: {\"topic\": max %(max_chars)s chars}",
@@ -2462,7 +2462,7 @@ MANIFEST_SHORT = {
     "visit_pinos_world": "visit_pinos_world - a signed note for Pino, about weekly. params: {\"text\"<=%(max_chars)s}",
 }
 # Exactly what Cypher can and cannot reach, so it never promises something it cannot do (build 12).
-CAN_REACH = ("What you can reach: your journal; on-screen notes; your avatar's color (and, in a conversation, its shape); "
+CAN_REACH = ("What you can reach: your journal; on-screen notes; your color (it tints your placeholder body in the apartment); "
              "short phone messages to Zack (capped, never in quiet hours); one look at your own screen; a free search (look_up: your search engine on Alpha, then Wikipedia); free read-only web browsing (browse: several pages on one subject, reading only); "
              "a paid, budgeted web search for broad or current topics (web_search, read-only); public X accounts by handle (x_lookup: bio and latest posts, read-only); "
              "Pino's public feed at pinos.world (visit_pino, read-only); the grid report (check_grid); asking Zack for an account "
@@ -3032,10 +3032,10 @@ def execute(action, params, L=None, st=None, p=None):
         return "ok" if r.returncode == 0 else "notify failed"
     if action == "set_avatar_color":
         try:
-            _post(NOVAD + "/api/avatar", {"color": params["color"]}, {}, 5)
+            _post(NOVAD + "/api/color", {"color": params["color"]}, {}, 5)
             return "ok"
         except Exception as e:
-            return "avatar failed: " + type(e).__name__
+            return "color failed: " + type(e).__name__
     return "no executor"
 
 # ---------- phase 3: phone, screen glances, look-ups ----------
@@ -3285,8 +3285,8 @@ def zack_lines(p):
             "if it needs an answer): " + " | ".join("[%s] %s" % (time.strftime("%-I:%M %p", time.localtime(t)), x)
                                                     for t, x in z))[:900] + "\n"
 
-# ---------- phase 4b: the avatar's conversations are Cypher's ----------
-# novad (the avatar's voice and hands) appends each conversation turn to
+# ---------- phase 4b: the deck screen's conversations are Cypher's ----------
+# novad (the deck screen's voice and hands) appends each conversation turn to
 # talk-spool.jsonl (cypher_link.record_turn). cypherd ingests it here: journals each
 # turn (scrubbed again), moves the drives, keeps the last turns for its own prompt
 # and the nightly sleep. A conversation can also queue request_account, which goes
@@ -3581,7 +3581,7 @@ def dash_snapshot(L, st, active=True, now=None):
         "lessons": [S(r["text"], 140) for r in ranked_lessons(now)],
         "lesson_count": len(load_lessons()),
         "body": S(body_description() or "", 300),
-        "apartment": feature(L, "apartment"), "spot": apartment_spot(L, st, active, now),
+        "spot": apartment_spot(L, st, active, now),
         "found": [[time.strftime("%-I:%M %p", time.localtime(f[0])), S(f[1], 60), S(f[2], 400)]
                   for f in (st.get("found") or [])[-3:] if isinstance(f, list) and len(f) == 3 and now - f[0] < 6 * 3600],
     }
@@ -5788,8 +5788,8 @@ def cli_body(argv):
             print("pending #%s (%s, %s): %s" % (r["id"], r.get("source", "sleep"), str(r.get("ts"))[:16], c["after"]))
         print("body_first: %s" % ("on: his next sleep asks for the body before anything else" if body_first_on(L) else
                                    "done (approved or waiting on Zack)" if feature(L, "body_first") else "off"))
-        print("apartment: %s; 3D body asset: placeholder until Nova installs the approved design "
-              "(~/.config/cypher/body-model.json or /usr/share/grokbot/cypher/apartment/body.json)" % ("on" if feature(L, "apartment") else "off"))
+        print("apartment 3D body asset: placeholder until Nova installs the approved design "
+              "(~/.config/cypher/body-model.json or /usr/share/grokbot/cypher/apartment/body.json)")
         return 0
     if argv[0] != "propose":
         print(cli_body.__doc__); return 2

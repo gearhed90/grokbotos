@@ -63,7 +63,7 @@ or unlock it himself.
 Places are a state field (apartment, noodle_stall); `go_to` and `eat` (+0.20 energy, 3 a day, 3 h apart) exist; cypherd writes `~/.local/state/cypher/world.json` (the manifest) every model call. The Alpha world service will later replace the simulated manifest.
 
 ## Build 16 (apartment shipped)
-The apartment (phase 1 below) is built: `build_files/rpi5/nova/apartment.py` + `apartment_gl.py`, GLES2 on the deck, from Cypher's own description, with a placeholder body until his design is approved. See docs/CYPHER.md "Build 16".
+The apartment (phase 1 below) is built: `build_files/rpi5/nova/apartment.py` + `apartment_gl.py`, GLES2 on the deck, from Cypher's own description, with a placeholder body until his design is approved. It is the deck's only screen; the flat avatar is archived in `archive/avatar-v1`. See docs/CYPHER.md "Build 16".
 
 ## Phases (sessions = one focused build sitting)
 1. A1 apartment on the deck + `go_to` inside it (bed, desk, terminal, window), tests: 2-3 sessions, one deck build.

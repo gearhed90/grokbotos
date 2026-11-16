@@ -65,9 +65,9 @@ now = at(14)
 import apartment as APT
 
 # ================= 1. flags =================
-check("apartment and body_first are features, on by default", "apartment" in C.FEATURES and "body_first" in C.FEATURES
-      and C.feature(L, "apartment") and C.feature(L, "body_first"))
-check("the shipped limits carry both", L0["features"].get("apartment") is True and L0["features"].get("body_first") is True)
+check("body_first is a feature, on by default; the apartment is not a flag (it is the only screen)", "body_first" in C.FEATURES
+      and C.feature(L, "body_first") and "apartment" not in C.FEATURES)
+check("the shipped limits carry body_first, not apartment", L0["features"].get("body_first") is True and "apartment" not in L0["features"])
 check("pino_post still locked off", not C.feature(L, "pino_post") and "pino_post" in C.LOCKED_FEATURES)
 
 # ================= 2. where he is in the room =================
@@ -85,14 +85,12 @@ check("out in Night City -> out (through the door)", spot("go_to", place="noodle
 check("Alpha holds the mind -> out", spot("none", active=False) == "out")
 st["place"] = "apartment"; st["dash_last"] = {"action": "write_codex"}; st["drives"]["energy"] = 0.6
 d = C.dash_snapshot(L, st, True, now)
-check("dash.json carries spot and the apartment flag", d.get("spot") == "desk" and d.get("apartment") is True, {k: d.get(k) for k in ("spot", "apartment")})
+check("dash.json carries his spot (no apartment flag)", d.get("spot") == "desk" and "apartment" not in d, {k: d.get(k) for k in ("spot", "apartment")})
 for a_ in ("research_lore", "rest", "eat", "journal_thought", "none"):
     st["dash_last"] = {"action": a_}; d = C.dash_snapshot(L, st, True, now)
     fake = dict(d); fake.pop("spot")
     check("deck fallback mapping agrees for %s" % a_, APT.spot_from_dash(fake) in (d["spot"], "window") and APT.spot_from_dash(d) == d["spot"],
           (APT.spot_from_dash(fake), d["spot"], d["activity"]))
-C.set_feature("apartment", False); check("features.json turns the apartment off (dash says so)", C.dash_snapshot(L, st, True, now)["apartment"] is False)
-C.set_feature("apartment", None)
 
 # ================= 3. body first =================
 check("no body yet -> body_first on", C.body_description() is None and C.body_first_on(L))
@@ -174,10 +172,22 @@ C.write_body(None)
 cli = open(os.path.join(SRC, "grokbot-cypher")).read()
 check("grokbot-cypher has body", '"body"' in cli and "body propose" in cli)
 nn = open(os.path.join(NOVA, "nova_native.py")).read()
-check("the face shows the apartment by default and follows the flag", "apartment_wanted" in nn and 'default=os.environ.get("NOVA_VIEW", "auto")' in nn
-      and "AptGLView" in nn)
+check("the face is the apartment only (no view switch, no avatar fallback)", "apartment_wanted" not in nn and "NOVA_VIEW" not in nn
+      and "AptGLView" in nn and "apartment.Apartment(" in nn)
 inst = open(os.path.join(ROOT, "build_files", "rpi5-nova.sh")).read()
-check("the image installs the apartment", "apartment.py apartment_gl.py apartment_body_placeholder.json" in inst)
+check("the image installs the apartment and his color, not the flat avatar", "look.py apartment.py apartment_gl.py apartment_body_placeholder.json" in inst
+      and not any(f in loop.split() for loop in inst.splitlines() if loop.startswith("for f in ") for f in ("avatar.py", "avatar_shapes.py", "glview.py", "shell.html")))
+# ================= 5. the flat avatar is gone from the deck, archived intact =================
+import re
+deck = [os.path.join(NOVA, f) for f in os.listdir(NOVA) if f.endswith((".py", ".html", ".js", ".conf"))] + [os.path.join(SRC, f) for f in os.listdir(SRC) if f.endswith(".py")]
+loads = [p for p in deck if re.search(r"^\s*(from|import)\s+(avatar|avatar_shapes|glview)\b", open(p).read(), re.M)
+         or re.search(r"shell\.html\b.*open\(|open\(.*shell\.html", open(p).read())]
+check("no deck file imports avatar, avatar_shapes or glview, or serves shell.html", not loads, loads)
+check("the avatar files are gone from the deck tree", not any(os.path.exists(os.path.join(NOVA, f)) for f in ("avatar.py", "avatar_shapes.py", "glview.py", "shell.html", "lock.html")))
+AR = os.path.join(ROOT, "archive", "avatar-v1")
+check("archived intact with a README", all(os.path.exists(os.path.join(AR, "nova", f)) for f in ("avatar.py", "avatar_shapes.py", "glview.py", "shell.html", "lock.html"))
+      and "restore" in open(os.path.join(AR, "README.md")).read().lower())
+check("no picker / look button CSS left in the face", not any(x in nn for x in ("#picker", "button#look", "draw_shape_thumb", "open_picker", "--shape")))
 
 srv.shutdown()
 print("%d passed, %d failed" % (ok, fail))

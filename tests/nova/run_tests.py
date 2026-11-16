@@ -75,13 +75,18 @@ try:
     check("confirm bad Origin 403", post("/api/confirm", {"id": "x", "yes": True}, {"Origin": "http://evil.com"}) == "HTTP 403")
     check("confirm bad Host 403", post("/api/confirm", {"id": "x", "yes": True}, {"Host": "evil.com:8765"}) == "HTTP 403")
     check("confirm oversize 413", post("/api/confirm", {"id": "x" * 2000, "yes": True}) == "HTTP 413")
-    g = json.loads(urllib.request.urlopen(B + "/api/avatar").read())
-    check("GET /api/avatar default + lists", g["shape"] == "capsule" and g["color"] == "green" and len(g["shapes"]) == 13 and len(g["colors"]) == 11, g)
-    a = post("/api/avatar", {"shape": "star", "color": "blue"})
-    check("POST /api/avatar saves", json.loads(a) == {"shape": "star", "color": "blue"} and json.load(open(T + "/cfg/avatar.json"))["shape"] == "star", a)
-    check("POST /api/avatar bad shape 400", post("/api/avatar", {"shape": "pumpkin"}) == "HTTP 400")
-    check("POST /api/avatar bad Origin 403", post("/api/avatar", {"shape": "circle"}, {"Origin": "http://evil.com"}) == "HTTP 403")
-    r = tool("set_avatar", {"shape": "hexagon"}); check("set_avatar tool", "blue hexagon" in r.get("reply", ""), r)
+    g = json.loads(urllib.request.urlopen(B + "/api/color").read())
+    check("GET /api/color default + list (color only)", g == {"color": "green", "colors": g["colors"]} and len(g["colors"]) == 11, g)
+    a = post("/api/color", {"color": "blue"})
+    check("POST /api/color saves", json.loads(a) == {"color": "blue"} and json.load(open(T + "/cfg/avatar.json")) == {"color": "blue"}, a)
+    check("POST /api/color bad color 400", post("/api/color", {"color": "pumpkin"}) == "HTTP 400")
+    check("POST /api/color shape only 400", post("/api/color", {"shape": "star"}) == "HTTP 400")
+    check("POST /api/color bad Origin 403", post("/api/color", {"color": "red"}, {"Origin": "http://evil.com"}) == "HTTP 403")
+    def code(path):
+        try: return urllib.request.urlopen(B + path).status
+        except urllib.error.HTTPError as e: return e.code
+    check("flat avatar gone: / /shell.html /api/avatar are 404", [code("/"), code("/shell.html"), code("/api/avatar")] == [404, 404, 404])
+    r = tool("set_color", {"color": "teal"}); check("set_color tool", "teal" in r.get("reply", ""), r)
 finally:
     for p in ps: p.terminate()
     time.sleep(.3); gl.close(); nl.close()

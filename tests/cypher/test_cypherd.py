@@ -78,8 +78,8 @@ check("quiet hours 11 PM to 6 AM, off Friday and Saturday nights",
 check("hosted backup capped at $0.50/day", shipped["brain"]["hosted_backup"]["daily_budget_usd"] == 0.5)
 check("primary brain is the Alpha proxy on 8090", shipped["brain"]["primary_url"] == "http://192.168.12.126:8090")
 sys.path.insert(0, NOVA)
-import avatar_shapes
-check("avatar colors match novad's list", shipped["avatar_colors"] == avatar_shapes.COLOR_IDS)
+import look
+check("avatar colors match novad's list (look.py)", shipped["avatar_colors"] == look.COLOR_IDS)
 bad = os.path.join(T, "bad.json")
 with open(bad, "w") as f: json.dump({"enabled": True}, f)
 try: C.load_limits(bad); check("incomplete limits refused", False)

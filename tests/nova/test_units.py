@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Unit tests for the Pi 5 Nova pieces that do not need a display or root:
-novad's key lookup order and checks, the nova-web prefs seeding, and the lock scene."""
+novad's key lookup order and checks, the nova-web prefs seeding, the lock scene (his apartment, asleep) and his
+color (look.py). The flat avatar's own tests are archived with it in archive/avatar-v1/tests."""
 import os, sys, tempfile, importlib.util, random
 HERE = os.path.dirname(os.path.abspath(__file__))
 NOVA = os.path.join(os.path.dirname(os.path.dirname(HERE)), "build_files", "rpi5", "nova")
@@ -15,7 +16,7 @@ T = tempfile.mkdtemp()
 user_key = os.path.join(T, "user_key"); sys_key = os.path.join(T, "sys_key")
 avatar_cfg = os.path.join(T, "cfg", "avatar.json")
 os.environ.update(NOVA_KEY_FILE=user_key, NOVA_SYS_KEY_FILE=sys_key, NOVA_WEB_USERJS=os.path.join(NOVA, "nova-web-user.js"),
-                  NOVA_AVATAR_CFG=avatar_cfg)
+                  NOVA_AVATAR_CFG=avatar_cfg, CYPHER_STATE_DIR=os.path.join(T, "state"), CYPHER_CONFIG_DIR=os.path.join(T, "ccfg"))
 spec = importlib.util.spec_from_file_location("novad", os.path.join(NOVA, "novad.py"))
 novad = importlib.util.module_from_spec(spec); spec.loader.exec_module(novad)
 
@@ -46,7 +47,8 @@ data = open(os.path.join(prof, "user.js")).read()
 check("nova-web user.js seeded", 'media.ffmpeg.enabled", true' in data and "sessionstore.resume_from_crash" in data)
 check("nova-web does not enable openh264 download", 'gmpopenh264.enabled", false' in data)
 
-import lockscene
+import json
+import lockscene, look
 s = lockscene.LockScene(rng=random.Random(1))
 png = os.path.join(T, "lock.png"); lockscene.render_png(png, typed=4)
 check("lock scene renders", os.path.getsize(png) > 10000)
@@ -55,76 +57,32 @@ keys = {k: (x, y) for k, x, y, r in s.key_rects(1280, 720)}
 check("keypad has 0-9, delete, ok", sorted(keys) == sorted(lockscene.KEYS))
 check("hit test finds 5", s.hit(*keys["5"]) == "5")
 check("hit test finds ok", s.hit(*keys["ok"]) == "ok")
-check("left half (avatar) is not a key", s.hit(200, 360) is None)
+check("left half (the room) is not a key", s.hit(200, 360) is None)
 check("keypad sits on the right half", all(x > 640 for x, _ in keys.values()))
-check("avatar is asleep", s.av.state == "sleeping")
-# ---------- avatar shapes and colors ----------
-import math, json, cairo
-import avatar_shapes as AS
-from avatar import Avatar, STATES
-check("13 shapes, 11 colors", len(AS.SHAPE_IDS) == 13 and len(AS.COLOR_IDS) == 11, (len(AS.SHAPE_IDS), len(AS.COLOR_IDS)))
-check("default look is the original green capsule", AS.DEFAULT == {"shape": "capsule", "color": "green"})
-check("no config -> default", AS.load() == AS.DEFAULT)
-check("orange is FF6B1A", AS.color_rgb("orange") == (1.0, 0x6B / 255, 0x1A / 255))
-worst = {}
-for sh in AS.SHAPE_IDS:
-    f = AS.sdf(sh); a0, co = AS.series(sh)
-    pts = AS.outline(sh, 96)
-    # the series is centred and, apart from the capsule, has the area of the unit circle
-    area = sum(r * r for _, _, r in pts) * math.pi / len(pts)
-    x0, y0, x1, y1 = AS.extent(sh)
-    worst[sh] = (round(area, 3), round(abs(x0 + x1) + abs(y0 + y1), 3))
-check("every shape has 32 harmonics", all(len(AS.series(s)[1]) == AS.HARM for s in AS.SHAPE_IDS))
-check("shapes have equal area", all(abs(worst[s][0] - math.pi) < .08 for s in AS.SHAPE_IDS if s != "capsule"), worst)
-check("shapes are centred", all(worst[s][1] < .08 for s in AS.SHAPE_IDS), worst)
-check("outline radius always positive", all(r > .2 for s in AS.SHAPE_IDS for _, _, r in AS.outline(s, 256)))
-
-def px(surf, x, y):
-    d = surf.get_data(); st = surf.get_stride(); i = int(y) * st + int(x) * 4
-    return d[i + 2], d[i + 1], d[i]
-W, H = 640, 360
-eyes_ok, body_ok, states_ok = [], [], []
-for sh in AS.SHAPE_IDS:
-    for cid in ("orange", "white", "amber", "gray"):
-        av = Avatar(rng=random.Random(3), style={"shape": sh, "color": cid}); av.forceBlink = 1
-        av.set_state("idle"); av.simulate(1.0); av.tick(.02)
-        surf = cairo.ImageSurface(cairo.FORMAT_RGB24, W, H); av.draw(cairo.Context(surf), W, H)
-        h0 = H * av.lay["h"]; g = av.geom(h0, 0, h0 / 2, 0); cx, cy = W * av.lay["cx"], H * av.lay["cy"]
-        want = tuple(round(c * 255) for c in AS.color_rgb(cid))
-        # body colour shows between the eyes and the top edge; the eyes stay dark on every color
-        bx, by = cx + g["ecx"], cy + g["ecy"] - h0 * .3 * g["es"]
-        body_ok.append(sum(abs(a - b) for a, b in zip(px(surf, bx, by), want)) < 40 or (sh, cid, px(surf, bx, by), want))
-        ex = cx + g["ecx"] + h0 * .25 * g["es"] + av.G("lx") * h0 * .272 * g["mv"]; ey = cy + g["ecy"] + av.G("ly") * h0 * .3 * g["mv"]
-        eyes_ok.append(max(px(surf, ex, ey)) < 40 or (sh, cid, px(surf, ex, ey)))
-    for st in STATES:
-        av = Avatar(rng=random.Random(4), style={"shape": sh, "color": "blue"}); av.set_state(st); av.simulate(1.5)
-        surf = cairo.ImageSurface(cairo.FORMAT_RGB24, 320, 180); c = cairo.Context(surf)
-        for _ in range(5): av.tick(.03); av.draw(c, 320, 180)
-        states_ok.append(any(max(px(surf, x, y)) > 100 for x in range(0, 320, 4) for y in range(0, 180, 4)) or (sh, st))
-check("body shows the chosen color, every shape", all(x is True for x in body_ok), [x for x in body_ok if x is not True])
-check("eyes are dark on every shape and color", all(x is True for x in eyes_ok), [x for x in eyes_ok if x is not True])
-check("every state draws on every shape", all(x is True for x in states_ok), [x for x in states_ok if x is not True])
-av = Avatar(style={"shape": "star", "color": "pink"})
-check("set_style switches live", av.set_style(shape="circle")["shape"] == "circle" and av.style["color"] == "pink")
-check("unknown shape falls back", Avatar(style={"shape": "pumpkin"}).style["shape"] == AS.DEFAULT["shape"])
-
-c = AS.save(shape="star")
-check("save writes avatar.json", json.load(open(avatar_cfg)) == {"shape": "star", "color": "green"}, c)
-AS.save(color="teal")
-check("save merges shape and color", AS.load() == {"shape": "star", "color": "teal"})
-for bad in ({"shape": "pumpkin"}, {"color": "#123456"}):
-    try: AS.save(**bad); check("save rejects " + str(bad), False)
-    except ValueError: check("save rejects " + str(bad), True)
+check("lock: he is asleep on the mattress", s.state == "sleeping" and s.ap.mv.spot == "bed" and s.ap.mv.pose == "lie", (s.ap.mv.spot, s.ap.mv.pose))
+check("lock scene does not load the flat avatar", not any(m in sys.modules for m in ("avatar", "avatar_shapes", "glview")))
+import cairo
+surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, 640, 360); c = cairo.Context(surf)
+s.draw(c, 640, 360, now=0); b1 = s.bg[2]; s.draw(c, 640, 360, now=0)
+check("lock room is drawn once per size (cached)", s.bg[2] is b1)
+# ---------- his color (look.py; tints the placeholder body) ----------
+check("11 colors, green default", len(look.COLOR_IDS) == 11 and look.load() == {"color": "green"})
+c = look.save("teal")
+check("save writes avatar.json (color only)", json.load(open(avatar_cfg)) == {"color": "teal"}, c)
+try: look.save("nope"); check("unknown color raises", False)
+except ValueError: check("unknown color raises", True)
 open(avatar_cfg, "w").write("{not json")
-check("broken avatar.json -> default", AS.load() == AS.DEFAULT)
-open(avatar_cfg, "w").write(json.dumps({"shape": "hexagon", "color": "nope"}))
-check("bad color in file -> default color, shape kept", AS.load() == {"shape": "hexagon", "color": AS.DEFAULT["color"]})
-
-r = novad.call_tool("set_avatar", {"shape": "drop", "color": "purple"})
-check("novad set_avatar tool saves", r.get("ok") and AS.load() == {"shape": "drop", "color": "purple"}, r)
-check("novad set_avatar rejects unknown shape", novad.call_tool("set_avatar", {"shape": "pumpkin"}).get("ok") is False)
-check("set_avatar in tool schema", any(t["function"]["name"] == "set_avatar" and t["function"]["parameters"]["properties"]["shape"]["enum"] == AS.SHAPE_IDS
-                                       for t in novad.tool_schema()))
-check("lock scene uses the saved look", lockscene.LockScene(rng=random.Random(1)).av.style == {"shape": "drop", "color": "purple"})
+check("broken avatar.json -> default", look.load() == look.DEFAULT)
+open(avatar_cfg, "w").write(json.dumps({"shape": "hexagon", "color": "pink"}))
+check("an old file's shape is ignored, its color kept", look.load() == {"color": "pink"})
+r = novad.call_tool("set_color", {"color": "purple"})
+check("novad set_color tool saves", r.get("ok") and look.load() == {"color": "purple"}, r)
+check("novad set_color rejects unknown color", novad.call_tool("set_color", {"color": "pumpkin"}).get("ok") is False)
+check("set_color in tool schema (color only)", any(t["function"]["name"] == "set_color" and list(t["function"]["parameters"]["properties"]) == ["color"]
+                                       and t["function"]["parameters"]["properties"]["color"]["enum"] == look.COLOR_IDS for t in novad.tool_schema()))
+check("no set_avatar (shape) tool any more", not any(t["function"]["name"] == "set_avatar" for t in novad.tool_schema()))
+import apartment
+check("apartment body takes his color", apartment.Apartment().tint == look.color_rgb("purple"))
+check("novad does not load the flat avatar", not hasattr(novad, "avatar_shapes") and "avatar_shapes" not in sys.modules)
 print("\n%d passed, %d failed" % (ok, fail))
 sys.exit(1 if fail else 0)
