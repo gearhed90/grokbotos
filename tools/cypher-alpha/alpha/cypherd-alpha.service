@@ -1,0 +1,30 @@
+[Unit]
+Description=Cypher standby mind on Alpha: thinks only while the deck is dark (~/nova-projects/cypher)
+After=cypher-brain-proxy.service
+Wants=cypher-brain-proxy.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Environment=CYPHER_HOST=alpha
+Environment=CYPHER_TRUST_OWNER=1
+Environment=CYPHER_LIMITS=%h/nova-projects/cypher/alpha/cypher-limits.json
+Environment=CYPHER_BRAIN_TOKEN_FILE=%h/.config/cypher-proxy/token
+Environment=CYPHER_XAI_KEY_FILE=/nonexistent
+Environment=CYPHER_PERSONA=%h/nova-projects/cypher/alpha/persona.md
+Environment=CYPHER_CONFIG_DIR=%h/.config/cypher-alpha
+Environment=CYPHER_STATE_DIR=%h/.local/state/cypher-alpha
+Environment=CYPHER_DATA_DIR=%h/.local/share/cypher-alpha
+ExecStart=/usr/bin/python3 %h/nova-projects/cypher/alpha/cypherd.py
+Restart=on-failure
+RestartSec=10
+RestartPreventExitStatus=78
+MemoryMax=128M
+MemoryHigh=96M
+TasksMax=32
+Nice=5
+NoNewPrivileges=yes
+UMask=0077
+
+[Install]
+WantedBy=default.target

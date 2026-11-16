@@ -1,0 +1,21 @@
+[Unit]
+Description=Cypher brain proxy: Pi 5 thinks with Alpha's llama-server, cameras first (~/nova-projects/cypher)
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+# Ticks ask for 150 tokens; the nightly sleep asks for 300; build 15 interviews ask for 350.
+Environment=CYPHER_PROXY_MAX_TOKENS=400
+ExecStart=/usr/bin/python3 %h/nova-projects/cypher/proxy/cypher_brain_proxy.py
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=78
+MemoryMax=128M
+MemoryHigh=96M
+TasksMax=64
+NoNewPrivileges=yes
+UMask=0077
+
+[Install]
+WantedBy=default.target

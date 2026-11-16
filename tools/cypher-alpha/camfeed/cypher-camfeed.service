@@ -1,0 +1,19 @@
+[Unit]
+Description=Cypher camera feed: read-only, sanitized camera events for cypherd (~/nova-projects/cypher)
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+# Reads eufy-filter and alpha-vision-model logs; writes only ~/.local/share/cypher-camfeed.
+ExecStart=/usr/bin/python3 %h/nova-projects/cypher/camfeed/cypher_camfeed.py
+Restart=on-failure
+RestartSec=10
+MemoryMax=64M
+MemoryHigh=48M
+TasksMax=8
+Nice=10
+NoNewPrivileges=yes
+UMask=0077
+
+[Install]
+WantedBy=default.target
