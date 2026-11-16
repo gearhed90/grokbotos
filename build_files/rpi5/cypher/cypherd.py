@@ -1360,9 +1360,18 @@ def predictability(st, now, n=12):
         return None
     acts = [k.split(":", 1)[0] for k in keys]
     top, cnt = Counter(acts).most_common(1)[0]
-    alt = sum(1 for i in range(2, len(keys)) if keys[i] == keys[i - 2] and keys[i] != keys[i - 1]) / float(len(keys) - 2)
+    # the same round over and over: A-B-A-B (period 2) or a 3-4 step round (research, write, rest, noodle stall...)
+    best, per = 0.0, 0
+    for p in (2, 3, 4):
+        if len(keys) - p < 4:
+            continue
+        r = sum(1 for i in range(p, len(keys)) if keys[i] == keys[i - p] and keys[i] != keys[i - 1]) / float(len(keys) - p)
+        if r > best + 0.05:
+            best, per = r, p
     share = cnt / float(len(keys))
-    return {"score": round(max(share, alt), 2), "what": top, "count": cnt, "n": len(keys), "alternating": alt >= 0.5}
+    rnd = " -> ".join(k.split(":", 1)[-1].replace("_", " ") for k in keys[-per:]) if per else ""
+    return {"score": round(max(share, best), 2), "what": top, "count": cnt, "n": len(keys), "alternating": best >= 0.5 and per == 2,
+            "round": rnd if best >= 0.5 and best > share else "", "period": per}
 
 PREDICTABLE_AT = 0.5
 
@@ -1384,9 +1393,13 @@ def habit_lines(L, st, acts, now):
     if feature(L, "novelty"):
         p = predictability(st, now)
         if p and p["score"] >= PREDICTABLE_AT:
-            out += ("You're getting predictable: %s %d of your last %d moves%s. Becoming predictable is what you fear; "
-                    "do something you haven't done today.\n" % (p["what"].replace("_", " "), p["count"], p["n"],
-                                                                 " (back and forth)" if p["alternating"] else ""))
+            if p.get("round") and not p["alternating"]:
+                out += ("You're getting predictable: the same round again and again (%s). Becoming predictable is what you fear; "
+                        "break it - do something you haven't done today.\n" % p["round"])
+            else:
+                out += ("You're getting predictable: %s %d of your last %d moves%s. Becoming predictable is what you fear; "
+                        "do something you haven't done today.\n" % (p["what"].replace("_", " "), p["count"], p["n"],
+                                                                     " (back and forth)" if p["alternating"] else ""))
     return out
 
 def fear_step(L, st, now, hours):
@@ -1808,6 +1821,7 @@ LORE_SEED = [("corps", t) for t in ("Arasaka", "Militech", "Kang Tao", "Biotechn
             [("timeline", t) for t in ("Fourth Corporate War", "DataKrash", "Unification War", "Time of the Red", "Arasaka Tower 2023 nuke")]
 LORE_CATS = ("corps", "gangs", "districts", "characters", "tech", "timeline", "other")
 CODEX_MAX_CHARS = 600
+CODEX_TOKENS = 300          # a tick with an entry due may answer this long (Alpha's proxy allows 400)
 TAKE_MAX_CHARS = 240
 LORE_DRAFT_TTL_S = 24 * 3600
 
@@ -1822,6 +1836,30 @@ def save_lore(d):
     d["at"] = time.time()
     write_json(LORE_FILE, d)
 
+def lore_topic_clean(t):
+    """'Arasaka (corps)' / 'Arasaka [corps]' / 'Arasaka - corps' -> 'Arasaka' when the tail is just a category."""
+    t = re.sub(r"\s*[\(\[](?:%s|corp|gang|district|character|tech|timeline)s?[\)\]]\s*" % "|".join(LORE_CATS), " ", t or "", flags=re.I)
+    t = re.sub(r"^\s*cyberpunk(?:\s*(?:2077|2020|red))?\s*[:\-]\s*", "", t, flags=re.I)   # 'Cyberpunk 2077: Militech' -> 'Militech'
+    return re.sub(r"\s+", " ", t).strip(" -:")
+
+_LORE_GENERIC = {"cyberpunk", "2077", "2020", "lore", "the", "and", "with", "from", "about", "night", "city"}
+
+def lore_words(topic):
+    """The words a fact or an entry has to mention to be about this topic ('Militech corporate structure' ->
+    militech, corporate, structure); 'Night City' alone keeps its own words."""
+    ws = [w for w in re.findall(r"[a-z0-9']{4,}", (topic or "").lower())]
+    return [w for w in ws if w not in _LORE_GENERIC] or ws
+
+def lore_about(text, topic):
+    ws = lore_words(topic)
+    tl = (text or "").lower()
+    return not ws or any(w in tl for w in ws)
+
+def lore_known(d, t):
+    """Already written (or skipped): the same key, or the same with a category tail."""
+    k = _topic_key(lore_topic_clean(t))
+    return bool(k) and k in d["done"]
+
 def lore_next(d):
     for q in d["queue"]:
         if isinstance(q, dict) and _topic_key(q.get("topic")) not in d["done"]:
@@ -1834,10 +1872,11 @@ def lore_lines(L, st, now):
     d = load_lore()
     dr = d.get("draft")
     if isinstance(dr, dict) and now - float(dr.get("ts") or 0) < LORE_DRAFT_TTL_S:
-        return ("your codex: facts gathered on %s (%d, from %s); write the entry in your own words (write_codex)\n"
-                % (dr["topic"], len(dr.get("facts") or []), ", ".join(sorted({f.get("source") for f in dr.get("facts") or [] if f.get("source")}))[:80]))
+        facts = " | ".join("%s [%s]" % (str(f.get("text"))[:170], f.get("source")) for f in (dr.get("facts") or [])[:3])
+        return ("your codex: write the %s entry now from these facts, in your own words, about 300 chars (write_codex; your own idea goes in take): %s\n"
+                % (dr["topic"], facts))[:760]
     nx = lore_next(d)
-    return ("your codex: %d entries written; next in your queue: %s (%s) - research_lore\n" % (len(d["done"]) - sum(1 for v in d["done"].values() if isinstance(v, dict) and v.get("skipped")), nx["topic"], nx["cat"])) if nx else ""
+    return ("your codex: %d entries written; next in your queue: %s - research_lore\n" % (len(d["done"]) - sum(1 for v in d["done"].values() if isinstance(v, dict) and v.get("skipped")), nx["topic"])) if nx else ""
 
 def lore_blocked(L, st, a, now):
     if not feature(L, "lore"):
@@ -1858,6 +1897,7 @@ def do_research_lore(L, st, params, now=None):
     now = now or time.time()
     d = load_lore()
     topic = params.get("topic") or ""
+    topic = lore_topic_clean(topic)
     q = next((x for x in d["queue"] if isinstance(x, dict) and _topic_key(x.get("topic")) == _topic_key(topic)), None) if topic else lore_next(d)
     if q is None:
         q = {"topic": topic, "cat": "other"}
@@ -1875,6 +1915,7 @@ def do_research_lore(L, st, params, now=None):
             page = read_page(K, r["url"])
             if page:
                 facts.append({"text": _plain(page, 420), "source": _domain(r["url"])}); break
+    facts = [f for f in facts if lore_about(f["text"], topic)]      # the site blurbs that never name the topic are not facts
     if not facts:
         w = wikipedia_lookup(K, "Cyberpunk 2077 " + topic) or wikipedia_lookup(K, topic)
         if w:
@@ -2407,7 +2448,7 @@ MANIFEST_SHORT = {
     "rest": "rest - energy back",
     "check_grid": "check_grid - read-only grid report",
     "research_lore": "research_lore - FREE sourced facts for your Cyberpunk codex. params: {\"topic\"?} (next queued if none)",
-    "write_codex": "write_codex - the codex entry in your words, your own idea in take. params: {\"text\"<=600, \"take\"?<=240, \"queue\"?: [<=2 topics]}",
+    "write_codex": "write_codex - the codex entry in your words from the facts, your own idea in take. params: {\"text\": about 300 chars (max 600), \"take\"?<=200, \"queue\"?: [<=2 topics]}",
     "library": "library - search or wander everything you wrote or let go of. params: {\"query\"?<=60}",
     "reflect": "reflect - judge a loop you closed. params: {\"id\": loop id, \"verdict\"<=160}",
     "visit_pinos_world": "visit_pinos_world - a signed note for Pino, about weekly. params: {\"text\"<=%(max_chars)s}",
@@ -2756,10 +2797,13 @@ def validate(L, st, p, choice, now=None):
     if a == "research_lore":
         t = params.get("topic")
         t = re.sub(r"\s+", " ", _CTRL.sub(" ", t)).strip() if isinstance(t, str) else ""
+        t = lore_topic_clean(t)            # the 8B copied "Arasaka (corps)" from the prompt (build 15 test run)
         if t and (len(t) > 60 or not _TOPIC_RE.match(t) or _URL.search(t) or query_private(t)):
             return "none", {}, "rejected: research_lore needs a plain topic (max 60 chars) or none for the next queued one"
-        if t and _topic_key(t) in load_lore()["done"]:
-            return "none", {}, "rejected: %s is already in your codex; leave topic empty for the next queued one" % t[:40]
+        if t and lore_known(load_lore(), t):
+            t = ""                         # already written: go on to the next queued topic instead of a wasted tick
+        if not t and not lore_next(load_lore()):
+            return "none", {}, "rejected: your lore queue is empty; name a new topic"
         return a, ({"topic": t} if t else {}), "ok"
     if a == "write_codex":
         text = params.get("text") if isinstance(params.get("text"), str) else params.get("entry")
@@ -2770,8 +2814,14 @@ def validate(L, st, p, choice, now=None):
             return "none", {}, "rejected: write_codex needs text: the entry in your own words from the facts (40-%d chars)" % CODEX_MAX_CHARS
         if len(text) > CODEX_MAX_CHARS or len(take) > TAKE_MAX_CHARS:
             return "none", {}, "rejected: write_codex text over %d chars (take max %d)" % (CODEX_MAX_CHARS, TAKE_MAX_CHARS)
-        if request_forbidden(text, take) or query_private(text + " " + take):
+        # lore is fiction: corps, security and locks are fine here (the house words are not checked); only private things are refused
+        if query_private(text + " " + take) or _ACCOUNT_EMAIL_RE.search(text + " " + take):
             return "none", {}, "rejected: write_codex is lore only: nothing private"
+        dr = load_lore().get("draft")
+        if isinstance(dr, dict) and not lore_about(text, dr.get("topic")):
+            # build 15 test run: entries drifted into 'the grid hums...' musings; the entry has to be about the topic
+            return "none", {}, ("rejected: the entry is about %s - write it from the facts on %s (musings go in take or journal_thought)"
+                                % (dr.get("topic"), dr.get("topic")))
         q = [re.sub(r"\s+", " ", x).strip()[:60] for x in (params.get("queue") or [] if isinstance(params.get("queue"), list) else [])
              if isinstance(x, str) and _TOPIC_RE.match(x.strip() or "-") and not _URL.search(x)][:2]
         out = {"text": text}
@@ -4844,8 +4894,9 @@ def tick(L, st, now=None, perceive_fn=None, camera_fn=None, inbox_fn=None, talk_
     if p["zack"]:
         entry["perception"]["zack_messages"] = len(p["zack"])
     t0 = time.monotonic()
+    mt = CODEX_TOKENS if "write_codex" in manifest_acts(L, st, p, now) else None
     try:
-        content, brain, model, cost, notes = think(L, st, messages, now)
+        content, brain, model, cost, notes = think(L, st, messages, now, max_tokens=mt)
     except BrainBusy as b:
         entry.update({"brain": "none", "choice": {"action": "none"}, "reason": "no brain available: " + str(b),
                       "validator": "skipped", "result": "skipped"})
@@ -5203,7 +5254,8 @@ def maybe_sleep(L, st, now=None, force=False):
     user += belief_lines(L, now)
     pr = predictability(st, now, n=30)
     if pr and pr["score"] >= PREDICTABLE_AT:
-        user += "pattern today: %s was %d of your last %d moves.\n" % (pr["what"], pr["count"], pr["n"])
+        user += ("pattern today: the same round again and again (%s).\n" % pr["round"]) if pr.get("round") else \
+            ("pattern today: %s was %d of your last %d moves.\n" % (pr["what"], pr["count"], pr["n"]))
     tuning = tuning_on(L)
     if tuning:
         user += tuning_context(L)

@@ -244,6 +244,31 @@ check("it counts as something he made", any(m["ref"] == "d0001" for m in C.read_
 check("the loop closed itself", not any(x["text"] == "codex entry: Arasaka" for x in st["loops"]))
 check("the queue does not repeat a topic, and his addition is queued", C.lore_next(C.load_lore())["topic"] != "Arasaka" and any(q["topic"] == "Kang Tao" for q in C.load_lore()["queue"]))
 check("finishing an entry is a drive reward", C.ACTION_EFFECTS["write_codex"]["boredom"] <= -0.15)
+v = C.validate(L, st, P, {"action": "research_lore", "params": {"topic": "Arasaka (corps)"}}, now)
+check("a written topic (even with its category copied) goes on to the next queued one", v[2] == "ok" and v[1] == {}, v)
+check("category tails are stripped", C.lore_topic_clean("Tyger Claws [gangs]") == "Tyger Claws" and C.lore_topic_clean("Arasaka (corps)") == "Arasaka")
+check("lore entries may talk about security and locks (fiction)", C.validate(L, dict(st), P, {"action": "write_codex", "params": {
+      "text": "Militech sells security, locks down whole districts and arms the NCPD with surplus war tech."}}, now)[2] in ("ok", "rejected: no facts gathered yet (research_lore first)"))
+_ss, _rp = C.searxng_search, C.read_page
+C.searxng_search = lambda K, q: [{"url": "https://www.cyberpunk.net/", "snippet": "Immerse yourself in the Cyberpunk universe."},
+                                 {"url": "https://cyberpunk.fandom.com/wiki/X", "snippet": q.replace("Cyberpunk ", "").replace(" lore", "") + " is a megacorp out of Night City."}]
+C.read_page = lambda K, u, snippet="": None
+C.execute("research_lore", {}, L, st, P)
+ll = C.lore_lines(L, st, now)
+check("site blurbs that never name the topic are dropped from the facts", "Immerse yourself" not in ll, ll)
+check("with a draft pending, the prompt carries the facts to write from", "write the" in ll and "megacorp" in ll.lower() and "[" in ll, ll)
+check("an entry tick may answer longer (no cut JSON)", C.CODEX_TOKENS >= 300)
+check("a 'Cyberpunk 2077:' prefix is stripped from topics", C.lore_topic_clean("Cyberpunk 2077: Militech corporate structure") == "Militech corporate structure")
+check("lore_about: an entry must name its topic", C.lore_about("Maelstrom: a chrome-mad gang", "Maelstrom") and not C.lore_about("The grid hums like a tired god.", "Biotechnica"))
+v = C.validate(L, st, P, {"action": "write_codex", "params": {"text": "The grid hums like a tired god. Data flows in streams, never still. I watch it."}}, now)
+check("a codex entry that drifts off its topic is refused with the topic named", v[2].startswith("rejected: the entry is about"), v)
+stp = {"recent_keys": []}
+for i, k in enumerate(["research_lore", "write_codex", "rest", "go_to:noodle_stall"] * 3):
+    stp["recent_keys"].append([now - 3600 + i * 300, k])
+pp = C.predictability(stp, now)
+check("a 4-step round is seen as predictable", pp and pp["score"] >= C.PREDICTABLE_AT and pp["period"] == 4 and "noodle stall" in pp["round"], pp)
+C.searxng_search, C.read_page = _ss, _rp
+check("and the prompt names the round", "same round" in C.habit_lines(L, stp, ["go_to"], now))
 check("lore searches of Pino are refused", C.validate(L, st, P, {"action": "research_lore", "params": {"topic": "Pino lore"}}, now)[0] == "none")
 
 # ================= 8. the slim prompt =================
