@@ -212,13 +212,45 @@ Page reads send a normal desktop browser User-Agent with standard Accept and Acc
 
 The state survives restarts in `~/.config/cypher/panels-collapsed.json` (0600). With a column folded, the chat bar and replies widen into the freed space (up to 90% of the width) and still wrap. Journal taps only work while the right column is open.
 
+## Build 15 (Nov 16 2026): a mind that notices its own ruts
+
+Why: on the morning of Nov 16 he paced apartment <-> noodle stall and gave "quiet evening" reasons at 9 AM. Root causes in the
+journal: four stale threads ("watch Pino's feed later", "noodle stall bowl, quiet evening", ...) were shown on every tick for
+up to 7 days; memories were full of "quiet"; the none-fallback always walked him back to the apartment; a full thread cap
+logged "thread refused" on 99 of 129 ticks; the hand-off never adopted place or threads. Everything below can be switched off
+alone (`features` block in the locked limits, or `grokbot-cypher features off NAME`).
+
+| feature | what it does |
+| --- | --- |
+| `habituation` | the same move gives less relief each time (2 h half-life; `1/(1+0.6*load)`); eat/rest/none exempt; worn moves are named in the prompt |
+| `novelty` | a move not done in 24 h gives 1.25x; **fear of being predictable**: when one action (or an A-B-A-B pacing) fills half his last 12 moves, the prompt says so and boredom climbs 0.3/h |
+| `beliefs` | `mind/beliefs.json`: per action (per place for go_to) one piece of evidence per outcome, for (mood lifted and it worked) or against; lessons become rule beliefs |
+| `loops` | wants, promises, questions, work in progress replace threads: expire after 12 h untouched; a budget refills one open per 3 h (max 3 banked) instead of 4 a day; a refused open is quiet (no every-tick journal line); closed loops come back after 2 h for a verdict (`reflect`) |
+| `working_memory` | `mind/wm.json`, 12 items, strength fades (3-day half-life), recall strengthens; the weakest moves to the library |
+| `library` | Alpha keeps everything he lets go of, journal thoughts, codex entries, loops and interviews (sqlite FTS5; `tools/cypher-alpha/proxy/cypher_library.py`) with date, place, mood and strength; the deck queues an outbox and sends it at each sync; `library {"query"?}` searches or wanders (random, every third time the oldest shelves); finds come back into working memory, old ones feel good; "library" is a place in Night City |
+| `lore` + `makes` | his Cyberpunk codex: a topic queue (39 seeds; no repeats), `research_lore` gathers sourced facts (SearXNG on Alpha + one read-only page, fandom/wikipedia first, Wikipedia fallback), `write_codex` is the entry in his own words with his own idea kept apart (`take`); each finished entry is a drive reward and a thing he made (`mind/codex/`, `mind/made.json`) |
+| `pino_api` + `pino_cooldown` | `visit_pino` reads Pino's public API on his clock: now (15 s), feed (30 s), then mind (1 min), memories (5 min), who (10 min) in turn, cached in `pino-cache.json`; 503 = away; credited "Pino, from pinos.world (his words in quotes, not yours)"; 30 min between visits; Pino web/X/lore searches on a tick are sent to the API instead (Zack asking in chat still searches) |
+| `pino_post` | **off, locked.** A signed note at pinos.world about once a week (`visit_pinos_world`, 1/day 1/week, 200 chars, signed " - Cypher (an AI on Zack's cyberdeck)"), logged in full to `mind/pino-posts.jsonl`. Nothing is sent until this flag is on in the root-owned limits AND `pino.post.url` is set after verifying how the site accepts messages |
+| `interview` | `grokbot-cypher interview [--from zack|nova] [--day/--since/--until/--ticks] "QUESTION"`: he answers from the decisions (with the context saved with each) and his loops and memories at the time, on Alpha's free brain (local next; hosted only with `--hosted`); never a message_zack; saved in `mind/interviews.jsonl`, the journal and the library. `--note` leaves him a note (information, never an approval) |
+| `character_adds` | at sleep he may propose one habit he noticed ("character.added"), applied only with `grokbot-cypher tuning approve N` |
+| `full_text` | conversation turns and journal thoughts are kept whole (4000 chars, scrubbed); the HUD reply scrolls (max 40% of the screen) and stays up longer; **Super+H** opens the conversation view; `grokbot-cypher chat` |
+| `slim_prompt` | the tick prompt in fewer words (short manifest, short rules incl. "give the reason for THIS action in fresh words"); each decision stores `prompt_chars` and its context (`ctx`) |
+
+**Migration** (once per host, marker `mind/migrated-15.json`; backups first): memories -> library (all) and working memory
+(newest 6); lessons -> rule beliefs and library; fresh threads -> loops; stale threads -> library and closed loops; every journal
+thought -> library. The hand-off now carries place, loops, habits and the mind (working memory, beliefs, lore queue, the last 5
+codex entries, feature overrides; newer wins). Alpha's proxy takes 512 KB states and 1 MB sync bodies.
+
+CLI: `grokbot-cypher chat | interview | interviews | features | codex [show ID|queue] | library [stats|search|wander] |
+beliefs | loops | made | character | migrate15 [--dry-run]`.
+
 ## Not yet
 
-A local wake-word detector binary, self-improvement, dock meters, the lock-screen/boot theme, talking to Pino (needs an account), Cypher's 3D city on Alpha (plan: docs/CYPHER-WORLD.md). See the design page for the plan.
+A local wake-word detector binary, self-improvement, dock meters, the lock-screen/boot theme, talking to Pino (needs an account; build 15's signed note ships off until verified), Cypher's 3D city on Alpha (plan: docs/CYPHER-WORLD.md). See the design page for the plan.
 
 ## Tests
 
-`python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py`, `test_cypher_one_mind.py`, `test_cypherd_phase5.py`, `test_cypherd_build12.py`, `test_cypherd_build12b.py`, `test_cypherd_build13.py`, `test_cypherd_build14.py` and `test_cypherd_build14b.py` (build 14 includes a headless GTK probe on a private broadwayd when available; all HTTP mocked) (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, camfeed and a two-process failover test (`test_failover_e2e.py`) live with the Alpha code in `~/nova-projects/cypher/tests`.
+`python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py`, `test_cypher_one_mind.py`, `test_cypherd_phase5.py`, `test_cypherd_build12.py`, `test_cypherd_build12b.py`, `test_cypherd_build13.py`, `test_cypherd_build14.py`, `test_cypherd_build14b.py` and `test_cypherd_build15.py` (build 14 includes a headless GTK probe on a private broadwayd when available; all HTTP mocked) (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, library, camfeed and a two-process failover test (`test_failover_e2e.py`) are versioned in `tools/cypher-alpha/` (installed on Alpha under `~/nova-projects/cypher/`).
 
 ### Build 15 fix: power_off dialog never raised (found on build 14, 15 Nov 10:16 PM ET)
 Zack typed "Shut down"; the chat model replied "Shutting down. Confirm on the screen if you mean it." without
