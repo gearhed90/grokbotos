@@ -70,7 +70,7 @@ C = importlib.util.module_from_spec(spec); spec.loader.exec_module(C)
 shipped = C.load_limits(os.path.join(SRC, "cypher-limits.json"))
 check("shipped limits load", shipped["phase_max"] == 6 and shipped["tick_s"] == 45)
 check("phase 6 actions (build 12) are exactly the known set", sorted(C.allowed_actions(shipped)) ==
-      ["ask_nova", "check_grid", "eat", "glance_screen", "go_to", "journal_thought", "look_up", "message_zack", "none", "propose_code",
+      ["ask_nova", "browse", "check_grid", "eat", "glance_screen", "go_to", "journal_thought", "look_up", "message_zack", "none", "propose_code",
        "request_account", "rest", "review_lessons", "set_avatar_color", "show_note", "speak", "visit_pino", "web_search", "x_lookup"])
 check("quiet hours 11 PM to 6 AM, off Friday and Saturday nights",
       shipped["quiet_hours"] == {"default": ["23:00", "06:00"], "nights": {"fri": None, "sat": None}})

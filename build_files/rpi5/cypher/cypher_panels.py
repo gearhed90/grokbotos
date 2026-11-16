@@ -162,7 +162,86 @@ def badge(cr, x, y, label, color, size=12):
     return tw + 14
 
 # ---- the two columns ----
-def render_panels(cr, w, h, snap, now=None):
+# ---- build 14b: each column can collapse to a thin strip at its edge (tap its tab, or Super+[ / Super+]) ----
+COLLAPSED = os.path.join(CFG, "panels-collapsed.json")
+STRIP_W = 30          # collapsed strip width at 720 px high (a finger-wide target with the 44 px tab rows)
+TAB = 44              # touch target size at 720 px high
+SIDES = ("left", "right")
+
+def collapsed(path=None):
+    """{"left": bool, "right": bool} from the small state file (missing or broken: both open)."""
+    try:
+        with open(path or COLLAPSED) as f:
+            d = json.load(f)
+        return {s: bool(d.get(s)) for s in SIDES} if isinstance(d, dict) else {s: False for s in SIDES}
+    except (OSError, ValueError):
+        return {s: False for s in SIDES}
+
+def set_collapsed(side, value, path=None):
+    """Save one side's state (atomic, 0600); returns the new state."""
+    if side not in SIDES:
+        raise ValueError("side must be left or right")
+    path = path or COLLAPSED
+    st = collapsed(path); st[side] = bool(value)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(st, f)
+    os.replace(tmp, path)
+    return st
+
+def toggle_collapsed(side, path=None):
+    return set_collapsed(side, not collapsed(path)[side], path)
+
+def toggle_rect(w, h, side, col=None):
+    """(x, y, w, h) of the tap target that collapses (or, on the strip, expands) one column."""
+    k = h / 720.0
+    col = col if col is not None else collapsed()
+    if col[side]:
+        sw = STRIP_W * k
+        return (0 if side == "left" else w - sw, 90 * k, sw, h - 90 * k)      # the whole strip below the corner button
+    x = (MARGIN + COL_W + 4) * k if side == "left" else w - (MARGIN + COL_W + 4 + TAB) * k
+    return (x, 30 * k, TAB * k, TAB * k)                                    # a tab just inside the column's inner edge
+
+def hit_toggle(w, h, x, y, col=None):
+    """'left' / 'right' if (x, y) is on a collapse/expand target, else None."""
+    for side in SIDES:
+        rx, ry, rw, rh = toggle_rect(w, h, side, col)
+        if rx <= x <= rx + rw and ry <= y <= ry + rh:
+            return side
+    return None
+
+def render_panels(cr, w, h, snap, now=None, col=None):
+    """Both columns, with a collapsed one replaced by its edge strip, plus the collapse tabs."""
+    col = col if col is not None else collapsed()
+    k = h / 720.0
+    _render_columns(cr, w, h, snap, now)
+    for side in SIDES:
+        x0 = 0 if side == "left" else w - (MARGIN + COL_W + 2) * k
+        if col[side]:
+            cr.save(); cr.set_operator(cairo.OPERATOR_CLEAR)                 # wipe the column
+            cr.rectangle(x0, 0, (MARGIN + COL_W + 2) * k, h); cr.fill(); cr.restore()
+            sx, sy, sw, sh = toggle_rect(w, h, side, col)
+            cr.save(); cr.set_source_rgba(*BG, 0.82); cr.rectangle(sx, sy, sw, sh); cr.fill()
+            cr.set_source_rgba(*(CYAN if side == "right" else MAG), 0.75); cr.set_line_width(1.2)
+            ex = sx + (sw - 1 if side == "left" else 1)
+            cr.move_to(ex, sy); cr.line_to(ex, sy + sh); cr.stroke()
+            cy = sy + sh / 2
+            font(cr, 34 * k, True); cr.set_source_rgba(*TXT, 0.9)
+            g = "\u203a" if side == "left" else "\u2039"                      # chevron pointing to where it opens
+            cr.move_to(sx + sw / 2 - cr.text_extents(g).x_advance / 2, cy); cr.show_text(g)
+            cr.restore()
+        else:
+            tx, ty, tw, th = toggle_rect(w, h, side, col)
+            cr.save(); cr.set_source_rgba(*BG, 0.6); cr.rectangle(tx + 6 * k, ty + 6 * k, tw - 12 * k, th - 12 * k); cr.fill()
+            cr.set_source_rgba(*DIM, 0.8); cr.set_line_width(1); cr.rectangle(tx + 6 * k, ty + 6 * k, tw - 12 * k, th - 12 * k); cr.stroke()
+            font(cr, 30 * k, True); cr.set_source_rgba(*TXT, 0.85)
+            g = "\u2039" if side == "left" else "\u203a"                      # chevron toward the edge it folds into
+            cr.move_to(tx + tw / 2 - cr.text_extents(g).x_advance / 2, ty + th / 2 + 7 * k); cr.show_text(g)
+            cr.restore()
+
+def _render_columns(cr, w, h, snap, now=None):
     """Draw the left and right columns on a transparent surface of size w x h."""
     now = now or time.time()
     k = h / 720.0
@@ -306,23 +385,32 @@ def bar_width(w, h):
     k = h / 720.0
     return int(max(360, w - 2 * (MARGIN + COL_W + 18) * k))
 
-def text_column(w, h, panels=True):
+def text_column(w, h, panels=True, col=None):
     """(x, width) of the centre column for the chat bar and Cypher's replies (build 14): between the two
     columns with a gap, at most 720 px and 80% of the window. The avatar app pins its text bar to exactly
     this box (side margins, not a minimum width), so long input and replies wrap instead of running under a panel."""
     bw = min(720, int(w * .8))
-    if panels:
-        k = h / 720.0
-        bw = min(bw, int(w - 2 * (MARGIN + COL_W + 18) * k))
-    bw = max(160, bw)
-    return (w - bw) // 2, bw
+    if not panels:
+        bw = max(160, bw); return (w - bw) // 2, bw
+    k = h / 720.0
+    col = col if col is not None else collapsed()
+    edge = {s: ((STRIP_W + 16) if col[s] else (MARGIN + COL_W + 18)) * k for s in SIDES}
+    if not any(col.values()):
+        bw = max(160, min(bw, int(w - 2 * edge["left"])))
+        return (w - bw) // 2, bw
+    # build 14b: a collapsed column gives its room to the text (wider than 720, still wrapping)
+    x0, x1 = edge["left"], w - edge["right"]
+    bw = max(160, min(int(x1 - x0), int(w * .9)))
+    return int(x0 + (x1 - x0 - bw) / 2), bw
 
-def journal_rect(w, h):
+def journal_rect(w, h):  # (only meaningful while the right column is open)
     """(x, y, width, height) of the JOURNAL panel in window pixels (build 14): a tap there opens the viewer."""
     k = h / 720.0
     return (w - (MARGIN + COL_W) * k, 124 * k, COL_W * k, 226 * k)
 
-def in_journal(w, h, x, y):
+def in_journal(w, h, x, y, col=None):
+    if (col if col is not None else collapsed())["right"]:
+        return False
     jx, jy, jw, jh = journal_rect(w, h)
     return jx <= x <= jx + jw and jy <= y <= jy + jh
 
@@ -331,7 +419,8 @@ AVATAR_H = .55   # avatar.py's default body height (fraction of the window heigh
 def avatar_h(w, h):
     """Body height for the avatar so it sits between the two columns instead of under them."""
     k = h / 720.0
-    free = w - 2 * (MARGIN + COL_W + 16) * k
+    col = collapsed()
+    free = w - sum(((STRIP_W + 14) if col[s] else (MARGIN + COL_W + 16)) * k for s in SIDES)
     return max(.3, min(AVATAR_H, free / (1.9 * h)))
 
 class Cache:
@@ -340,7 +429,7 @@ class Cache:
         self.surf, self.key = None, None
     def surface(self, w, h, now=None, key=None):
         now = now or time.time()
-        key = (w, h) + tuple(key if key is not None else (snapshot_mtime(), int(now // 60)))
+        key = (w, h) + tuple(key if key is not None else (snapshot_mtime(), int(now // 60), tuple(sorted(collapsed().items()))))
         if self.surf is None or key != self.key:
             self.surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, max(1, w), max(1, h))
             cr = cairo.Context(self.surf)

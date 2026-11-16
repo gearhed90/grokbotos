@@ -388,6 +388,12 @@ class Nova:
             self.jstat.set_text(("%d entries" % self.jn) + (" \u00b7 that's all" if self.jend else " \u00b7 scroll for older")
                                 if self.jn else "nothing journaled yet")
         self.bg(lambda: CJ.entries(limit=self.JOURNAL_PAGE, offset=off), done)
+    def toggle_panel(self, side):
+        """Build 14b: fold a HUD column into its edge strip, or open it again (remembered in panels-collapsed.json)."""
+        if self.hud is None or CP.hidden(): return
+        try: CP.toggle_collapsed(side)
+        except (OSError, ValueError) as ex: print("panels:", type(ex).__name__, file=sys.stderr, flush=True); return
+        self._watch_hud()                                  # new key: redraw the HUD, re-place the bar and avatar
     def on_hud_tap(self, w, e):
         if self.hud is None or CP.hidden() or self.picker.get_visible() or self.jv.get_visible(): return False
         if not (self.hud_key and not self.hud_key[0]): return False
@@ -395,6 +401,9 @@ class Nova:
         if gw is None: return False
         ox, oy = gw.get_origin()[1:]
         x, y = e.x_root - ox, e.y_root - oy
+        side = CP.hit_toggle(w.get_allocated_width(), w.get_allocated_height(), x, y)
+        if side:
+            self.toggle_panel(side); return True
         if CP.in_journal(w.get_allocated_width(), w.get_allocated_height(), x, y):
             self.open_journal(); return True
         return False
@@ -430,9 +439,9 @@ class Nova:
         return True
     def _watch_hud(self):    # Super+C (panels-hidden) and new snapshots from cypherd
         if self.hud is None: return
-        key = (CP.hidden(), CP.snapshot_mtime(), int(time.time() // 60))
+        key = (CP.hidden(), CP.snapshot_mtime(), int(time.time() // 60), tuple(sorted(CP.collapsed().items())))
         if key != self.hud_key:
-            shown_changed = self.hud_key is None or key[0] != self.hud_key[0]
+            shown_changed = self.hud_key is None or key[0] != self.hud_key[0] or key[3:] != self.hud_key[3:]
             self.hud_key = key
             self.hud.set_visible(not key[0]); self.hud.queue_draw()
             if shown_changed: self.on_size(self.win, self.win.get_allocation())
@@ -593,6 +602,8 @@ class Nova:
         if self.picker.get_visible():
             if k in ("Escape", "Return", "KP_Enter"): self.close_picker()
             return True
+        if k in ("bracketleft", "bracketright") and e.state & Gdk.ModifierType.SUPER_MASK:   # build 14b: fold a column
+            self.toggle_panel("left" if k == "bracketleft" else "right"); return True
         if k in ("j", "J") and e.state & Gdk.ModifierType.SUPER_MASK:          # build 14: Super+J toggles the journal
             (self.close_journal if self.jv.get_visible() else self.open_journal)(); return True
         if self.jv.get_visible():

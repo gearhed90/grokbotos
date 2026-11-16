@@ -430,6 +430,8 @@ def fake_wiki(url, data=None, headers=None, timeout=10, hosts=None, cap=65536):
     key = up.unquote(url.split("/page/summary/")[1].split("?")[0])
     return (200, J(SUMS[key]).encode()) if key in SUMS else (404, b"")
 C._http, C._get = fake_wiki, fake_get
+# build 14b: page reads go through the pinned fetcher; serve them from the same fake
+C._pinned_fetch = lambda scheme, host, ip, port, target, headers, timeout, cap: fake_get("%s://%s%s" % (scheme, host, target), timeout, cap, headers)
 import socket as _so
 real_gai = _so.getaddrinfo
 def fake_gai(host, *a, **k):

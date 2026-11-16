@@ -192,25 +192,30 @@ def installed_apps():
         pass
     apps["firefox"] = "firefox"
     apps["onshape_pad"] = "nova-cadpad"   # Onshape button pad (cadpad.py)
+    apps["terminal"] = "grokbot-term"     # build 14b: a foot terminal on its own workspace (grokbot-term; Super+Enter)
     apps.pop("nova-shell", None)
     return apps
 
 CLOSABLE_EXTRA = {"web": "nova-web"}   # pages Nova opened with open_url
 
+APP_ALIASES = {"foot": "terminal", "term": "terminal", "shell": "terminal", "console": "terminal"}
+
 def t_open_app(name):
-    apps = installed_apps(); n = str(name).strip().lower()
+    apps = installed_apps(); n = str(name).strip().lower(); n = APP_ALIASES.get(n, n)
     if n not in apps:
         return {"ok": False, "error": "app not allowed", "allowed": sorted(apps)}
     if n == "firefox":
         launch(["firefox", "--new-window"])
     elif n == "onshape_pad":
         launch([sys.executable, os.path.join(HERE, "cadpad.py"), "--fullscreen"])
+    elif n == "terminal":
+        launch(["/usr/local/bin/grokbot-term"])
     else:
         launch(["/usr/local/bin/grokbot-webapp", n])
     return {"ok": True, "opened": n}
 
 def close_target(name):
-    n = str(name).strip().lower()
+    n = str(name).strip().lower(); n = APP_ALIASES.get(n, n)
     app_id = {**installed_apps(), **CLOSABLE_EXTRA}.get(n)
     if not app_id or app_id == "nova-shell":
         return None, {"ok": False, "error": "app not allowed", "allowed": sorted({**installed_apps(), **CLOSABLE_EXTRA})}
@@ -560,6 +565,9 @@ def tool_schema():
           {"service": {"type": "string", "maxLength": 40}, "why": {"type": "string", "maxLength": 160}}, ["service", "why"]),
         f("look_up", "Free search for a subject: SearXNG on Alpha, then Wikipedia (queued; what he found reaches you in a minute or two).",
           {"topic": {"type": "string", "maxLength": 60}}, ["topic"]),
+        f("browse", "Free, read-only web browsing on one subject: searches, then reads and follows links on up to 5 pages; summaries go to your journal "
+          "(queued; what you read reaches you in a minute or two). Reading only: you cannot buy, order, log in, sign up or submit forms.",
+          {"topic": {"type": "string", "maxLength": 60}}, ["topic"]),
         f("web_search", "Paid, budgeted web search for broad or current topics, read-only (queued; a short summary reaches you in a minute or two).",
           {"query": {"type": "string", "maxLength": 80}}, ["query"]),
         f("x_lookup", "Read a public X account's bio and latest posts by handle, read-only; you cannot post, follow or message "
@@ -570,7 +578,7 @@ def tool_schema():
     ]
 
 TOOL_RULES = ("You run on Zack's Grok Bot OS Raspberry Pi touchscreen. "
-          "Act on requests using your tools. The onshape_pad app is Zack's touch button pad for Onshape on his PC. For streamers on Twitch open https://www.twitch.tv/<channel> "
+          "Act on requests using your tools. The onshape_pad app is Zack's touch button pad for Onshape on his PC. The terminal app is a foot terminal on this deck (open_app terminal; Super+Enter also opens one): there IS a terminal. For streamers on Twitch open https://www.twitch.tv/<channel> "
           "(channel names are lowercase with no spaces, e.g. 'burnt peanut' -> burntpeanut). "
           "Some tools return pending: the user is shown Yes/No buttons; just restate the question briefly. "
           "Never ask for, repeat or accept a WiFi password: tell the user to enter it in Settings. "

@@ -158,6 +158,24 @@
     "x_posts": 5,
     "worst_usd_per_call": 0.05
   },
+  "browse": {
+    "_comment": "Build 14b: browse. Free, read-only web browsing: SearXNG on Alpha (lookup.searxng_url; Wikipedia search if it is down), then up to max_pages public pages and on-topic links from them in session_s seconds. GET only through a pinned IP (re-checked on every redirect); no cookies, logins, sessions, forms, POSTs, checkouts or accounts; LAN/Tailscale/.local hosts, credential URLs, cart/checkout/login/signup links and downloads skipped. A normal desktop browser User-Agent (Zack's call); a site that refuses (403/429/captcha) is never fought: the search snippet, then an Internet Archive copy, then the next result.",
+    "enabled": true,
+    "phase": 6,
+    "max_pages": 5,
+    "max_fetches": 10,
+    "session_s": 45,
+    "page_timeout_s": 8,
+    "page_max_bytes": 393216,
+    "page_chars": 260,
+    "links_per_page": 2,
+    "max_per_site": 2,
+    "search_results": 8,
+    "snippet_min": 80,
+    "found_page_chars": 150,
+    "max_found_chars": 800,
+    "fail_cooldown_s": 21600
+  },
   "pino": {
     "_comment": "Build 12: visit_pino. Pino's public, keyless API (pinos.world/api/v1/now and /feed, documented at pinos.world/developers). Read-only GETs, this host only, no redirects; credit 'Pino, from pinos.world'. Cypher cannot talk to Pino (that needs an account Zack approves).",
     "enabled": true,
@@ -208,6 +226,7 @@
     "message_zack": {"phase": 3, "max_chars": 200, "per_hour": 3, "per_day": null, "_comment": "never in quiet hours (weeknights). per_day null = no daily cap (Zack, Nov 15)."},
     "glance_screen": {"phase": 3, "per_hour": 6, "per_day": 30},
     "look_up": {"phase": 3, "max_chars": 60, "per_hour": 4, "per_day": 20},
+    "browse": {"phase": 6, "max_chars": 80, "per_hour": 2, "per_day": 12, "_comment": "build 14b: free read-only browsing, up to 5 pages a session"},
     "request_account": {"phase": 3, "max_service_chars": 40, "max_why_chars": 160, "per_day": 1, "per_week": 2, "_comment": "never in quiet hours. Service = the site's plain domain with a known TLD; accepted only when the Alpha brain or the hosted backup chose it (never the local 3B). Asks Zack only; Nova creates accounts after he approves. The ntfy ping does not count against message_zack's caps. Cypher must not share its email."},
     "check_grid": {"phase": 5, "per_hour": 2, "per_day": 30, "min_gap_s": 1800, "_comment": "read-only gridwatch report: Alpha, proxy, lease, camera feed, latest grokbotos commits. Build 13: on his own at most every 30 min unless the grid changed since he last looked; Zack asking in a conversation skips the wait"},
     "x_lookup": {"phase": 5, "per_hour": 4, "per_day": 20, "_comment": "build 12: read-only public X account (bio + latest posts) by handle; deck only; paid from the hosted budget"},

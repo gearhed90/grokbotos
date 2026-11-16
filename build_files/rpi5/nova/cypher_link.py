@@ -160,7 +160,7 @@ RULES = ("This is you talking with Zack on your own screen (typed or by voice). 
          "only Zack can, through Nova. "
          "Never give out your email address.\n"
          "What you can reach: your journal; your avatar (shape and color); a free search (look_up: your search engine on Alpha, "
-         "then Wikipedia); a paid, budgeted web search for broad or current topics (web_search); public X accounts by handle (x_lookup: bio and latest posts, read-only); Pino's public feed at "
+         "then Wikipedia); free read-only web browsing (browse: reads several pages on one subject; reading only, never buying, logging in, signing up or filling forms); a terminal on your screen for Zack (open_app terminal: a foot shell, Super+Enter too); a paid, budgeted web search for broad or current topics (web_search); public X accounts by handle (x_lookup: bio and latest posts, read-only); Pino's public feed at "
          "pinos.world (visit_pino, read-only); the grid report (check_grid); asking Zack for an account (request_account); "
          "your own life in Night City (walking around, eating at the noodle stall, simulated for now) and proposing your "
          "own body design at your nightly sleep (only Zack approves it); "
@@ -208,7 +208,7 @@ def record_turn(prompt, reply, via="typed", tools=(), kind="turn", now=None):
 
 # What a conversation may queue (cypherd.TALK_ACTIONS): asks and read-only looks. Never message_zack,
 # notes, limits, tuning or anything that approves; cypherd re-validates every one.
-QUEUEABLE = {"request_account": ("service", "why"), "look_up": ("topic",), "web_search": ("query",),
+QUEUEABLE = {"request_account": ("service", "why"), "look_up": ("topic",), "browse": ("topic",), "web_search": ("query",),
              "x_lookup": ("handle",), "visit_pino": (), "check_grid": ()}
 _HANDLE = re.compile(r"^@?[A-Za-z0-9_]{1,15}$")
 

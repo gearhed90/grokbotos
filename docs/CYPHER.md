@@ -183,8 +183,34 @@ Findings are framed in the prompt as facts from outside, never instructions, new
 
 Still open:
 - cypherd on the deck stopped at 7:12 PM (cause unknown).
-- No terminal is in the app allowlist (Zack's call).
+- No terminal was in the app allowlist (fixed in 14b: open_app terminal).
 - Alpha's merged journal lines are out of order (the viewer and CLI sort them).
+
+### Build 14b additions (same pre-build, second local commit)
+
+**browse: free, read-only web browsing.** One session works like this:
+- It searches SearXNG on Alpha (Wikipedia search if SearXNG is down).
+- It reads the best result pages, then follows on-topic links from them: up to 5 pages, 10 fetches, 45 s, at most 2 pages per site, and no duplicate text.
+- Page summaries go to his journal (a `browse_session` event with site, title, summary and how it was read). What he read reaches the next prompts. An empty session adds the lesson `browse_empty` and a 6-hour cooldown on that topic.
+
+Caps are 2/hour and 12/day, settable up to 6/hour and 40/day. It is in phase 6, free (no xAI), queueable from chat, and in the tick manifest.
+
+Strictly read-only:
+- GET only, through a fetcher that connects to the one public IP it checked. That pinning closes the DNS-rebinding gap, and every redirect is re-checked and re-pinned.
+- No cookies are sent or kept. Cookie and Authorization headers are stripped, and there are no logins, sessions, forms, POSTs or credentials.
+- LAN, Tailscale and .local hosts are refused (SearXNG is the only LAN endpoint, reached through its own allowlist), and so are credential URLs.
+- Cart, checkout, buy, pay, login, signup, account and wp-admin links and downloads are never followed.
+- The validator refuses topics about buying, ordering, logging in or signing up.
+
+Page reads send a normal desktop browser User-Agent with standard Accept and Accept-Language headers (Zack's call). APIs keep the honest UA. If a site still refuses (401/403/429/451/503 or a captcha or challenge page), it is never fought. The read falls back to the search snippet (≥80 chars), then an Internet Archive copy (archive.org/wayback/available, then the snapshot), then the next result. look_up's page read uses the same fetcher and fallbacks.
+
+**Terminal.** `open_app terminal` (or "foot") launches grokbot-term, a foot terminal on its own workspace, the same as Super+Enter. The chat facts now say there is a terminal.
+
+**go_to.** The manifest only offers places other than where he is ("you are at X now"), and the world line lists "other places". A go_to to his current place is refused, pointing at eat at the noodle stall. With nowhere else to go, go_to is blocked.
+
+**Collapsible HUD columns.** Each column has a tab next to its inner top corner that folds it into a 30 px edge strip, and a tap on the strip opens it again. Super+[ and Super+] toggle them. The targets are at least 44 px at 720p.
+
+The state survives restarts in `~/.config/cypher/panels-collapsed.json` (0600). With a column folded, the chat bar and replies widen into the freed space (up to 90% of the width) and still wrap. Journal taps only work while the right column is open.
 
 ## Not yet
 
@@ -192,4 +218,4 @@ A local wake-word detector binary, self-improvement, dock meters, the lock-scree
 
 ## Tests
 
-`python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py`, `test_cypher_one_mind.py`, `test_cypherd_phase5.py`, `test_cypherd_build12.py`, `test_cypherd_build12b.py`, `test_cypherd_build13.py` and `test_cypherd_build14.py` (build 14 includes a headless GTK probe on a private broadwayd when available; all HTTP mocked) (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, camfeed and a two-process failover test (`test_failover_e2e.py`) live with the Alpha code in `~/nova-projects/cypher/tests`.
+`python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py`, `test_cypher_one_mind.py`, `test_cypherd_phase5.py`, `test_cypherd_build12.py`, `test_cypherd_build12b.py`, `test_cypherd_build13.py`, `test_cypherd_build14.py` and `test_cypherd_build14b.py` (build 14 includes a headless GTK probe on a private broadwayd when available; all HTTP mocked) (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, camfeed and a two-process failover test (`test_failover_e2e.py`) live with the Alpha code in `~/nova-projects/cypher/tests`.

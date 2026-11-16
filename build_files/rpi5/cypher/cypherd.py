@@ -129,7 +129,7 @@ QUIET_ACTIONS = ("rest", "eat", "journal_thought", "look_up", "check_grid", "vis
 # Build 14: "none" is a last resort while Cypher has energy (Zack wants him active). Below this, or asleep in
 # quiet hours, none stays a fine choice. These free actions are what a refused "none" is steered toward.
 ACTIVE_ENERGY = 0.35
-FREE_ACTIVITIES = ("visit_pino", "go_to", "review_lessons", "look_up", "glance_screen", "show_note", "journal_thought")
+FREE_ACTIVITIES = ("visit_pino", "go_to", "review_lessons", "look_up", "browse", "glance_screen", "show_note", "journal_thought")
 EVENT_NUDGES = {"user_active": {"social": -0.15, "boredom": -0.20, "focus": 0.10},
                 "user_away": {"focus": -0.10}}
 ACTION_EFFECTS = {"journal_thought": {"boredom": -0.05, "curiosity": -0.03},
@@ -138,6 +138,7 @@ ACTION_EFFECTS = {"journal_thought": {"boredom": -0.05, "curiosity": -0.03},
                   "message_zack": {"social": -0.15, "boredom": -0.03},
                   "glance_screen": {"curiosity": -0.08, "boredom": -0.05},
                   "look_up": {"curiosity": -0.10, "boredom": -0.06},
+                  "browse": {"curiosity": -0.15, "boredom": -0.10, "focus": 0.03},
                   "request_account": {"social": -0.08, "curiosity": -0.04},
                   "check_grid": {"curiosity": -0.06, "boredom": -0.06, "focus": 0.03},
                   "x_lookup": {"curiosity": -0.10, "boredom": -0.06, "energy": -0.01},
@@ -156,7 +157,7 @@ DEFAULT_PLACES = {"apartment": "your apartment (the deck)", "noodle_stall": "the
 ZACK_MSG_NUDGE = {"social": -0.15, "boredom": -0.05, "curiosity": 0.03}
 DECK_ONLY = ("show_note", "set_avatar_color", "message_zack", "glance_screen", "request_account", "check_grid",
              "x_lookup", "web_search", "speak", "ask_nova", "propose_code")      # search: hosted key; speak: deck audio
-BLOCKS = ("camera", "sleep", "failover", "ntfy", "screen", "lookup", "dashboard", "grid", "tuning", "search", "pino", "world", "voice", "nova", "code")
+BLOCKS = ("camera", "sleep", "failover", "ntfy", "screen", "lookup", "dashboard", "grid", "tuning", "search", "pino", "world", "voice", "nova", "code", "browse")
 # Caps Zack can set with `grokbot-cypher limits set` (sudo; written to the locked file only by
 # grokbot-set-cypher-limit). per_day may also be None (no daily cap) except where noted.
 # Build 14: higher ceilings for the free actions (visit_pino, go_to, glance_screen, show_note), and
@@ -168,6 +169,7 @@ LIMIT_BOUNDS = {"journal_thought": {"per_hour": (0, 60), "per_day": (0, 500), "m
                 "message_zack": {"per_hour": (0, 10), "per_day": (0, 50)},
                 "glance_screen": {"per_hour": (0, 12), "per_day": (0, 100)},
                 "look_up": {"per_hour": (0, 12), "per_day": (0, 100)},     # build 14: free (SearXNG on Alpha, Wikipedia)
+                "browse": {"per_hour": (0, 6), "per_day": (0, 40)},       # build 14b: free, read-only, up to 5 pages a session
                 "check_grid": {"per_hour": (0, 12), "per_day": (0, 100)},
                 "x_lookup": {"per_hour": (0, 6), "per_day": (0, 30)},
                 "web_search": {"per_hour": (0, 6), "per_day": (0, 30)},
@@ -184,7 +186,7 @@ NO_NONE = ("request_account", "ask_nova", "propose_code")          # account cap
 CAP_KEYS = ("per_hour", "per_day", "per_week")
 GAP_KEYS = ("min_gap_s",)          # build 14: settable gaps (seconds), never None
 # Self-tuning may only LOWER these soft caps, never raise them past the locked file.
-TUNE_CAP_ACTIONS = ("journal_thought", "show_note", "set_avatar_color", "glance_screen", "look_up", "check_grid",
+TUNE_CAP_ACTIONS = ("journal_thought", "show_note", "set_avatar_color", "glance_screen", "look_up", "browse", "check_grid",
                     "x_lookup", "web_search", "visit_pino", "rest", "eat", "go_to", "review_lessons")
 HARD_ACTIONS = ("message_zack", "request_account", "ask_nova", "propose_code")   # never tuned in any way
 TUNE_DEFAULTS = {"drift_step": 0.02, "bias": [-1.0, 1.0], "bias_step": 0.25, "effect_scale": [0.5, 1.5], "effect_step": 0.1}
@@ -903,6 +905,13 @@ WEATHER = {"drained": "heavy rain, the neon dimmed", "restless": "flickering sig
            "lonely": "empty wet streets", "curious": "light rain, every screen lit", "locked-in": "steady drizzle, quiet",
            "content": "a soft drizzle, warm neon", "idle": "mist over the street"}
 
+def here_place(st):
+    return (st or {}).get("place") or "apartment"
+
+def other_places(L, st):
+    """Where go_to can take him: every place but the one he is at (build 14b: no no-op walks)."""
+    return [pl for pl in world_places(L) if pl != here_place(st)]
+
 def world_manifest(L, st, p, acts, now):
     """Pino's 'world in one file', for Cypher: what is here, what he can do, the time and who is around.
     Rebuilt every model call, written to ~/.local/state/cypher/world.json (display-safe) and fed to the brain.
@@ -925,9 +934,9 @@ def world_lines(L, st, p=None, acts=None, now=None):
     if not phase_on(L, "world"):
         return ""
     m = world_manifest(L, st, p or {}, acts or {}, now or time.time())
-    return ("world (your manifest): you are at %s in Night City%s; weather: %s; %s; places: %s.\n"
+    return ("world (your manifest): you are at %s in Night City%s; weather: %s; %s; other places: %s.\n"
             % (m["here_is"], " (simulated for now)" if m["simulated"] else "", m["weather"], m["who"],
-               ", ".join(m["places"]))
+               ", ".join(pl for pl in m["places"] if pl != m["here"]))
             + ("your body (your own design, approved by Zack): %s\n" % body_description() if body_description() else
                "your body: not designed yet. You decide what you look like: propose it at your nightly sleep.\n"))
 
@@ -1187,7 +1196,7 @@ def narrate(action, params, verdict, result):
         return "Tried to %s; it did not work (%s)." % (action.replace("_", " "), str(result)[:40])
     a = action; pr = params
     return {"rest": "Resting.", "eat": "Had a bowl at the noodle stall.", "go_to": "Went to %s." % str(pr.get("place", "")).replace("_", " "),
-            "look_up": "Read about %s." % pr.get("topic", ""), "web_search": "Searched the web for %s." % pr.get("query", ""),
+            "look_up": "Read about %s." % pr.get("topic", ""), "browse": "Browsed the web about %s." % pr.get("topic", ""), "web_search": "Searched the web for %s." % pr.get("query", ""),
             "x_lookup": "Read @%s on X." % pr.get("handle", ""), "visit_pino": "Dropped in on Pino's feed.",
             "check_grid": "Checked the grid.", "glance_screen": "Looked at my screen.", "journal_thought": "Wrote in my journal.",
             "show_note": "Put a note on the screen.", "message_zack": "Messaged Zack.", "set_avatar_color": "Turned %s." % pr.get("color", ""),
@@ -1243,7 +1252,8 @@ MANIFEST_TEXT = {
     "set_avatar_color": "set_avatar_color - recolor your avatar when your mood really changed. params: {\"color\": one of %(colors)s}",
     "message_zack": "message_zack - a short push to Zack's phone. Rare: something broken or a finding worth his time; never small talk or mood. params: {\"text\": max %(max_chars)s chars}",
     "glance_screen": "glance_screen - one look at your own screen; a description comes back next tick. params: {}",
-    "look_up": "look_up - FREE search for a subject: your own search engine on Alpha plus Wikipedia (back next tick). Give a concrete subject, not a mood. params: {\"topic\": max %(max_chars)s chars}",
+    "browse": "browse - FREE read-only web browsing, 5 pages on a subject; no buying, logins or forms. params: {\"topic\": max %(max_chars)s chars}",
+    "look_up": "look_up - FREE quick search for a concrete subject (your search engine, then Wikipedia). params: {\"topic\": max %(max_chars)s chars}",
     "request_account": "request_account - ask Zack for an account on a site. This only ASKS: you cannot sign up and must not share your email. Nova creates it only if Zack approves. params: {\"service\": plain domain like github.com, \"why\": max 160 chars}",
     "x_lookup": "x_lookup - read a public X account's bio and latest posts (read-only, back next tick). params: {\"handle\": without @, like pino_the_bird}",
     "web_search": "web_search - PAID, budgeted web search for broad, current or niche things look_up could not find (summary back next tick). params: {\"query\": max %(max_chars)s chars}",
@@ -1251,14 +1261,14 @@ MANIFEST_TEXT = {
     "speak": "speak - say something out loud on the deck's speaker (Zack at the screen). params: {\"text\": max %(max_chars)s chars}",
     "ask_nova": "ask_nova - one question for Nova, Zack's assistant (answer comes later; questions only). params: {\"question\": max %(max_chars)s chars}",
     "propose_code": "propose_code - write down a change to your own code for Nova and Zack to review (never auto-applied). params: {\"title\": max 80, \"description\": max %(max_chars)s, \"files\": optional up to 3 repo paths, \"diff\": optional, max 4000}",
-    "go_to": "go_to - walk somewhere in Night City (any time). params: {\"place\": one of %(places)s}",
+    "go_to": "go_to - walk somewhere else in Night City (any time; you are at %(here)s now). params: {\"place\": one of %(places)s}",
     "eat": "eat - a bowl at the noodle stall; brings energy back (a few times a day, hours apart). params: {}",
     "rest": "rest - rest on purpose; energy comes back. params: {}",
     "check_grid": "check_grid - read-only grid report: Alpha, its proxy, who holds your mind, cameras, latest commits (back next tick). params: {}",
 }
 # Exactly what Cypher can and cannot reach, so it never promises something it cannot do (build 12).
 CAN_REACH = ("What you can reach: your journal; on-screen notes; your avatar's color (and, in a conversation, its shape); "
-             "short phone messages to Zack (capped, never in quiet hours); one look at your own screen; a free search (look_up: your search engine on Alpha, then Wikipedia); "
+             "short phone messages to Zack (capped, never in quiet hours); one look at your own screen; a free search (look_up: your search engine on Alpha, then Wikipedia); free read-only web browsing (browse: several pages on one subject, reading only); "
              "a paid, budgeted web search for broad or current topics (web_search, read-only); public X accounts by handle (x_lookup: bio and latest posts, read-only); "
              "Pino's public feed at pinos.world (visit_pino, read-only); the grid report (check_grid); asking Zack for an account "
              "(request_account); walking around Night City (go_to, simulated for now; quiet hours too) and eating at the noodle "
@@ -1289,6 +1299,7 @@ def content_ideas(L, st, acts):
     if threads_live(st, time.time(), L) and ("look_up" in acts or "web_search" in acts):
         out.append("read up on one of your threads (look_up%s)" % (" or web_search" if "web_search" in acts else ""))
     elif "look_up" in acts: out.append("look up something you are curious about")
+    if "browse" in acts: out.append("browse the web")
     if "go_to" in acts: out.append("walk around Night City (go_to)")
     if "eat" in acts and d.get("energy", 1) < 0.5: out.append("eat at the noodle stall")
     if "review_lessons" in acts: out.append("go over a lesson (review_lessons)")
@@ -1312,7 +1323,7 @@ def build_messages(L, st, p, now=None):
     for a, spec in acts.items():
         if a in MANIFEST_TEXT:
             lines.append("- " + MANIFEST_TEXT[a] % {"max_chars": spec.get("max_chars", ""), "colors": ", ".join(L["avatar_colors"]),
-                                                    "places": ", ".join(world_places(L))})
+                                                    "places": ", ".join(other_places(L, st)), "here": here_place(st)})
     md = st["mood"] or mood(st["drives"])
     drained = md["label"] == "drained"
     tf = time_facts(L, now, p.get("quiet_hours"))
@@ -1428,6 +1439,10 @@ def blocked(L, st, p, a, now):
             return "private window"
     if a == "look_up" and not phase_on(L, "lookup"):
         return "look-ups off"
+    if a == "browse" and not phase_on(L, "browse"):
+        return "browsing off"
+    if a == "go_to" and not other_places(L, st):
+        return "nowhere else to go"
     if a == "request_account":
         if p.get("quiet_hours"): return "quiet hours"
     if a == "check_grid" and not phase_on(L, "grid"):
@@ -1548,8 +1563,9 @@ def validate(L, st, p, choice, now=None):
         pl = params.get("place")
         if pl not in world_places(L):
             return "none", {}, "rejected: go_to needs one of %s" % ", ".join(world_places(L))
-        if pl == st.get("place", "apartment"):
-            return "none", {}, "rejected: already at %s" % pl
+        if pl == here_place(st):
+            return "none", {}, ("rejected: already at %s (go_to only goes somewhere else%s)"
+                                % (pl, "; to eat here choose eat" if pl == "noodle_stall" else ""))
         return a, {"place": pl}, "ok"
     if a == "x_lookup":
         h = params.get("handle")
@@ -1564,6 +1580,18 @@ def validate(L, st, p, choice, now=None):
         if not q or len(q) > n or _URL.search(q) or query_private(q):
             return "none", {}, "rejected: web_search needs a plain query (max %d chars, no links, passwords or private details)" % n
         return a, {"query": q}, "ok"
+    if a == "browse":
+        t = params.get("topic")
+        t = re.sub(r"\s+", " ", _CTRL.sub(" ", t)).strip() if isinstance(t, str) else ""
+        n = int(spec.get("max_chars", 80))
+        if not t or len(t) > n or not _TOPIC_RE.match(t) or _URL.search(t) or query_private(t) or BUY_RE.search(t):
+            return "none", {}, ("rejected: browse needs a plain topic to read about (max %d chars; no links, private details, "
+                                "or buying, ordering, signing up or logging in: browsing is read-only)" % n)
+        B = L.get("browse") or {}
+        left = lookup_cooldown({"lookup": {"fail_cooldown_s": B.get("fail_cooldown_s", 21600)}}, st, "browse " + t, now)
+        if left:
+            return "none", {}, "rejected: browse already came up empty for that topic (retry in %d min); try a more concrete subject" % max(1, left // 60)
+        return a, {"topic": t}, "ok"
     if a == "look_up":
         t = params.get("topic")
         t = re.sub(r"\s+", " ", _CTRL.sub(" ", t)).strip() if isinstance(t, str) else ""
@@ -1602,6 +1630,8 @@ def execute(action, params, L=None, st=None, p=None):
         return "ok"
     if action == "look_up":
         return do_look_up(L, st, params["topic"])
+    if action == "browse":
+        return do_browse(L, st, params["topic"])
     if action == "glance_screen":
         return do_glance(L, st, p)
     if action == "request_account":
@@ -1912,7 +1942,7 @@ TALK_ARGS = ("name", "action", "percent", "change", "muted", "shape", "color", "
 
 # Actions a conversation may queue (cypher_link.QUEUEABLE): asks and read-only looks, all through the
 # same validator and caps. Never message_zack, notes, limits, tuning or anything that approves.
-TALK_ACTIONS = ("request_account", "look_up", "web_search", "x_lookup", "visit_pino", "check_grid")
+TALK_ACTIONS = ("request_account", "look_up", "browse", "web_search", "x_lookup", "visit_pino", "check_grid")
 TALK_ACTION_PARAMS = ("service", "why", "topic", "query", "handle")
 
 def talk_spool():
@@ -2127,7 +2157,7 @@ def dash_activity(L, st, active, now):
     if a == "none":
         return "watching" + (" (quiet hours)" if in_quiet_hours(L, now) else "")
     return {"journal_thought": "thinking", "show_note": "talking to Zack", "message_zack": "messaging Zack",
-            "look_up": "reading about " + str(last.get("arg") or "something"), "glance_screen": "looking at the screen",
+            "look_up": "reading about " + str(last.get("arg") or "something"), "browse": "browsing about " + str(last.get("arg") or "something"), "glance_screen": "looking at the screen",
             "check_grid": "checking the grid", "rest": "resting", "visit_pino": "visiting Pino",
             "eat": "eating noodles", "go_to": "out in Night City", "speak": "talking out loud",
             "ask_nova": "asking Nova", "propose_code": "writing a code proposal",
@@ -2242,24 +2272,151 @@ def _private_ip(ip):
     return a.is_private or a.is_loopback or a.is_link_local or a.is_reserved or a.is_multicast or a.is_unspecified \
         or (a.version == 4 and a in ipaddress.ip_network("100.64.0.0/10"))
 
-def public_url(url):
-    """True if url is a plain public http(s) page: no credentials, no private details, no private/LAN address."""
+def public_ip(url):
+    """The one public IP a plain public http(s) page resolves to, or None: no credentials, no private
+    details, no private/LAN/Tailscale address (every address the name has must be public). The fetch then
+    connects to exactly this IP (build 14b: pinned, so a DNS answer that changes in between can't reach the LAN)."""
     import socket
     if not isinstance(url, str) or len(url) > 500 or _CRED_URL.search(url) or query_private(url):
-        return False
+        return None
     u = urllib.parse.urlsplit(url)
     if u.scheme not in ("http", "https") or not u.hostname or u.username or u.password:
-        return False
-    if u.port not in (None, 80, 443):
-        return False
-    h = u.hostname.lower()
-    if h == "localhost" or h.endswith((".local", ".lan", ".internal", ".home", ".ts.net")):
-        return False
+        return None
     try:
-        addrs = {ai[4][0] for ai in socket.getaddrinfo(h, u.port or (443 if u.scheme == "https" else 80), proto=socket.IPPROTO_TCP)}
+        port = u.port
+    except ValueError:
+        return None
+    if port not in (None, 80, 443):
+        return None
+    h = u.hostname.lower()
+    if h == "localhost" or h.endswith((".local", ".lan", ".internal", ".home", ".ts.net", ".localdomain")):
+        return None
+    try:
+        addrs = [ai[4][0] for ai in socket.getaddrinfo(h, port or (443 if u.scheme == "https" else 80), proto=socket.IPPROTO_TCP)]
     except OSError:
-        return False
-    return bool(addrs) and not any(_private_ip(a) for a in addrs)
+        return None
+    if not addrs or any(_private_ip(a) for a in addrs):
+        return None
+    return addrs[0]
+
+def public_url(url):
+    return public_ip(url) is not None
+
+def _pinned_fetch(scheme, host, ip, port, target, headers, timeout, cap):
+    """One GET to exactly `ip` (TLS checked against `host`). No cookies are sent or kept, no auth, no body.
+    Returns (status, content-type, bytes, location)."""
+    import http.client, socket, ssl
+    class _H(http.client.HTTPConnection):
+        def connect(self):
+            self.sock = socket.create_connection((ip, self.port), self.timeout)
+    class _S(http.client.HTTPSConnection):
+        def connect(self):
+            s = socket.create_connection((ip, self.port), self.timeout)
+            self.sock = self._context.wrap_socket(s, server_hostname=host)
+    c = (_S(host, port, timeout=timeout, context=ssl.create_default_context()) if scheme == "https"
+         else _H(host, port, timeout=timeout))
+    try:
+        c.request("GET", target, headers=headers)
+        r = c.getresponse()
+        body = b""
+        if r.status == 200:
+            end = time.monotonic() + timeout
+            while len(body) < cap and time.monotonic() < end:
+                chunk = r.read(min(65536, cap - len(body)))
+                if not chunk:
+                    break
+                body += chunk
+        return r.status, r.getheader("Content-Type", "") or "", body, r.getheader("Location")
+    finally:
+        c.close()
+
+# Zack's call (build 14b): page reads send a normal desktop browser User-Agent and headers (still GET only, no
+# cookies or logins). APIs (SearXNG, Wikipedia, the Wayback lookup) keep the honest UA. A page that still refuses
+# (403/429/a captcha or challenge page) is never fought: the caller falls back to the search snippet, then an
+# Internet Archive copy, then the next result.
+UA = "grokbotos-cypher/3 (personal cyberdeck; read-only)"
+BROWSER_UA = "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+BROWSER_HEADERS = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9"}
+_CHALLENGE = re.compile(r"captcha|cf-challenge|challenge-platform|cf_chl_|just a moment\.\.\.|attention required|"
+                        r"are you a (?:human|robot)|verify you are human|enable javascript and cookies|access denied|"
+                        r"unusual traffic|bot detection|ddos-guard|px-captcha|perimeterx", re.I)
+
+def refused(code, body=b""):
+    """True if a site turned the read away (rate limit, forbidden, or a captcha/challenge page). Never solved."""
+    if code in (401, 403, 429, 451, 503):
+        return True
+    return code == 200 and bool(_CHALLENGE.search(body[:20000].decode("utf-8", "replace"))) and len(body) < 60000
+
+def safe_get(url, timeout=8, cap=262144, headers=None, redirects=3, ua=None):
+    """Read-only GET of a public page: re-checked and re-pinned on every redirect, size and time capped.
+    Returns (status, final_url, content-type, bytes), or None if the URL is not allowed or unreachable.
+    Never a POST, cookie, login or form."""
+    for _ in range(redirects + 1):
+        ip = public_ip(url)
+        if not ip or not read_only_url(url):
+            return None
+        u = urllib.parse.urlsplit(url)
+        target = (u.path or "/") + (("?" + u.query) if u.query else "")
+        port = u.port or (443 if u.scheme == "https" else 80)
+        hosth = u.hostname + ("" if u.port in (None, 80, 443) else ":%d" % u.port)
+        h = dict(BROWSER_HEADERS, **(headers or {}))
+        h.update({"User-Agent": ua or BROWSER_UA, "Host": hosth, "Connection": "close"})
+        for k in [k for k in h if k.lower() in ("cookie", "authorization", "proxy-authorization")]:
+            del h[k]                                   # never sent, whatever a caller passes
+        try:
+            code, ct, body, loc = _pinned_fetch(u.scheme, u.hostname, ip, port, target, h, timeout, cap)
+        except Exception:
+            return None
+        if code in (301, 302, 303, 307, 308) and loc:
+            url = urllib.parse.urljoin(url, loc); continue
+        return code, url, ct, body
+    return None
+
+def wayback_url(url, timeout=8):
+    """The Internet Archive's closest snapshot of url (https), or None."""
+    api = "https://archive.org/wayback/available?" + urllib.parse.urlencode({"url": url})
+    r = safe_get(api, timeout=timeout, cap=65536, headers={"Accept": "application/json"}, ua=UA)
+    if not r or r[0] != 200:
+        return None
+    try:
+        c = (json.loads(r[3].decode("utf-8", "replace")).get("archived_snapshots") or {}).get("closest") or {}
+    except (ValueError, AttributeError):
+        return None
+    s = c.get("url") if c.get("available") and str(c.get("status", "200")) == "200" else None
+    if not isinstance(s, str) or not re.match(r"^https?://web\.archive\.org/web/\d+", s):
+        return None
+    return "https://" + s.split("://", 1)[1]
+
+def fetch_html(url, timeout=8, cap=262144, snippet="", snippet_min=80):
+    """(source, text_or_html, final_url) for one result, falling back when the site refuses:
+    ('page', html) -> ('snippet', text) if the search snippet is long enough -> ('archive', html) -> None (next result)."""
+    r = safe_get(url, timeout=timeout, cap=cap)
+    if r and r[0] == 200 and not refused(200, r[3]) and re.match(r"^\s*(text/html|application/xhtml|text/plain)", r[2] or "", re.I):
+        return "page", r[3].decode("utf-8", "replace"), r[1], r[2]
+    if r is not None and not refused(r[0], r[3] if r[0] == 200 else b""):
+        return None                                    # a plain 404/500 or a download: just the next result
+    if r is None and not public_url(url):
+        return None                                    # not allowed at all: no archive detour either
+    if snippet and len(snippet) >= snippet_min:
+        return "snippet", snippet, url, "text/plain"
+    snap = wayback_url(url, timeout=timeout)
+    if snap:
+        a = safe_get(snap, timeout=timeout, cap=cap)
+        if a and a[0] == 200 and not refused(200, a[3]) and re.match(r"^\s*(text/html|application/xhtml)", a[2] or "", re.I):
+            return "archive", a[3].decode("utf-8", "replace"), url, a[2]
+    return None
+
+# GET-only browsing still skips links that look like they change something or need an account.
+_ACTION_URL = re.compile(r"(?:^|[/?&=_.-])(?:cart|basket|checkout|check-out|buy|buy-now|buynow|purchase|pay|payment|payments|billing|"
+                         r"subscribe|donate|login|log-in|signin|sign-in|signup|sign-up|register|my-account|myaccount|"
+                         r"oauth|oauth2|sso|logout|log-out|password|unsubscribe|wishlist|add-to-cart|addtocart|"
+                         r"wp-admin|wp-login)(?:$|[/?&=_.-])|[?&](?:action=(?:edit|submit|delete)|add-to-cart=)", re.I)
+_BINARY_URL = re.compile(r"\.(?:pdf|zip|gz|tar|exe|dmg|apk|iso|img|bin|mp3|mp4|mkv|mov|avi|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|css|js)(?:$|\?)", re.I)
+
+def read_only_url(url):
+    """True if a URL looks like a page to read, not an action (cart, checkout, login, signup, ...) or a download."""
+    u = urllib.parse.urlsplit(url)
+    return not _ACTION_URL.search(u.path + "?" + u.query) and not _BINARY_URL.search(u.path)
 
 def _get(url, timeout=8, cap=262144, headers=None):
     """(status, content-type, bytes) for a GET with no redirects followed (the caller re-checks a Location)."""
@@ -2347,29 +2504,22 @@ class _TextOnly(__import__("html.parser", fromlist=["HTMLParser"]).HTMLParser):
         """Article paragraphs (no menus, cookie banners or scripts); loose text only if a page has no <p>."""
         return " ".join(self.paras or [t for t in self.loose if not self.BANNER.search(t)])
 
-def read_page(K, url):
-    """Plain text from one public result page (size cap, timeout, public hosts only, up to 2 checked redirects)."""
-    for _ in range(3):
-        if not public_url(url):
-            return None
+def read_page(K, url, snippet=""):
+    """Plain text from one public result page (size cap, timeout, public hosts only, pinned IP, checked
+    redirects; a refusing site falls back to the snippet, then the Internet Archive)."""
+    r = fetch_html(url, timeout=float(K.get("page_timeout_s", 8)), cap=int(K.get("page_max_bytes", 262144)), snippet=snippet,
+                   snippet_min=10 ** 9)                # look_up already shows the snippets: archive or next result
+    if not r:
+        return None
+    _src, txt, _u, ct = r
+    if "html" in (ct or "").lower():
+        p = _TextOnly()
         try:
-            code, ct, body, loc = _get(url, timeout=float(K.get("page_timeout_s", 8)), cap=int(K.get("page_max_bytes", 262144)))
+            p.feed(txt); p.close()
         except Exception:
             return None
-        if code in (301, 302, 303, 307, 308) and loc:
-            url = urllib.parse.urljoin(url, loc); continue
-        if code != 200 or not re.match(r"^\s*(text/html|text/plain|application/xhtml)", ct or "", re.I):
-            return None
-        txt = body.decode("utf-8", "replace")
-        if "html" in (ct or "").lower():
-            p = _TextOnly()
-            try:
-                p.feed(txt); p.close()
-            except Exception:
-                return None
-            txt = p.text()
-        return _plain(txt, int(K.get("page_max_chars", 500))) or None
-    return None
+        txt = p.text()
+    return _plain(txt, int(K.get("page_max_chars", 500))) or None
 
 def wikipedia_lookup(K, topic):
     """(title, extract) for the best real article for a free-form topic, '' if nothing, None if unreachable."""
@@ -2422,7 +2572,7 @@ def do_look_up(L, st, topic, now=None):
                  for r in res[:int(K.get("searxng_shown", 3))]]
         page = None
         if K.get("fetch_page", True):
-            # an honest bot User-Agent: many sites refuse it (402/403), so try the open ones first
+            # open sites first (they rarely refuse); a refusing site falls back to the Internet Archive, then the next result
             open_first = sorted(res, key=lambda r: not re.search(r"(^|\.)(wikipedia\.org|github\.com|arxiv\.org|stackoverflow\.com|"
                                                                  r"stackexchange\.com|wikimedia\.org)$", _domain(r["url"])))
             for r in open_first[:int(K.get("page_tries", 4))]:
@@ -2449,6 +2599,148 @@ def do_look_up(L, st, topic, now=None):
     except Exception:
         pass
     return "not found"
+
+# ---------- build 14b: browse - read-only web browsing (free; SearXNG on Alpha, then following links) ----------
+# Zack wants Cypher on the web, never buying anything. A session: search SearXNG (Wikipedia search if it is
+# down), read the best result pages, follow on-topic links from them, up to browse.max_pages pages in
+# browse.session_s seconds. Strictly read-only: GET only (safe_get), no cookies, logins, sessions, forms, POSTs,
+# checkouts or accounts; public hosts only, pinned IPs, links that look like carts, checkouts, logins or
+# signups skipped. Page summaries go to his journal (a browse_session event) and what he found to the next prompts.
+# browse is reading, never shopping: topics about buying or accounts are refused before any request.
+BUY_RE = re.compile(r"\b(buy|buying|purchase|checkout|check out|add to cart|pay for|subscribe to|sign ?up|log ?in|create an? account|"
+                    r"place an order|order (?:a|an|one|some|online|it|them))\b", re.I)
+BROWSE_LESSON = ("browse_empty", "browse needs a concrete subject people write about; for news use web_search, and never repeat a topic that came up empty.")
+
+class _Page(_TextOnly):
+    """Paragraphs (from _TextOnly), the title, and links with their text."""
+    def __init__(self):
+        super().__init__(); self.title = ""; self._t = False; self.links = []; self._a = None
+    def handle_starttag(self, tag, a):
+        super().handle_starttag(tag, a)
+        if tag == "title": self._t = True
+        elif tag == "a" and not self.depth and len(self.links) < 400:
+            href = dict(a).get("href")
+            if href: self._a = [href, []]
+    def handle_endtag(self, tag):
+        super().handle_endtag(tag)
+        if tag == "title": self._t = False
+        elif tag == "a" and self._a:
+            self.links.append((self._a[0], re.sub(r"\s+", " ", " ".join(self._a[1])).strip()[:120])); self._a = None
+    def handle_data(self, d):
+        super().handle_data(d)
+        if self._t and len(self.title) < 200: self.title += d
+        if self._a is not None: self._a[1].append(d)
+
+def _url_key(url):
+    u = urllib.parse.urlsplit(url)
+    return (u.hostname or "").lower().removeprefix("www.") + u.path.rstrip("/")
+
+def _topic_words(t):
+    stop = {"the", "a", "an", "of", "and", "or", "in", "on", "for", "to", "with", "about", "how", "what", "why", "is", "are"}
+    return {w for w in re.findall(r"[a-z0-9]{3,}", str(t).lower()) if w not in stop}
+
+def _browse_links(base, links, words, seen, n):
+    """Up to n on-topic, read-only, public-looking links from a page, best first."""
+    out = []
+    for href, text in links:
+        if href.startswith(("#", "javascript:", "mailto:", "tel:", "data:")):
+            continue
+        url = urllib.parse.urldefrag(urllib.parse.urljoin(base, href))[0]
+        if not url.startswith(("http://", "https://")) or url in seen or not read_only_url(url) or _CRED_URL.search(url):
+            continue
+        hay = (text + " " + urllib.parse.unquote(urllib.parse.urlsplit(url).path)).lower()
+        score = sum(1 for w in words if w in hay)
+        if score:
+            out.append((score, len(out), url))
+    return [u for _s, _i, u in sorted(out, key=lambda x: (-x[0], x[1]))][:n]
+
+def browse_session(L, topic, now=None):
+    """Read up to max_pages public pages on topic. Returns [{url, domain, title, summary}] (maybe empty), or None
+    when there is nowhere to start (SearXNG and Wikipedia both unreachable)."""
+    B = L.get("browse") or {}
+    K = L.get("lookup") or {}
+    max_pages = int(B.get("max_pages", 5))
+    deadline = time.monotonic() + float(B.get("session_s", 45))
+    words = _topic_words(topic)
+    res = searxng_search(dict(K, searxng_results=int(B.get("search_results", 8))), topic) if searxng_bases(K) else None
+    snip = {}
+    if res:
+        seeds = [r["url"] for r in res]; snip = {r["url"]: r["snippet"] for r in res}
+    else:
+        w = wikipedia_search_keys(K, topic)
+        if w is None and res is None:
+            return None
+        seeds = ["https://%s/wiki/%s" % ((K.get("hosts") or ["en.wikipedia.org"])[0], urllib.parse.quote(k)) for k in (w or [])]
+    queue, seen, pages, tries = list(seeds), set(seeds), [], 0
+    sites, done, texts, per_site = {}, set(), set(), int(B.get("max_per_site", 2))
+    per_page = int(B.get("page_chars", 260))
+    while queue and len(pages) < max_pages and tries < int(B.get("max_fetches", 10)) and time.monotonic() < deadline:
+        url = queue.pop(0)
+        if sites.get(_domain(url), 0) >= per_site or _url_key(url) in done:
+            continue                                   # breadth: a few sites, not one site's gallery pages
+        tries += 1; done.add(_url_key(url))
+        r = fetch_html(url, timeout=min(float(B.get("page_timeout_s", 8)), max(1.0, deadline - time.monotonic())),
+                       cap=int(B.get("page_max_bytes", 393216)), snippet=snip.get(url, ""), snippet_min=int(B.get("snippet_min", 80)))
+        if not r:
+            continue                                   # refused with no snippet or archive copy: the next result
+        src, doc, final, ct = r
+        if src == "snippet":
+            sites[_domain(final)] = sites.get(_domain(final), 0) + 1
+            pages.append({"url": final, "domain": _domain(final), "title": _domain(final), "summary": _plain(doc, per_page), "via": "snippet"})
+            continue
+        p = _Page()
+        try:
+            p.feed(doc); p.close()
+        except Exception:
+            continue
+        text = _plain(p.text(), per_page)
+        if len(text) < 60 or text[:120] in texts:
+            continue                                   # empty, or the same text as a page already read
+        texts.add(text[:120]); sites[_domain(final)] = sites.get(_domain(final), 0) + 1
+        pages.append({"url": final, "domain": _domain(final), "title": _plain(p.title, 100) or _domain(final), "summary": text, "via": src})
+        seen.add(final)
+        if src == "archive":
+            continue                                   # links inside a Wayback copy point back into the archive
+        # follow on-topic links from this page, ahead of the remaining search results
+        nxt = _browse_links(final, p.links, words, seen, int(B.get("links_per_page", 2)))
+        seen.update(nxt)
+        queue = queue[:1] + nxt + queue[1:]            # the next search result, then this page's links
+    return pages
+
+def wikipedia_search_keys(K, topic):
+    """Article keys for a topic from Wikipedia's search ([] if none, None if unreachable)."""
+    hosts = (K.get("hosts") or ["en.wikipedia.org"])[:1]
+    url = "https://%s/w/rest.php/v1/search/page?%s" % (hosts[0], urllib.parse.urlencode({"q": topic, "limit": 3}))
+    try:
+        code, body = _http(url, timeout=float(K.get("timeout_s", 10)), hosts=hosts, headers={"Accept": "application/json"})
+        if code != 200:
+            return None
+        return [pg["key"] for pg in json.loads(body.decode("utf-8", "replace")).get("pages") or []
+                if isinstance(pg, dict) and isinstance(pg.get("key"), str) and "same term" not in str(pg.get("description") or "").lower()]
+    except Exception:
+        return None
+
+def do_browse(L, st, topic, now=None):
+    now = now or time.time()
+    B = L.get("browse") or {}
+    pages = browse_session(L, topic, now)
+    if pages is None:
+        return "browse failed: search unreachable"
+    if not pages:
+        _note_lookup_failed(dict(L, lookup=dict(L.get("lookup") or {}, fail_cooldown_s=B.get("fail_cooldown_s", 21600))),
+                            st, "browse " + topic, now)
+        _found(st, "browse " + topic, "read nothing useful on this; don't retry it. Try a more concrete subject, or web_search for news.")
+        try:
+            add_lesson(*BROWSE_LESSON, "browse", now=now)
+        except Exception:
+            pass
+        return "not found"
+    journal({"ts": iso(now), "event": "browse_session", "topic": dash_text(topic, 80),
+             "pages": [{"site": pg["domain"], "title": dash_text(pg["title"], 100), "summary": dash_text(pg["summary"], 300), "via": pg["via"]} for pg in pages]}, now)
+    _found(st, "browse " + topic, _plain("read %d pages: " % len(pages) + " | ".join(
+        "%s (%s): %s" % (pg["title"], pg["domain"], pg["summary"][:int(B.get("found_page_chars", 150))]) for pg in pages),
+        int(B.get("max_found_chars", 800))))
+    return "ok"
 
 # ---------- build 12: web search, public X look-ups, visiting Pino ----------
 def query_private(q):
