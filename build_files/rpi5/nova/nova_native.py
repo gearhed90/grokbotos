@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Cypher's face for grokbotos (GTK3 + pycairo): the avatar, the text bar and voice,
+"""Cypher's face for grokbotos (GTK3 + pycairo): his apartment (build 16, apartment.py: the default screen; the
+round avatar when the `apartment` feature is off or --view avatar), the text bar and voice,
 and Cypher's HUD panels around the avatar (cypher_panels: mood, drives, brain,
 activity, journal, actions, camera line, phone replies, account requests; Super+C
 hides/shows them). Super+J opens the journal, Super+H the full conversation (build 15). Talking here is talking to Cypher (novad -> cypher_link).
@@ -42,6 +43,7 @@ window, .nova { background: #000; }
 #reply.q { color: #fff; font-weight: 600; background: rgba(0,0,0,.72); border-radius: 18px; padding: 8px 18px; }
 #echo { color: #fff; font-size: 18px; }
 #vnote { color: rgba(255,255,255,.55); font-size: 15px; }
+#aptcap { color: rgba(255,42,109,.85); font-size: 17px; font-family: monospace; letter-spacing: 2px; }
 #inbox { background: rgba(20,24,22,.85); border: 1px solid rgba(110,231,183,.18); border-radius: 28px; }
 #inbox:focus-within { border-color: rgba(110,231,183,.45); }
 textview#in, textview#in text { font-size: 20px; color: #fff; background: transparent; background-image: none; caret-color: #fff; }
@@ -132,6 +134,14 @@ def confirm_click(pid, yes, path=None, timeout=10):
     finally:
         s.close()
 
+def apartment_wanted(view):
+    """Build 16: the apartment is the default screen unless --view avatar, or cypherd's `apartment` feature is off
+    (dash.json "apartment": false). A snapshot without the key (older cypherd, or none yet) means on."""
+    if view in ("apartment", "avatar"): return view == "apartment"
+    if CP is None: return True
+    s = CP.load_snapshot()
+    return not (isinstance(s, dict) and s.get("apartment") is False)
+
 def column(W, H, panels):
     """(x, width) of the centre text column: cypher_panels.text_column when the HUD is up."""
     if CP is not None:
@@ -213,7 +223,19 @@ class Nova:
         w = self.win = Gtk.Window(title="Cypher"); w.get_style_context().add_class("nova")
         w.set_default_size(*a.size); w.connect("destroy", Gtk.main_quit)
         ov = Gtk.Overlay(); w.add(ov)
-        if a.renderer == "gl":
+        self.apt = None
+        if apartment_wanted(getattr(a, "view", "auto")):
+            try:
+                import apartment
+                self.apt = self.av = apartment.Apartment(style=self.style)
+            except Exception as ex:                 # the round avatar still works if the room cannot load
+                print("apartment unavailable:", type(ex).__name__, ex, file=sys.stderr, flush=True); self.apt = None
+                self.av = Avatar(style=self.style)
+        self.view = "apartment" if self.apt is not None else "avatar"
+        if a.renderer == "gl" and self.apt is not None:
+            from apartment_gl import AptGLView
+            self.da = AptGLView(self.apt); self.redraw = self.da.queue_render
+        elif a.renderer == "gl":
             from glview import GLView, GLAvatar
             self.av = GLAvatar(style=self.style); self.da = GLView(self.av); self.redraw = self.da.queue_render
             if a.blink is not None: self.av.forceBlink = a.blink
@@ -260,6 +282,8 @@ class Nova:
         vb.add(self.mute); vb.add(self.mic); row.add_overlay(vb)
         for x in (self.rsw, self.echo, self.cf, row): bar.add(x)
         ov.add_overlay(bar)
+        self.aptcap = Gtk.Label(name="aptcap", halign=Gtk.Align.CENTER, valign=Gtk.Align.START, margin_top=22, no_show_all=True)
+        ov.add_overlay(self.aptcap); ov.set_overlay_pass_through(self.aptcap, True)   # "Out in Night City" while he is out
         self.vnote = Gtk.Label(name="vnote", halign=Gtk.Align.CENTER, valign=Gtk.Align.END); self.fv = Fader(self.vnote, .6)
         ov.add_overlay(self.vnote); ov.set_overlay_pass_through(self.vnote, True)
         # look picker: a small button top-right opens a grid of shapes and a row of colors
@@ -446,6 +470,10 @@ class Nova:
         self._watch_hud()
         return True
     def _watch_hud(self):    # Super+C (panels-hidden) and new snapshots from cypherd
+        if getattr(self.a, "view", "auto") == "auto" and apartment_wanted("auto") != (self.view == "apartment"):
+            print("view: apartment feature changed; restarting the face as", "apartment" if self.view == "avatar" else "avatar",
+                  file=sys.stderr, flush=True)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
         if self.hud is None: return
         key = (CP.hidden(), CP.snapshot_mtime(), int(time.time() // 60), tuple(sorted(CP.collapsed().items())))
         if key != self.hud_key:
@@ -486,6 +514,10 @@ class Nova:
             dt = now - self.last; self.last = now
             self.next_due = max(self.next_due + self.av.frame_interval(), now - .01)
             self.av.tick(dt); self.redraw(); self.frames += 1
+            if self.apt is not None:
+                cap = self.apt.caption()
+                if cap != self.aptcap.get_text():
+                    self.aptcap.set_text(cap); self.aptcap.set_visible(bool(cap))
         return True
 
     def on_draw(self, w, cr):
@@ -721,6 +753,8 @@ def main():
     p.add_argument("--size", type=lambda s: tuple(map(int, s.split("x"))), default=(1280, 720))
     p.add_argument("--dpr", type=float, default=.5, help="avatar render scale (0.5 = half resolution)")
     p.add_argument("--renderer", choices=["gl", "cairo"], default=os.environ.get("NOVA_RENDERER", "gl"))
+    p.add_argument("--view", choices=["auto", "apartment", "avatar"], default=os.environ.get("NOVA_VIEW", "auto"),
+                   help="apartment (build 16 default screen) or the round avatar; auto follows cypherd's apartment feature")
     p.add_argument("--state"); p.add_argument("--sim", type=float); p.add_argument("--blink", type=float)
     p.add_argument("--confirm"); p.add_argument("--reply"); p.add_argument("--q"); p.add_argument("--mic", choices=["on", "off", "none"])
     p.add_argument("--shape", choices=AS.SHAPE_IDS, help="show this shape (not saved)")

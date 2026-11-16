@@ -28,9 +28,12 @@ rpm -q libavcodec-freeworld gtk4-layer-shell >/dev/null
 
 # --- Nova app + novad -----------------------------------------------------
 install -d -m 0755 "$nova"
-for f in avatar.py avatar_shapes.py glview.py nova_native.py novad.py cypher_link.py shell.html lockscene.py pamauth.py cadpad.py nova-web-user.js; do
+for f in avatar.py avatar_shapes.py glview.py apartment.py apartment_gl.py apartment_body_placeholder.json nova_native.py novad.py cypher_link.py shell.html lockscene.py pamauth.py cadpad.py nova-web-user.js; do
     install -m 0644 "${src}/${f}" "${nova}/${f}"
 done
+# Build 16: Cypher's apartment is the default screen (apartment.py + apartment_gl.py). His body is one asset:
+# the placeholder above until Zack approves his own design, which goes in /usr/share/grokbot/cypher/apartment/body.json.
+python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "${nova}/apartment_body_placeholder.json"
 install -m 0755 "${src}/grokbot-lock-keypad.py" "${nova}/grokbot-lock-keypad.py"
 ln -sf "${nova}/grokbot-lock-keypad.py" /usr/local/bin/grokbot-lock-keypad
 install -m 0755 "${src}/grokbot-nova" /usr/local/bin/grokbot-nova

@@ -1,0 +1,15 @@
+{
+  "name": "placeholder",
+  "temporary": true,
+  "note": "Stand-in body until Cypher designs his own (his proposal, Zack approves). Swap: put the approved design in /usr/share/grokbot/cypher/apartment/body.json (image) or ~/.config/cypher/body-model.json (this user). Units are meters, feet at the origin, facing +z. Parts are boxes; 'group' leg_l/leg_r/arm_l/arm_r lets legs and arms swing and fold; 'color' (#rrggbb) overrides his avatar color; 'emit' 0-2 is glow.",
+  "emit": 0.3,
+  "parts": [
+    {"box": [-0.15, 0.0, -0.08, -0.03, 0.82, 0.08], "group": "leg_l"},
+    {"box": [0.03, 0.0, -0.08, 0.15, 0.82, 0.08], "group": "leg_r"},
+    {"box": [-0.20, 0.82, -0.11, 0.20, 1.42, 0.11]},
+    {"box": [-0.29, 0.86, -0.07, -0.21, 1.40, 0.07], "group": "arm_l"},
+    {"box": [0.21, 0.86, -0.07, 0.29, 1.40, 0.07], "group": "arm_r"},
+    {"box": [-0.12, 1.46, -0.12, 0.12, 1.72, 0.12]},
+    {"box": [-0.09, 1.56, 0.12, 0.09, 1.61, 0.135], "color": "#05D9E8", "emit": 1.6}
+  ]
+}

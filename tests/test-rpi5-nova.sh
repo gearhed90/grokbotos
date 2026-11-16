@@ -9,7 +9,7 @@ source "${root}/tests/assert.sh"
 cd "$root"
 nova=build_files/rpi5/nova
 
-for f in avatar.py avatar_shapes.py glview.py nova_native.py novad.py shell.html lockscene.py pamauth.py \
+for f in avatar.py avatar_shapes.py glview.py apartment.py apartment_gl.py apartment_body_placeholder.json nova_native.py novad.py shell.html lockscene.py pamauth.py \
     nova-web-user.js grokbot-lock-keypad.py grokbot-nova grokbot-set-xai-key cadpad.py grokbot-cadpad-token \
     novad.service grokbot-lock.pam sway-rpi5-nova.conf; do
     assert_file "${nova}/${f}"
@@ -127,7 +127,7 @@ fi
 assert_contains "${nova}/novad.py" 'You are Cypher, the mind living in'
 assert_contains "${nova}/novad.py" 'cypher_link.system_prompt(TOOL_RULES)'
 assert_contains "${nova}/shell.html" 'placeholder="Ask Cypher…"'
-if grep -n 'Pixel' "${nova}"/*.py "${nova}"/*.html | grep -v devicePixelRatio; then
+if grep -n 'Pixel' "${nova}"/*.py "${nova}"/*.html | grep -v -e devicePixelRatio -e glReadPixels; then
     fail "the assistant is still called Pixel somewhere"
 fi
 python3 tests/cypher/test_cypherd.py
@@ -145,6 +145,9 @@ python3 tests/cypher/test_cypherd_build13.py
 python3 tests/cypher/test_cypherd_build14.py
 python3 tests/cypher/test_cypherd_build14b.py
 python3 tests/cypher/test_cypherd_build15.py
+python3 tests/cypher/test_cypherd_build16.py
+python3 tests/nova/test_apartment.py
+assert_contains build_files/rpi5-nova.sh 'apartment.py apartment_gl.py apartment_body_placeholder.json'
 python3 -m py_compile "${cy}/grokbot-set-cypher-limit"
 assert_contains build_files/rpi5-nova.sh '/usr/local/sbin/grokbot-set-cypher-limit'
 assert_contains "${cy}/cypher-limits.json" '"message_zack": {"phase": 3, "max_chars": 200, "per_hour": 3, "per_day": null'
