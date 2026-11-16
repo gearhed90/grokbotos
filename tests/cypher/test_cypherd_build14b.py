@@ -377,6 +377,15 @@ print(json.dumps(out))
 else:
     check("no broadwayd/GTK: panel GTK probe skipped", True)
 
+# Flash of build 14: the deck's older locked file had lookup.hosts = [en.wikipedia.org] only, so SearXNG was off.
+_m = C.merge_defaults({"lookup": {"hosts": ["en.wikipedia.org"]}, "actions": {}},
+                      {"lookup": {"hosts": ["en.wikipedia.org", "192.168.12.126", "100.114.239.111"],
+                                  "searxng_url": "http://192.168.12.126:8888", "searxng_alt_urls": ["http://100.114.239.111:8888"]}})
+check("merge: lookup.hosts gains the image's SearXNG hosts", _m["lookup"]["hosts"] == ["en.wikipedia.org", "192.168.12.126", "100.114.239.111"], _m)
+check("merge: SearXNG bases come back on an old locked file", C.searxng_bases(_m["lookup"]) == ["http://192.168.12.126:8888", "http://100.114.239.111:8888"], C.searxng_bases(_m["lookup"]))
+_m2 = C.merge_defaults({"pino": {"hosts": ["pinos.world"]}}, {"pino": {"hosts": ["pinos.world", "evil.example"]}})
+check("merge: other blocks' host lists are not extended", _m2["pino"]["hosts"] == ["pinos.world"], _m2)
+
 srv.shutdown(); shutil.rmtree(T, ignore_errors=True)
 print("\nbuild 14b tests: %d passed, %d failed" % (ok, fail))
 sys.exit(1 if fail else 0)

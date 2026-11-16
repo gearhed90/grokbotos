@@ -297,7 +297,7 @@ def image_limits():
 def merge_defaults(L, D):
     """Fill what the locked file lacks from the image copy: whole actions, keys inside an action, and
     top-level blocks or keys inside a block. Never overrides a value the locked file sets (a null cap
-    stays null)."""
+    stays null); the one list it extends is lookup.hosts, with the image's hosts the file lacks."""
     if not isinstance(D, dict) or not D:
         return L
     L = json.loads(json.dumps(L))
@@ -310,6 +310,10 @@ def merge_defaults(L, D):
             for k2, v2 in v.items():
                 if k2 not in L[k]:
                     L[k][k2] = json.loads(json.dumps(v2))
+                elif k == "lookup" and k2 == "hosts" and isinstance(v2, list) and isinstance(L[k][k2], list):
+                    # build 14 shipped SearXNG's two Alpha addresses here; an older locked file that lists only
+                    # the encyclopedia would otherwise silently turn SearXNG off (searxng_bases checks this list).
+                    L[k][k2] += [h for h in v2 if isinstance(h, str) and h not in L[k][k2]]
                 elif k == "actions" and isinstance(v2, dict) and isinstance(L[k][k2], dict):
                     for k3, v3 in v2.items():
                         L[k][k2].setdefault(k3, v3)
