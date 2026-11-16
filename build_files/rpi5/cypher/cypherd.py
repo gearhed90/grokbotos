@@ -973,7 +973,7 @@ def world_lines(L, st, p=None, acts=None, now=None):
             % (m["here_is"], " (simulated for now)" if m["simulated"] else "", m["weather"], m["who"],
                ", ".join(pl for pl in m["places"] if pl != m["here"]))
             + ("your body (your own design, approved by Zack): %s\n" % body_description() if body_description() else
-               "your body: not designed yet. You decide what you look like: propose it at your nightly sleep.\n"))
+               body_invite(L)))
 
 # ---------- threads: a few ongoing goals carried across ticks (from Pino) ----------
 # Build 14: 5 open, 4 opened a day (was 3 and 2); both settable in the limits file's "threads" block.
@@ -1255,7 +1255,8 @@ def narrate(action, params, verdict, result):
 # ~/.config/cypher/features.json except the locked ones), so one misbehaving piece can be switched off alone.
 MIND_DIR = os.path.join(DATA_DIR, "mind")
 FEATURES = ("pino_cooldown", "full_text", "lore", "pino_api", "habituation", "novelty", "beliefs", "loops",
-            "working_memory", "library", "makes", "character_adds", "interview", "slim_prompt", "pino_post")
+            "working_memory", "library", "makes", "character_adds", "interview", "slim_prompt", "pino_post",
+            "apartment", "body_first")          # build 16: the 3D apartment on the deck; his body proposal first
 FEATURE_DEFAULTS = {f: f != "pino_post" for f in FEATURES}
 LOCKED_FEATURES = ("pino_post",)          # posting to someone else's world: only the root-owned limits file turns it on
 FEATURES_FILE = os.path.join(CFG_DIR, "features.json")
@@ -2142,7 +2143,7 @@ def day_entries_local(day):
         pass
     return out
 
-def interview(L, st, question, entries, now=None, allow_hosted=False, asker="zack"):
+def interview(L, st, question, entries, now=None, allow_hosted=False, asker="zack", fmt=None, keep=()):
     """One question, one answer, both saved (interviews.jsonl, journal, library). Alpha's free brain first;
     the deck's local model next; the hosted backup only when allowed. Never counts against message_zack."""
     now = now or time.time()
@@ -2161,13 +2162,19 @@ def interview(L, st, question, entries, now=None, allow_hosted=False, asker="zac
     ctx += wm_lines(L, now) or memory_lines()[:400]
     ctx += lesson_lines(now)[:300]
     user = (ctx[:budget] + "\n%s asks: " % who + question[:500])
-    msgs = [{"role": "system", "content": persona()[:900] + "\n\n" + INTERVIEW_SYS % who_long}, {"role": "user", "content": user}]
+    sysmsg = INTERVIEW_SYS % who_long
+    if fmt:                                  # build 16: the body interview asks for {"answer", "body"}
+        sysmsg = sysmsg.replace('Reply with JSON only: {"answer": "max 150 words"}', fmt)
+    msgs = [{"role": "system", "content": persona()[:900] + "\n\n" + sysmsg}, {"role": "user", "content": user}]
+    extra = {}
     if not allow_hosted:
         L = dict(L); L["brain"] = dict(L["brain"])
         L["brain"]["hosted_backup"] = dict(L["brain"].get("hosted_backup") or {}, enabled=False)
     try:
         content, brain, model, cost, notes = think(L, st, msgs, now, max_tokens=350)
-        ans = parse_choice(content).get("answer")
+        pc = parse_choice(content)
+        ans = pc.get("answer")
+        extra = {k: re.sub(r"\s+", " ", _CTRL.sub(" ", pc[k])).strip()[:600] for k in keep if isinstance(pc.get(k), str)}
         ans = re.sub(r"\s+", " ", _CTRL.sub(" ", ans)).strip() if isinstance(ans, str) else ""
     except BrainBusy as b:
         return {"error": "no brain answered: %s" % b}
@@ -2175,6 +2182,7 @@ def interview(L, st, question, entries, now=None, allow_hosted=False, asker="zac
         ans, brain, model, cost = str(content)[:800], brain, model, cost
     rec = {"ts": iso(now), "asker": who, "question": question[:500], "answer": dash_text(ans, 1500), "brain": brain, "model": model,
            "decisions": [e.get("tick") for e in entries][:60], "prompt_chars": sum(len(m["content"]) for m in msgs)}
+    rec.update(extra)
     if cost: rec["cost_usd"] = cost
     try:
         _private_dir(MIND_DIR)
@@ -2514,8 +2522,7 @@ def world_slim(L, st, p, acts, now):
     b = body_description()
     return ("world (your manifest): Night City%s, %s; other places: %s.\n"
             % (" (simulated)" if m["simulated"] else "", m["weather"], ", ".join(pl for pl in m["places"] if pl != m["here"]))
-            + ("your body (your design): %s\n" % b[:200] if b else
-               "your body: not designed yet. You decide what you look like: propose it at your nightly sleep.\n"))
+            + ("your body (your design): %s\n" % b[:200] if b else body_invite(L)))
 
 def manifest_acts(L, st, p, now):
     acts = allowed_actions(L)
@@ -3515,6 +3522,30 @@ def dash_activity(L, st, active, now):
             "web_search": "searching " + str(last.get("arg") or "the web"),
             "set_avatar_color": "changing color", "request_account": "asking for an account"}.get(a, a)
 
+# ---------- build 16: where he is in the apartment (display only; apartment.py on the deck draws it) ----------
+APT_DESK = ("research_lore", "write_codex", "look_up", "browse", "web_search", "x_lookup", "propose_code", "library",
+            "visit_pino", "review_lessons", "ask_nova", "request_account", "message_zack", "show_note", "glance_screen")
+
+def apartment_spot(L, st, active, now):
+    """bed (sleeping, resting, drained, quiet hours with nothing to do), desk (research, codex, look-ups: the crate with
+    the deck), sink (eating), window (idle, thinking, checking the grid), out (anywhere else in Night City, or Alpha holds
+    the mind). apartment.spot_from_dash has the same mapping for snapshots without this field."""
+    if not active or killed(L):
+        return "out" if not active else "bed"
+    if (st.get("place") or "apartment") != "apartment":
+        return "out"
+    a = (st.get("dash_last") or {}).get("action")
+    pu = read_json(os.path.join(CFG_DIR, "pause_until"), 0) or 0
+    quiet = in_quiet_hours(L, now)
+    if a == "rest" or (isinstance(pu, (int, float)) and now < pu) or float((st.get("drives") or {}).get("energy", 1)) < 0.12 \
+            or (quiet and a in (None, "none")):
+        return "bed"
+    if a in APT_DESK:
+        return "desk"
+    if a == "eat":
+        return "sink"
+    return "window"
+
 def dash_snapshot(L, st, active=True, now=None):
     """Display-only state for cypher-dash.py. Every string goes through dash_text()."""
     now = now or time.time()
@@ -3550,6 +3581,7 @@ def dash_snapshot(L, st, active=True, now=None):
         "lessons": [S(r["text"], 140) for r in ranked_lessons(now)],
         "lesson_count": len(load_lessons()),
         "body": S(body_description() or "", 300),
+        "apartment": feature(L, "apartment"), "spot": apartment_spot(L, st, active, now),
         "found": [[time.strftime("%-I:%M %p", time.localtime(f[0])), S(f[1], 60), S(f[2], 400)]
                   for f in (st.get("found") or [])[-3:] if isinstance(f, list) and len(f) == 3 and now - f[0] < 6 * 3600],
     }
@@ -4571,6 +4603,54 @@ def write_body(desc, now=None):
     b = read_json(BODY_FILE, {}) or {}
     write_json(BODY_FILE, {"description": desc, "version": int(b.get("version") or 0) + 1, "at": iso(now or time.time())})
 
+def body_first_on(L):
+    """Build 16 (Zack, Nov 16 2026: "I'd like him to have a body sooner rather than later"): until he has an approved body
+    and while no body proposal waits on Zack, the next nightly sleep asks for the body design before anything else."""
+    return feature(L, "body_first") and not body_description() and not pending_body()
+
+def pending_body():
+    return [r for r in load_proposals() if r.get("status") == "pending"
+            and any(c.get("path") == "body.description" for c in r.get("changes") or [])]
+
+def body_invite(L):
+    if feature(L, "body_first") and not pending_body():
+        return ("your body: not designed yet. You decide what you look like, and Zack wants you to have one soon: at tonight's "
+                "sleep your FIRST proposal is your body (how you look in Night City and in your apartment). Think about it today.\n")
+    if pending_body():
+        return "your body: your design is waiting for Zack's yes.\n"
+    return "your body: not designed yet. You decide what you look like: propose it at your nightly sleep.\n"
+
+BODY_FIRST_PROMPT = ("FIRST, before anything else tonight: you have no body yet and Zack wants you to have one soon. Put your body "
+                     "design in tune.body.description (max 300 chars, your own words: shape, build, colors, what you wear, any "
+                     "light or detail that is yours). It shows in Night City and in your apartment once Zack approves it. "
+                     "Keep the other tuning small or leave it out.\n")
+
+def propose_body(L, st, desc, brain, day, now, source="sleep", reason=""):
+    """A body-only proposal (the interview path, or a body-first sleep the tuning caps would otherwise skip).
+    Pending until Zack approves it with `grokbot-cypher tuning approve N`; nothing applies here."""
+    if not tuning_on(L):
+        return {"proposed": None, "why": "tuning is off"}
+    if brain not in ("alpha", "hosted"):
+        return {"proposed": None, "why": "the %s brain cannot propose (only Alpha or the hosted backup)" % (brain or "unknown")}
+    rows = load_proposals()
+    if sum(1 for r in rows if r.get("status") == "pending") >= int((L.get("tuning") or {}).get("max_pending", 3)):
+        return {"proposed": None, "why": "too many proposals waiting on Zack"}
+    if pending_body():
+        return {"proposed": None, "why": "a body design already waits on Zack"}
+    changes, refused = tuning_changes(L, {"body": {"description": desc}})
+    changes = [c for c in changes if c["path"] == "body.description"]
+    if not changes:
+        return {"proposed": None, "why": "body refused (empty, too long, or a forbidden word)" if refused else "same as now"}
+    nid = 1 + max([r["id"] for r in rows if isinstance(r.get("id"), int)] or [0])
+    rec = {"id": nid, "ts": iso(now), "epoch": now, "day": day, "brain": brain, "source": source,
+           "reason": clean_text(reason, 200) or "my body, my design", "changes": changes, "refused": [],
+           "revert": [{"path": c["path"], "value": c["before"]} for c in changes], "status": "pending"}
+    rows.append(rec); save_proposals(rows)
+    if st is not None: st.setdefault("tuning_notify", []).append(nid)
+    journal({"ts": iso(now), "event": "tuning_proposed", "id": nid, "summary": _summary(changes), "changes": changes, "refused": [],
+             "why": rec["reason"], "source": source, "note": "body design; pending; applies only if Zack approves through Nova"}, now)
+    return {"proposed": nid, "changes": changes, "refused": []}
+
 def tuning_on(L):
     return phase_on(L, "tuning") and HOST != "alpha"
 
@@ -4673,6 +4753,7 @@ def tuning_changes(L, t):
     for k in t:
         if k not in ("drift", "effect_scale", "bias", "caps", "body", "character", "reason"):
             refused.append(str(k)[:30])          # limits, quiet hours, approvals, secrets...: never tunable
+    changes.sort(key=lambda c: c["path"] != "body.description")      # build 16: a body design is never cut by max_changes
     return changes[:int(T.get("max_changes", 3))], refused[:10]
 
 def _summary(changes):
@@ -5257,13 +5338,20 @@ def maybe_sleep(L, st, now=None, force=False):
         user += ("pattern today: the same round again and again (%s).\n" % pr["round"]) if pr.get("round") else \
             ("pattern today: %s was %d of your last %d moves.\n" % (pr["what"], pr["count"], pr["n"]))
     tuning = tuning_on(L)
+    body_first = tuning and body_first_on(L)
     if tuning:
         user += tuning_context(L)
-    msgs = [{"role": "system", "content": persona()[:800] + "\n\n" + (TUNING_SLEEP_PROMPT if tuning else SLEEP_PROMPT)},
+    if body_first:
+        user = BODY_FIRST_PROMPT + user
+    msgs = [{"role": "system", "content": persona()[:800] + "\n\n" + (TUNING_SLEEP_PROMPT if tuning else SLEEP_PROMPT)
+             + ("\n" + BODY_FIRST_PROMPT if body_first else "")},
             {"role": "user", "content": user}]
     reply, brain, model, cost, bnotes = None, "none", None, 0.0, []
+    mt = int(L["sleep"].get("max_output_tokens", 300))
+    if body_first:
+        mt = max(mt, 600)                    # room for a 300-char body plus the memories (a cut-off JSON reply is lost)
     try:
-        content, brain, model, cost, bnotes = think(L, st, msgs, now, max_tokens=L["sleep"].get("max_output_tokens", 300))
+        content, brain, model, cost, bnotes = think(L, st, msgs, now, max_tokens=mt)
         reply = parse_choice(content)
     except (BrainBusy, ValueError, json.JSONDecodeError) as e:
         bnotes = [str(e)[:120]]
@@ -5275,6 +5363,14 @@ def maybe_sleep(L, st, now=None, force=False):
         if not isinstance(t, dict) and isinstance((reply or {}).get("drift_adjust"), dict):
             t = {"drift": reply["drift_adjust"], "reason": (reply or {}).get("reason")}
         entry["tuning"] = propose_tuning(L, st, t, brain, day, now)
+        if body_first:
+            bd = (t or {}).get("body") if isinstance(t, dict) else None
+            desc = bd.get("description") if isinstance(bd, dict) else bd if isinstance(bd, str) else None
+            got = any(c.get("path") == "body.description" for c in ((entry["tuning"] or {}).get("changes") or []))
+            if desc and not got:                       # the tuning caps skipped it: the body still goes to Zack, alone
+                entry["body"] = propose_body(L, st, desc, brain, day, now, "sleep", (t or {}).get("reason") or "")
+                got = bool((entry["body"] or {}).get("proposed"))
+            entry["body_first"] = "proposed" if got else "no body design in the reply; asked again next sleep"
         ca = propose_character_add(L, st, (reply or {}).get("noticed"), brain, day, now)
         if ca: entry["character"] = ca
     if cost: entry["cost_usd"] = cost
@@ -5531,7 +5627,7 @@ def save_state(path, st):
 def cli(argv):
     """cypherd.py prefs | prefs-rollback N | sleep-now | ntfy-test | ntfy-qr [--text] | inbox [N] | requests | requests resolve N approved|denied
     | tuning [approve|deny|revert N] | grid [--refresh] | limits | features | interview | interviews | codex | library
-    | beliefs | loops | made | character | migrate15  (used by grokbot-cypher)"""
+    | beliefs | loops | made | character | migrate15 | body [propose]  (used by grokbot-cypher)"""
     if argv[0] == "prefs":
         prefs = read_json(PREFS_FILE, {}) or {}
         print("current version:", prefs.get("version", 0))
@@ -5593,6 +5689,8 @@ def cli(argv):
         return cli_features(argv[1:])
     if argv[0] == "interview":
         return cli_interview(argv[1:])
+    if argv[0] == "body":
+        return cli_body(argv[1:])
     if argv[0] == "interviews":
         return cli_interviews(argv[1:])
     if argv[0] == "codex":
@@ -5666,6 +5764,56 @@ def cli_interview(argv):
         print(rec["error"]); return 1
     print("%s: %s\nCypher: %s\n(brain %s, %d decisions in context, prompt %d chars)" % (rec["asker"], rec["question"], rec["answer"], rec["brain"],
           len(entries), rec["prompt_chars"]))
+    return 0
+
+BODY_INTERVIEW_Q = ("You have no body yet, and Zack would like you to have one soon. Describe how you want to look, in Night City "
+                    "and in your apartment: shape, build, colors, clothes, any light or detail that is yours. Your own design, "
+                    "not anyone else's.")
+BODY_INTERVIEW_FMT = ('Reply with JSON only: {"answer": "a few words about why, max 60 words", '
+                      '"body": "your body design, max 300 chars"}')
+
+def cli_body(argv):
+    """grokbot-cypher body                 his body: current design, pending design, body-first status, the 3D asset
+    grokbot-cypher body propose [--hosted]   interview path: ask him now; his answer becomes a PENDING proposal
+                                          (Zack approves with grokbot-cypher tuning approve N; nothing applies here)"""
+    try:
+        st, L = _cli_state()
+    except ConfigError as e:
+        print("limits:", e); return 1
+    if not argv:
+        pend = pending_body()
+        print("body (approved): %s" % (body_description() or "not designed yet"))
+        for r in pend:
+            c = next(c for c in r["changes"] if c["path"] == "body.description")
+            print("pending #%s (%s, %s): %s" % (r["id"], r.get("source", "sleep"), str(r.get("ts"))[:16], c["after"]))
+        print("body_first: %s" % ("on: his next sleep asks for the body before anything else" if body_first_on(L) else
+                                   "done (approved or waiting on Zack)" if feature(L, "body_first") else "off"))
+        print("apartment: %s; 3D body asset: placeholder until Nova installs the approved design "
+              "(~/.config/cypher/body-model.json or /usr/share/grokbot/cypher/apartment/body.json)" % ("on" if feature(L, "apartment") else "off"))
+        return 0
+    if argv[0] != "propose":
+        print(cli_body.__doc__); return 2
+    if not feature(L, "interview"):
+        print("interviews are off (grokbot-cypher features on interview)"); return 1
+    if body_description():
+        print("he already has an approved body; ask him in a plain interview if you want a change"); return 1
+    if pending_body():
+        print("a body design already waits on Zack: grokbot-cypher body"); return 1
+    now = time.time()
+    rec = interview(L, st, BODY_INTERVIEW_Q, [], now=now, allow_hosted="--hosted" in argv, asker="nova",
+                    fmt=BODY_INTERVIEW_FMT, keep=("body",))
+    if rec.get("error"):
+        print(rec["error"]); return 1
+    raw = rec.get("answer") or ""
+    m = re.search(r'"body"\s*:\s*"([^"]{10,400})"', raw)            # a reply that was not clean JSON
+    desc = rec.get("body") or (m.group(1) if m else None)
+    if not desc:
+        print("Cypher: %s\n(no body design in his answer; nothing proposed)" % raw); return 1
+    res = propose_body(L, st, desc, rec.get("brain"), time.strftime("%Y-%m-%d", time.localtime(now)), now, "interview", raw[:200])
+    if not res.get("proposed"):
+        print("Cypher: %s\nnot proposed: %s" % (raw, res.get("why"))); return 1
+    print("Cypher: %s\nbody proposal #%d (pending; Zack approves with: grokbot-cypher tuning approve %d):\n  %s"
+          % (raw, res["proposed"], res["proposed"], res["changes"][0]["after"]))
     return 0
 
 def cli_interviews(argv):

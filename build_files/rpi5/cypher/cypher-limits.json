@@ -247,8 +247,9 @@
     "reflect": {"phase": 6, "per_hour": 2, "per_day": 12, "_comment": "build 15: judge an open loop he closed"},
     "visit_pinos_world": {"phase": 6, "max_chars": 200, "per_day": 1, "per_week": 1, "_comment": "build 15: a rare signed note left at pinos.world, logged in full. Never sent unless features.pino_post is true AND pino.post.url is set (both unset: not verified)"}
   },
-  "features": {"_comment": "Build 15: switch any new piece off alone. pino_post can only be turned on here (root-owned); the rest can be overridden with: grokbot-cypher features NAME on|off|default",
+  "features": {"_comment": "Build 15: switch any new piece off alone (build 16 adds apartment: the 3D room on the deck, and body_first: his next sleep proposes his body first). pino_post can only be turned on here (root-owned); the rest can be overridden with: grokbot-cypher features NAME on|off|default",
                "pino_cooldown": true, "full_text": true, "lore": true, "pino_api": true, "habituation": true, "novelty": true, "beliefs": true, "loops": true,
-               "working_memory": true, "library": true, "makes": true, "character_adds": true, "interview": true, "slim_prompt": true, "pino_post": false},
+               "working_memory": true, "library": true, "makes": true, "character_adds": true, "interview": true, "slim_prompt": true, "pino_post": false,
+               "apartment": true, "body_first": true},
   "avatar_colors": ["white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray"]
 }

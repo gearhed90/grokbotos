@@ -51,6 +51,11 @@
   grokbot-cypher beliefs | loops | made   what experience taught him, his open loops, things he made
   grokbot-cypher character         his approved character additions and pending ones (approve with tuning)
   grokbot-cypher migrate15 [--dry-run]   one-time move of memories/lessons/threads into the new mind (cypherd does it at start)
+  Build 16:
+  grokbot-cypher body              his body: approved design, pending design, body-first status, the apartment's 3D asset
+  grokbot-cypher body propose [--hosted]   ask him for his body design now (interview); it becomes a PENDING proposal
+                                   (Zack approves with tuning approve N; nothing applies on its own)
+  grokbot-cypher features off apartment    the round avatar instead of the apartment (the face restarts by itself)
 """
 import json, os, shutil, subprocess, sys, time
 E = os.environ.get
@@ -178,13 +183,13 @@ def main(argv):
     elif cmd == "panels":
         return subprocess.run([E("CYPHER_PANELS_TOGGLE", "/usr/local/bin/grokbot-cypher-panels"), *argv[2:]]).returncode
     elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests", "inbox", "ntfy-qr", "tuning", "grid", "limits", "asks", "code", "lessons",
-                 "features", "interview", "interviews", "codex", "library", "beliefs", "loops", "made", "character", "migrate15"):
+                 "features", "interview", "interviews", "codex", "library", "beliefs", "loops", "made", "character", "migrate15", "body"):
         if cmd == "prefs" and len(argv) > 3 and argv[2] == "rollback":
             args = ["prefs-rollback", argv[3]]
         elif cmd == "limits":
             args = ["limits"]
         elif cmd in ("requests", "inbox", "ntfy-qr", "tuning", "grid", "asks", "code", "lessons", "features", "interview", "interviews",
-                     "codex", "library", "beliefs", "loops", "made", "character", "migrate15"):
+                     "codex", "library", "beliefs", "loops", "made", "character", "migrate15", "body"):
             args = [cmd, *argv[2:]]
         else:
             args = [cmd]
