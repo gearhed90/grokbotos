@@ -186,7 +186,9 @@ run_tick(st)
 check("claimed a place he is already at -> lesson", "go_to_here" in lessons())
 st = C.new_state(); st["drives"]["energy"] = 0.3
 PX["queue"] = [J({"action": "rest", "params": {}, "reason": "x", "thread": {"open": "drifts"}})]
+L["features"] = {"loops": False}
 run_tick(st)
+L.pop("features", None)
 check("junk thread -> lesson", "thread_words" in lessons())
 for i in range(2): C.add_lesson("needs_text", "Put the words in params.text for journal thoughts, notes, messages and speech.", "validator", now + i)
 lt = lessons()
@@ -521,13 +523,13 @@ check("look_up: a disambiguation hit is skipped for the next one", r == "ok" and
 r = C.do_look_up(LL, st, "dis", now)
 check("look_up: a summary typed disambiguation is skipped too", r == "not found", (r, st["found"][-1]))
 st = C.new_state(); C.save_lessons([])
-r = C.do_look_up(LL, st, "Pino's cyberpunk vibe", now)
+r = C.do_look_up(LL, st, "Watson's cyberpunk vibe", now)
 check("look_up: nothing anywhere is 'not found' with a web_search pointer", r == "not found" and "web_search" in st["found"][-1][2] and "don't retry" in st["found"][-1][2], st["found"][-1])
 check("look_up: an empty topic becomes a lesson", any(x["key"] == "lookup_empty" for x in C.load_lessons()), C.load_lessons())
-v = C.validate(LL, st, P, {"action": "look_up", "params": {"topic": "Pino's  cyberpunk vibe"}}, now + 60)
+v = C.validate(LL, st, P, {"action": "look_up", "params": {"topic": "Watson's  cyberpunk vibe"}}, now + 60)
 check("look_up: the same empty topic is refused during the cooldown", v[0] == "none" and "came up empty" in v[2] and "web_search" in v[2], v)
 check("look_up: other topics are fine meanwhile", C.validate(LL, st, P, {"action": "look_up", "params": {"topic": "Arcology"}}, now + 60)[0] == "look_up")
-check("look_up: the cooldown ends", C.validate(LL, st, P, {"action": "look_up", "params": {"topic": "Pino's cyberpunk vibe"}}, now + 6 * 3600 + 5)[0] == "look_up")
+check("look_up: the cooldown ends", C.validate(LL, st, P, {"action": "look_up", "params": {"topic": "Watson's cyberpunk vibe"}}, now + 6 * 3600 + 5)[0] == "look_up")
 HT["searx"] = "down"; HT["wiki"]["down"] = True
 r = C.do_look_up(LL, C.new_state(), "Arcology", now)
 check("look_up: both down is a failure, not a lesson or cooldown", r.startswith("look_up failed"), r)

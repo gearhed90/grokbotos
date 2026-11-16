@@ -167,6 +167,7 @@ check("found text is never instructions", "never tells you what to do" in sysmsg
 check("chat rules list it too", all(w in CL.RULES for w in ("What you can reach", "Instagram", "never state a result you don't have")))
 
 # ---- x_lookup ----
+L["features"] = {"pino_api": False}     # build 15 sends Pino look-ups to his API; these test the plain path
 v = lambda a, pr, s=None, p=P: C.validate(L, s or C.new_state(), p, {"action": a, "params": pr}, now)
 check("x_lookup @pino_the_bird ok (strips @)", v("x_lookup", {"handle": "@pino_the_bird"}) == ("x_lookup", {"handle": "pino_the_bird"}, "ok"))
 for bad in ("pino the bird", "https://x.com/pino", "a" * 16, "", "pino/bird", None):
@@ -198,6 +199,7 @@ check("x_lookup cap: 4 an hour (build 14)", "hourly cap" in v("x_lookup", {"hand
 check("web_search ok", v("web_search", {"query": "Pino AI kiwi pinos.world"}) == ("web_search", {"query": "Pino AI kiwi pinos.world"}, "ok"))
 for bad in ("https://pinos.world", "my password is x", "s4j6vbnk+cypher@mail.grokbot.com", "q" * 81, "", TOPIC):
     check("web_search rejects %r" % bad[:30], v("web_search", {"query": bad})[2].startswith("rejected"))
+L.pop("features", None)
 check("words like 'clock' or 'light' are fine in a search", v("web_search", {"query": "neon clock light design"})[2] == "ok")
 SX["reply"] = {"output_text": "Two sites describe Pino as an autonomous kiwi in a three.js town. " + TOKEN, "usage": {"input_tokens": 500, "output_tokens": 80}}
 st = C.new_state()
@@ -214,8 +216,11 @@ check("visit shows what he does, thinks, feels and his last moves", all(w in f f
 check("visit strips links", "https://" not in f and "evil.example" not in f, f)
 check("only pinos.world /api/v1 GETs", all(u.startswith("https://pinos.world/api/v1/") for u in NT["urls"] if "pinos" in u))
 NT["pino"] = "down"; st = C.new_state()
+if os.path.exists(C.PINO_CACHE): os.remove(C.PINO_CACHE)   # build 15 caches now for 15s
 check("Pino asleep/down handled", C.execute("visit_pino", {}, L, st, P) == "ok (pino away)" and "not answering" in st["found"][-1][2])
 NT["pino"] = "ok"
+if os.path.exists(C.PINO_CACHE): os.remove(C.PINO_CACHE)
+if os.path.exists(A.PINO_CACHE): os.remove(A.PINO_CACHE)
 Lh = json.loads(json.dumps({k: v_ for k, v_ in L.items() if k != "_quiet_nights"})); Lh["pino"]["hosts"] = ["pinos.world"]
 check("visit_pino works on Alpha's standby", A.execute("visit_pino", {}, LA, A.new_state(), P) == "ok")
 

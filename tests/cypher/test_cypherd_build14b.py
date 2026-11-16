@@ -247,6 +247,7 @@ check("the chat facts say there is a terminal", "there IS a terminal" in N.TOOL_
 check("other apps are still refused", N.t_open_app("bash")["ok"] is False)
 
 # ================= 3. go_to never offers where he is =================
+L["features"] = {"library": False}     # build 15 adds the library as a place; this checks the plain two
 st = C.new_state(); st["place"] = "noodle_stall"; PX["seen"].clear()
 C.tick(L, st, now + 7200, perceive_fn=perceive(P), camera_fn=lambda L, s, n: [])
 prompt = "\n".join(m["content"] for b in PX["seen"] for m in b["messages"])
@@ -260,6 +261,7 @@ st["place"] = None
 check("an unset place counts as the apartment", C.validate(L, st, P, {"action": "go_to", "params": {"place": "apartment"}}, now)[0] == "none")
 L1 = json.loads(json.dumps(L)); L1["world"]["places"] = {"apartment": "home"}
 check("with nowhere else to go, go_to is blocked", (lambda s: (s.update(place="apartment"), C.blocked(L1, s, P, "go_to", now))[1])(C.new_state()) == "nowhere else to go")
+L.pop("features", None)
 
 # ================= 4. collapsible HUD columns =================
 try:

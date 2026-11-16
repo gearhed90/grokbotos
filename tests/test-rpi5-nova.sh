@@ -144,6 +144,7 @@ python3 tests/cypher/test_cypherd_build12b.py
 python3 tests/cypher/test_cypherd_build13.py
 python3 tests/cypher/test_cypherd_build14.py
 python3 tests/cypher/test_cypherd_build14b.py
+python3 tests/cypher/test_cypherd_build15.py
 python3 -m py_compile "${cy}/grokbot-set-cypher-limit"
 assert_contains build_files/rpi5-nova.sh '/usr/local/sbin/grokbot-set-cypher-limit'
 assert_contains "${cy}/cypher-limits.json" '"message_zack": {"phase": 3, "max_chars": 200, "per_hour": 3, "per_day": null'

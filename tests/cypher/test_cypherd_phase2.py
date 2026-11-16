@@ -184,6 +184,10 @@ check("a day with no ticks is skipped", D.maybe_sleep(L, D.new_state(), time.mkt
 check("no sleep before 4 AM", D.maybe_sleep(L, D.new_state(), time.mktime((2026, 11, 15, 3, 59, 0, 0, 0, -1))) is None)
 check("memories reach the prompt", "Zack came home" in D.memory_lines() and "Quiet evenings" in D.memory_lines())
 LOCAL["reply"] = json.dumps({"memories": [], "add_notes": ["Another note"], "drop_notes": [0]})
+with open(os.path.join(D.DATA_DIR, "journal", "2026-11-15.jsonl"), "w") as f:    # a day with ticks (an empty day is skipped since build 13)
+    for i in range(3):
+        f.write(json.dumps({"ts": "2026-11-15T1%d:00:00-0500" % i, "tick": 10 + i, "mood": "content", "brain": "alpha",
+                            "choice": {"action": "rest", "params": {}}, "reason": "r", "perception": {"camera": []}}) + "\n")
 s2 = D.maybe_sleep(L, D.new_state(), time.mktime((2026, 11, 16, 4, 1, 0, 0, 0, -1)))
 check("second night: version 2, note dropped and added", D.read_json(D.PREFS_FILE)["version"] == 2 and
       D.read_json(D.PREFS_FILE)["notes"] == ["Zack likes short notes.", "Another note"], D.read_json(D.PREFS_FILE))
@@ -215,6 +219,8 @@ check("deck always thinks", D.mind_step(L, std) is True)
 check("deck adopted Alpha's mind on hand-back", std["drives"]["energy"] == 0.11 and std["cam_seq"] == 40 and std["tick"] == 500, std)
 check("deck ignores limits from the store", "deck_limits" not in std or std["deck_limits"] is None)
 jl = open(os.path.join(D.DATA_DIR, "journal", "2026-11-15.jsonl")).read()
+_today = os.path.join(D.DATA_DIR, "journal", time.strftime("%Y-%m-%d") + ".jsonl")     # the hand-back event is journaled at the real time
+jl += open(_today).read() if os.path.exists(_today) and not _today.endswith("2026-11-15.jsonl") else ""
 check("Alpha's entries merged into the deck journal", "alpha:6:498:x" in jl and "alpha:6:499:y" in jl)
 check("hand-back journaled", '"event": "handback"' in jl)
 check("merge cursor saved", std["merged_since"] == "2026-11-15T03:11:00-0500")

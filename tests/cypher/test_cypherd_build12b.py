@@ -111,6 +111,7 @@ check("no secrets in world.json", TOKEN not in json.dumps(wj) and TOPIC not in j
 check("body not designed yet -> invited to design it", "You decide what you look like" in msgs[1]["content"])
 
 # ---- threads ----
+L["features"] = {"loops": False}     # build 15 replaces threads with open loops; this is the legacy path
 st = C.new_state()
 check("open a thread", C.apply_thread(st, {"open": "find out what Pino's town is built with"}, now).startswith("opened thread #1"))
 check("threads in the prompt", "#1 find out what Pino" in C.build_messages(L, st, P, now)[1]["content"])
@@ -124,6 +125,7 @@ check("thread text with house words refused", C.apply_thread(C.new_state(), {"op
 PX["reply"] = json.dumps({"action": "journal_thought", "params": {"text": "neon again"}, "reason": "x", "thread": {"open": "map the street below"}})
 st = C.new_state(); e = run_tick(st)
 check("a decision can open a thread", e.get("thread", "").startswith("opened thread") and st["threads"][0]["text"] == "map the street below", e)
+L.pop("features", None)
 
 # ---- decide, then speak ----
 check("narration comes from what happened", e.get("said") == "Wrote in my journal." and st["dash_last"]["reason"].startswith("Wrote in my journal."), e)

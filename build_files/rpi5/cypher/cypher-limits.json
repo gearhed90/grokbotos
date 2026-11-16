@@ -183,7 +183,9 @@
     "hosts": ["pinos.world"],
     "timeout_s": 10,
     "feed_items": 3,
-    "max_result_chars": 400
+    "max_result_chars": 600,
+    "ttl_s": {"_comment": "build 15: never ask pinos.world more often than this per API part (seconds; the code's floors are the same)", "now": 15, "feed": 30, "mind": 60, "memories": 300, "who": 600},
+    "post": {"_comment": "build 15: where a signed note would be sent. null = not verified: nothing is ever sent", "url": null, "field": "message"}
   },
   "world": {
     "_comment": "Build 12: Night City (Zack's private project). Simulated until the city exists on Alpha: Cypher's place is a state field and trips are instant; the deck is his apartment. Going out is allowed in quiet hours (Zack, Nov 15); quiet hours still block messages and notes.",
@@ -231,14 +233,22 @@
     "check_grid": {"phase": 5, "per_hour": 2, "per_day": 30, "min_gap_s": 1800, "_comment": "read-only gridwatch report: Alpha, proxy, lease, camera feed, latest grokbotos commits. Build 13: on his own at most every 30 min unless the grid changed since he last looked; Zack asking in a conversation skips the wait"},
     "x_lookup": {"phase": 5, "per_hour": 4, "per_day": 20, "_comment": "build 12: read-only public X account (bio + latest posts) by handle; deck only; paid from the hosted budget"},
     "web_search": {"phase": 5, "max_chars": 80, "per_hour": 4, "per_day": 20, "_comment": "build 12: read-only web search; deck only; paid from the hosted budget"},
-    "visit_pino": {"phase": 5, "per_hour": 4, "per_day": 24, "_comment": "build 12: read-only look at Pino's public feed (pinos.world API, no key)"},
+    "visit_pino": {"phase": 5, "per_hour": 4, "per_day": 24, "min_gap_s": 1800, "_comment": "build 12: read-only look at Pino's public feed (pinos.world API, no key). Build 15: at most every 30 min; each API part is cached (pino.ttl_s)"},
     "go_to": {"phase": 5, "per_hour": 12, "per_day": 100, "_comment": "build 12: walk somewhere in Night City (world.places); allowed in quiet hours"},
     "eat": {"phase": 5, "per_hour": 1, "per_day": 3, "min_gap_s": 10800, "max_energy": 0.8, "_comment": "build 12: a bowl at the noodle stall, +0.20 energy, 3 a day, 3 h apart; build 13: not when energy is 0.8 or more. Simulated trip while world.simulated; otherwise only at the noodle stall"},
     "speak": {"phase": 6, "max_chars": 200, "per_hour": 3, "per_day": 20, "_comment": "phase 6: say it out loud on the deck; Zack at the screen, not quiet hours"},
     "ask_nova": {"phase": 6, "max_chars": 300, "per_day": 3, "_comment": "phase 6: one question to Nova through a local outbox file; 3 a day"},
     "propose_code": {"phase": 6, "max_chars": 600, "max_diff_chars": 4000, "per_day": 1, "per_week": 3, "_comment": "phase 6: local code proposal for Nova to review; never applied automatically"},
     "rest": {"phase": 5, "per_hour": 4, "per_day": 40, "_comment": "build 12: rest on purpose (+energy). A drained tick that picks none rests instead."},
-    "review_lessons": {"phase": 6, "per_hour": 3, "per_day": 24, "_comment": "build 14: go over one lesson (free, local file); only when he has lessons"}
+    "review_lessons": {"phase": 6, "per_hour": 3, "per_day": 24, "_comment": "build 14: go over one lesson (free, local file); only when he has lessons"},
+    "research_lore": {"phase": 6, "per_hour": 2, "per_day": 16, "_comment": "build 15: free sourced facts for his Cyberpunk lore codex (SearXNG on Alpha + one read-only page, browse's rules)"},
+    "write_codex": {"phase": 6, "max_chars": 600, "per_hour": 2, "per_day": 16, "_comment": "build 15: the codex entry in his own words; his own idea kept apart in take"},
+    "library": {"phase": 6, "per_hour": 3, "per_day": 30, "_comment": "build 15: search or wander his library on Alpha"},
+    "reflect": {"phase": 6, "per_hour": 2, "per_day": 12, "_comment": "build 15: judge an open loop he closed"},
+    "visit_pinos_world": {"phase": 6, "max_chars": 200, "per_day": 1, "per_week": 1, "_comment": "build 15: a rare signed note left at pinos.world, logged in full. Never sent unless features.pino_post is true AND pino.post.url is set (both unset: not verified)"}
   },
+  "features": {"_comment": "Build 15: switch any new piece off alone. pino_post can only be turned on here (root-owned); the rest can be overridden with: grokbot-cypher features NAME on|off|default",
+               "pino_cooldown": true, "full_text": true, "lore": true, "pino_api": true, "habituation": true, "novelty": true, "beliefs": true, "loops": true,
+               "working_memory": true, "library": true, "makes": true, "character_adds": true, "interview": true, "slim_prompt": true, "pino_post": false},
   "avatar_colors": ["white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray"]
 }
