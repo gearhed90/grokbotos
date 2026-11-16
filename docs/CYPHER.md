@@ -219,3 +219,13 @@ A local wake-word detector binary, self-improvement, dock meters, the lock-scree
 ## Tests
 
 `python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py`, `test_cypher_one_mind.py`, `test_cypherd_phase5.py`, `test_cypherd_build12.py`, `test_cypherd_build12b.py`, `test_cypherd_build13.py`, `test_cypherd_build14.py` and `test_cypherd_build14b.py` (build 14 includes a headless GTK probe on a private broadwayd when available; all HTTP mocked) (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, camfeed and a two-process failover test (`test_failover_e2e.py`) live with the Alpha code in `~/nova-projects/cypher/tests`.
+
+### Build 15 fix: power_off dialog never raised (found on build 14, 15 Nov 10:16 PM ET)
+Zack typed "Shut down"; the chat model replied "Shutting down. Confirm on the screen if you mean it." without
+calling `power_off`, so no Confirm/Cancel dialog appeared (journal kind `turn`, no `pending` AUDIT line). The
+unbacked-claim guard only knew search/look-up verbs, so it let the false claim through. Now (novad.py):
+- a plain whole-message shutdown request ("shut down", "power off", "turn yourself off", ...) raises the
+  physical dialog directly, without asking the model; only the on-screen Confirm click still runs it;
+- a reply that mentions a confirm dialog/button or says it is shutting down, restarting or locking, in a turn
+  where no tool returned pending, gets one nudge; if it still claims it, it is replaced with
+  "No confirm dialog is up; nothing was started."

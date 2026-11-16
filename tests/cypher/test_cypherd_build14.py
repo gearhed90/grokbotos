@@ -305,6 +305,53 @@ check("timeout (expired) does nothing, even with a click", res.get("error") == "
 script[:] = [{"content": "", "tool_calls": [{"id": "1", "function": {"name": "power", "arguments": J({"action": "shutdown"})}}]}]
 ev = []; N.handle_prompt("shut down", ev.append)
 check("the old power/shutdown tool goes through the same dialog", [x["confirm"]["physical"] for x in ev if "confirm" in x] == [True])
+# --- build 15: the 10:16 PM bug: the model said "Shutting down. Confirm on the screen" with no tool call ---
+N.PENDING.clear(); seen.clear()
+script[:] = [{"content": "Shutting down. Confirm on the screen if you mean it."}]   # what the model really did
+ev = []; N.handle_prompt("Shut down", ev.append)
+cf = [x["confirm"] for x in ev if "confirm" in x]
+check("b15: 'Shut down' raises the physical dialog without asking the model", cf and cf[0]["physical"] is True
+      and cf[0]["text"] == "Shut Cypher down now?" and not seen and len(script) == 1 and cf[0]["id"] in N.PENDING, (ev, seen))
+check("b15: ...and nothing runs until the click", not os.path.exists(REQ) and N.confirm(cf[0]["id"], True).get("error") == "needs_click")
+for ptxt in ("shut down", "Shutdown.", "power off", "please power down now", "Cypher, shut yourself down", "turn yourself off", "ok shut down please"):
+    N.PENDING.clear(); script[:] = []; ev = []; N.handle_prompt(ptxt, ev.append)
+    check("b15: intent %r -> dialog" % ptxt, [x["confirm"]["physical"] for x in ev if "confirm" in x] == [True], ev)
+for ptxt in ("shut down the terminal", "how do I shut down Alpha?", "don't shut down", "what happens when you power off?",
+             "close the browser", "shut up"):
+    check("b15: not a shutdown request: %r" % ptxt, not N.power_intent(ptxt))
+N.PENDING.clear()
+# a false claim with no dialog: one nudge, then the reply is replaced
+script[:] = [{"content": "Shutting down. Confirm on the screen if you mean it."},
+             {"content": "Okay. Tap Confirm on the screen when you're ready."}]
+ev = []; N.handle_prompt("can you turn the deck off for me in a bit", ev.append)
+rep = [x["reply"] for x in ev if "reply" in x]
+check("b15: a reply claiming a dialog that was never raised is nudged, then replaced",
+      rep == [N.NO_DIALOG_TEXT] and not [x for x in ev if "confirm" in x] and not N.PENDING
+      and any(m.get("content") == N.CONFIRM_NUDGE for m in seen[-1]), (ev, seen[-1][-2:]))
+script[:] = [{"content": "Shutting down. Confirm on the screen if you mean it."},
+             {"content": "", "tool_calls": [{"id": "2", "function": {"name": "power_off", "arguments": "{}"}}]}]
+ev = []; N.handle_prompt("can you turn the deck off for me in a bit", ev.append)
+check("b15: after the nudge the model can still call power_off -> the real dialog",
+      [x["confirm"]["physical"] for x in ev if "confirm" in x] == [True] and not [x for x in ev if "reply" in x], ev)
+N.PENDING.clear()
+script[:] = [{"content": "Locking the screen now. Hit Yes on the dialog."}, {"content": "I can lock the screen if you want; say so."}]
+ev = []; N.handle_prompt("lock it maybe?", ev.append)
+check("b15: an honest retry after the nudge is kept", [x.get("reply") for x in ev if "reply" in x] == ["I can lock the screen if you want; say so."], ev)
+for ok_txt in ("I can confirm it's 2026.", "Terminal's up. Super+Enter if you need another.", "The noodle stall was quiet tonight.",
+               "Say shut down and I'll put a dialog up."):
+    check("b15: no false alarm on %r" % ok_txt, not N.confirm_claim(ok_txt))
+for bad in ("Shutting down. Confirm on the screen if you mean it.", "Tap Confirm on the screen.", "Powering off now.",
+            "The dialog is up, hit Confirm.", "Press the Yes button to restart.", "Restarting now."):
+    check("b15: claim caught: %r" % bad, N.confirm_claim(bad))
+script[:] = [{"content": "", "tool_calls": [{"id": "3", "function": {"name": "power", "arguments": J({"action": "lock"})}}]}]
+ev = []; N.handle_prompt("lock the screen", ev.append)
+check("b15: a real pending (lock) still reaches the dialog", len([x for x in ev if "confirm" in x]) == 1 and not [x for x in ev if "reply" in x], ev)
+N.PENDING.clear(); kinds = []; _rt = N.cypher_link.record_turn
+N.cypher_link.record_turn = lambda prompt, reply, via="typed", tools=(), kind="turn", now=None: kinds.append((kind, reply, [t["tool"] for t in tools]))
+script[:] = []; ev = []; N.handle_prompt("Shut down", ev.append)
+N.cypher_link.record_turn = _rt; N.PENDING.clear()
+check("b15: the journal logs 'Shut down' as asks_confirm with power_off pending", kinds == [("asks_confirm", "Shut Cypher down now?", ["power_off"])], kinds)
+check("b15: TOOL_RULES forbid claiming a dialog", "unless a tool returned pending this turn" in N.TOOL_RULES)
 N.PENDING.clear()
 N.serve_confirm_socket()
 sk = os.environ["NOVA_CONFIRM_SOCK"]

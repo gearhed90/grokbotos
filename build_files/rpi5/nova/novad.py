@@ -383,6 +383,36 @@ CONFIRM_SOCK = os.environ.get("NOVA_CONFIRM_SOCK") or os.path.join(
 def power_off_pending():
     return make_pending("power_off", {"action": "poweroff"}, POWER_OFF_Q, do_power_off, physical=True, ttl=POWER_OFF_TTL)
 
+# Build 15 (bug from build 14, 15 Nov 10:16 PM): Zack typed "Shut down"; the model answered "Shutting down.
+# Confirm on the screen if you mean it." without calling power_off, so no dialog came up, and nothing caught
+# the false claim. Two fixes, both in code, not left to the model:
+#  1. A plain shutdown request goes straight to power_off_pending() (the same dialog; only the on-screen
+#     Confirm click still runs it). Strict whole-message match: "shut down the terminal" is not one.
+#  2. A reply may only mention a confirm dialog / Yes-No prompt, or say it is shutting down, restarting or
+#     locking, when this turn really raised a pending confirm. Otherwise the model gets one nudge to call the
+#     tool, and if it still claims one, the reply is replaced with a plain "no dialog is up".
+POWER_INTENT_RE = re.compile(
+    r"^\W*(?:(?:hey|ok|okay|please|cypher|now|go|ahead|and)[\s,]+)*"
+    r"(?:shut\s*down|power\s+(?:off|down)|shut\s+(?:yourself|the\s+deck|it|cypher)\s+(?:down|off)"
+    r"|turn\s+(?:yourself|the\s+deck|cypher)\s+off|power\s+(?:yourself|the\s+deck|cypher)\s+(?:off|down))"
+    r"(?:[\s,]+(?:now|please|yourself|the\s+deck|cypher|for\s+(?:the|to)\s*night|for\s+now))*\W*$", re.I)
+CONFIRM_CLAIM_RE = re.compile(
+    r"\b(?:confirm|tap|click|press|hit|answer)\b[^.?!\n]{0,40}\b(?:on\s+(?:the|my|your|this)\s+screen|on-screen|button|dialog|prompt|pop-?up)"
+    r"|\b(?:dialog|prompt|pop-?up|yes/no|confirm/cancel)\b[^.?!\n]{0,30}\b(?:is\s+up|showing|on\s+(?:the|my|your|this)\s+screen|appear|waiting)"
+    r"|\b(?:shutting\s+(?:myself\s+|the\s+deck\s+|it\s+)?down|powering\s+(?:myself\s+|the\s+deck\s+)?(?:off|down)|restarting\s+(?:now|the\s+deck|myself)|locking\s+the\s+screen)\b",
+    re.I)
+CONFIRM_NUDGE = ("Your reply mentions a confirm dialog or says you are shutting down, restarting or locking, but no tool "
+                 "raised a dialog this turn, so nothing is on the screen. If Zack asked for that, call the tool now "
+                 "(power_off to shut down, power for lock or restart); otherwise reply again without claiming it.")
+NO_DIALOG_TEXT = ("No confirm dialog is up; nothing was started. Say \"shut down\" again and I'll put the Confirm "
+                  "button on the screen.")
+
+def power_intent(prompt):
+    return bool(isinstance(prompt, str) and len(prompt) <= 60 and POWER_INTENT_RE.match(prompt.strip()))
+
+def confirm_claim(text):
+    return bool(isinstance(text, str) and CONFIRM_CLAIM_RE.search(text))
+
 def _sysctl(argv, timeout):
     if DRY_RUN:
         log("DRY-RUN", " ".join(argv)); return 0
@@ -581,6 +611,7 @@ TOOL_RULES = ("You run on Zack's Grok Bot OS Raspberry Pi touchscreen. "
           "Act on requests using your tools. The onshape_pad app is Zack's touch button pad for Onshape on his PC. The terminal app is a foot terminal on this deck (open_app terminal; Super+Enter also opens one): there IS a terminal. For streamers on Twitch open https://www.twitch.tv/<channel> "
           "(channel names are lowercase with no spaces, e.g. 'burnt peanut' -> burntpeanut). "
           "Some tools return pending: the user is shown Yes/No buttons; just restate the question briefly. "
+          "Never say a confirm dialog or button is on the screen, or that you are shutting down, unless a tool returned pending this turn. "
           "Never ask for, repeat or accept a WiFi password: tell the user to enter it in Settings. "
           "You cannot install updates. "
           "Replies are shown above a text bar: keep small talk to one or two short sentences, but when Zack asks a real "
@@ -626,6 +657,11 @@ def handle_prompt(prompt, emit, via="typed"):
         convo = [{"role": "system", "content": sysmsg}] + history[-HISTORY_MAX:] + [{"role": "user", "content": prompt}]
     try:
         pend = None; nudged = False
+        if power_intent(prompt):
+            # a plain shutdown request: raise the dialog ourselves (fix 1 above); never left to the model
+            emit({"state": "working", "tool": "power_off"})
+            pend = power_off_pending()
+            used.append({"tool": "power_off", "args": {}, "outcome": "pending"})
         for _ in range(MAX_TOOL_ROUNDS + 2):
             if pend:   # stop here: only the user's Yes on /api/confirm runs it
                 with hlock:
@@ -641,10 +677,19 @@ def handle_prompt(prompt, emit, via="typed"):
                 text = (m.get("content") or "").strip() or "Done."
                 # Decide, then speak: a reply that claims an action with no tool behind it gets one
                 # chance to call the tool or take the claim back.
-                if not nudged and cypher_link.enabled() and cypher_link.unbacked_claim(text, used):
+                if not nudged and not confirm_claim(text) and cypher_link.enabled() and cypher_link.unbacked_claim(text, used):
                     nudged = True
                     convo += [{"role": "assistant", "content": text}, {"role": "system", "content": cypher_link.CLAIM_NUDGE}]
                     continue
+                if confirm_claim(text):
+                    # fix 2: no pending confirm was raised this turn (a pending one returns above), so a
+                    # reply that talks about a dialog or a shutdown in progress is false
+                    if not nudged:
+                        nudged = True
+                        convo += [{"role": "assistant", "content": text}, {"role": "system", "content": CONFIRM_NUDGE}]
+                        continue
+                    log("reply claimed a confirm dialog that was never raised; replaced")
+                    text = NO_DIALOG_TEXT
                 if nudged and cypher_link.unbacked_claim(text, used):
                     text += " (Nothing started yet. Ask me again and I'll run it.)"
                 with hlock:
