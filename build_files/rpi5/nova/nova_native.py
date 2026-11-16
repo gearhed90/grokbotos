@@ -2,7 +2,7 @@
 """Cypher's face for grokbotos (GTK3 + pycairo): the avatar, the text bar and voice,
 and Cypher's HUD panels around the avatar (cypher_panels: mood, drives, brain,
 activity, journal, actions, camera line, phone replies, account requests; Super+C
-hides/shows them). Talking here is talking to Cypher (novad -> cypher_link).
+hides/shows them). Super+J opens the journal, Super+H the full conversation (build 15). Talking here is talking to Cypher (novad -> cypher_link).
 Client of novad (http://127.0.0.1:8765). The internal names stay (nova_native.py,
 Wayland app_id "nova-shell") so the sway rules, the Super toggle and novad's focus
 watcher keep working. No on-screen keyboard by design."""
@@ -37,6 +37,7 @@ CONFIRM_SOCK = os.environ.get("NOVA_CONFIRM_SOCK") or os.path.join(
 CSS = b"""
 window, .nova { background: #000; }
 #reply { color: #d1fae5; font-size: 24px; }
+#replysw, #replysw viewport { background: transparent; background-image: none; border: 0; }
 #reply.err { color: #fcd34d; }
 #reply.q { color: #fff; font-weight: 600; background: rgba(0,0,0,.72); border-radius: 18px; padding: 8px 18px; }
 #echo { color: #fff; font-size: 18px; }
@@ -231,7 +232,10 @@ class Nova:
         # echo and the input all wrap inside it, so nothing runs under the HUD panels.
         bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, halign=Gtk.Align.FILL, valign=Gtk.Align.END); self.bar = bar
         self.reply = Gtk.Label(name="reply", wrap=True, wrap_mode=Pango.WrapMode.WORD_CHAR, justify=Gtk.Justification.CENTER,
-                               halign=Gtk.Align.FILL, xalign=0.5, margin_bottom=12)
+                               halign=Gtk.Align.FILL, xalign=0.5)
+        # build 15: a long reply scrolls inside a box at most ~40% of the screen tall instead of running off it
+        self.rsw = Gtk.ScrolledWindow(name="replysw", margin_bottom=12, propagate_natural_height=True)
+        self.rsw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC); self.rsw.add(self.reply)
         self.echo = Gtk.Label(name="echo", wrap=True, wrap_mode=Pango.WrapMode.WORD_CHAR, justify=Gtk.Justification.CENTER,
                               halign=Gtk.Align.FILL, xalign=0.5, margin_bottom=10)
         self.echo.set_size_request(-1, 22)
@@ -254,7 +258,7 @@ class Nova:
         self.mic.connect("button-press-event", self.mic_down); self.mic.connect("button-release-event", self.mic_up)
         self.mic.connect("touch-event", self.mic_touch)
         vb.add(self.mute); vb.add(self.mic); row.add_overlay(vb)
-        for x in (self.reply, self.echo, self.cf, row): bar.add(x)
+        for x in (self.rsw, self.echo, self.cf, row): bar.add(x)
         ov.add_overlay(bar)
         self.vnote = Gtk.Label(name="vnote", halign=Gtk.Align.CENTER, valign=Gtk.Align.END); self.fv = Fader(self.vnote, .6)
         ov.add_overlay(self.vnote); ov.set_overlay_pass_through(self.vnote, True)
@@ -340,14 +344,14 @@ class Nova:
         card = self.jcard = Gtk.Box(name="jcard", orientation=Gtk.Orientation.VERTICAL, spacing=8,
                                     halign=Gtk.Align.FILL, valign=Gtk.Align.FILL)
         top = Gtk.Box(spacing=10)
-        t = Gtk.Label(label="JOURNAL \u00b7 newest first", xalign=0); t.get_style_context().add_class("jttl"); top.pack_start(t, True, True, 0)
+        t = self.jttl = Gtk.Label(label="JOURNAL \u00b7 newest first", xalign=0); t.get_style_context().add_class("jttl"); top.pack_start(t, True, True, 0)
         x = Gtk.Button(label="Close  Esc", name="jclose"); x.set_can_focus(False)
         x.connect("clicked", lambda *_: self.close_journal()); top.pack_end(x, False, False, 0); card.add(top)
         sw = self.jsw = Gtk.ScrolledWindow(vexpand=True); sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         sw.connect("edge-reached", lambda _s, pos: self._journal_more() if pos == Gtk.PositionType.BOTTOM else None)
         self.jlist = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14); sw.add(self.jlist); card.add(sw)
         self.jstat = Gtk.Label(xalign=0); self.jstat.get_style_context().add_class("jdim"); card.add(self.jstat)
-        eb.add(card); self.jn, self.jbusy, self.jend = 0, False, False
+        eb.add(card); self.jn, self.jbusy, self.jend, self.jkinds = 0, False, False, None
         return eb
     def _jlabel(self, text, cls):
         l = Gtk.Label(label=text, xalign=0, wrap=True, wrap_mode=Pango.WrapMode.WORD_CHAR, selectable=False)
@@ -357,7 +361,7 @@ class Nova:
         b.add(self._jlabel("%s  %s%s" % (v["time"], v["kind"].upper().replace("_", " "), "  @alpha" if v["host"] == "alpha" else ""), "jhead"))
         if v["what"]: b.add(self._jlabel(v["what"], "jwhat"))
         if v["reason"]: b.add(self._jlabel("why: " + v["reason"], "jwhy"))
-        if v["result"]: b.add(self._jlabel("result: " + v["result"], "jres"))
+        if v["result"]: b.add(self._jlabel(v["result"] if v["kind"] in ("talk", "interview") else "result: " + v["result"], "jres"))
         if v["extra"]: b.add(self._jlabel(v["extra"], "jdim"))
         b.show_all(); return b
     def _place_journal(self):
@@ -368,8 +372,11 @@ class Nova:
         self.jcard.set_margin_top(int(H * .08))
         # stop above the chat input so the bar stays visible and usable
         self.jcard.set_margin_bottom(int(H * .035) + max(48, self.inp.widget.get_allocated_height()) + 16)
-    def open_journal(self):
+    def open_journal(self, chat=False):
+        """chat=True (Super+H, build 15): only the conversations and interviews, in full."""
         if CJ is None or self.picker.get_visible(): return
+        self.jkinds = getattr(CJ, "CHAT_KINDS", ("talk",)) if chat else None
+        self.jttl.set_text("CHAT \u00b7 newest first" if chat else "JOURNAL \u00b7 newest first")
         self._place_journal()
         for c in self.jlist.get_children(): self.jlist.remove(c)
         self.jn, self.jend = 0, False; self.jstat.set_text("reading\u2026")
@@ -387,7 +394,8 @@ class Nova:
             self.jn += len(rows); self.jend = len(rows) < self.JOURNAL_PAGE
             self.jstat.set_text(("%d entries" % self.jn) + (" \u00b7 that's all" if self.jend else " \u00b7 scroll for older")
                                 if self.jn else "nothing journaled yet")
-        self.bg(lambda: CJ.entries(limit=self.JOURNAL_PAGE, offset=off), done)
+        kinds = self.jkinds
+        self.bg(lambda: CJ.entries(limit=self.JOURNAL_PAGE, offset=off, kinds=kinds) if kinds else CJ.entries(limit=self.JOURNAL_PAGE, offset=off), done)
     def toggle_panel(self, side):
         """Build 14b: fold a HUD column into its edge strip, or open it again (remembered in panels-collapsed.json)."""
         if self.hud is None or CP.hidden(): return
@@ -463,6 +471,8 @@ class Nova:
         if (x, bw) != getattr(self, "_col", None):                        # margins, not a minimum width: text wraps inside
             self._col = (x, bw); self.bar.set_margin_start(x); self.bar.set_margin_end(W - x - bw)
         self.bar.set_margin_bottom(int(H * .035))
+        mh = max(120, int(H * .4))
+        if self.rsw.get_max_content_height() != mh: self.rsw.set_max_content_height(mh)
         self._place_vnote(H)
 
     def _place_vnote(self, H=None):
@@ -533,9 +543,10 @@ class Nova:
     def say(self, t, err=False, instant=False):
         if self.a.ask: print("say:", "ERR" if err else "OK", t, file=sys.stderr, flush=True)
         if not err: self.speak(t)
-        sc = self.reply.get_style_context(); self.reply.set_text(t)
+        sc = self.reply.get_style_context(); self.reply.set_text(t); self.rsw.get_vadjustment().set_value(0)
         (sc.add_class if err else sc.remove_class)("err"); self.fr.to(1, instant=instant); self.clear_tms()
-        self.set_state("idle" if err else "typing"); hold = min(14000, 3500 + len(t) * 60)
+        # build 15: long replies stay up long enough to read (and scroll); Super+H shows the whole conversation
+        self.set_state("idle" if err else "typing"); hold = min(14000 if len(t) < 300 else 90000, 3500 + len(t) * 60)
         self.tms = [self.later(min(2500, 600 + len(t) * 25), lambda: self.set_state("idle")),
                     self.later(hold, lambda: (self.fr.to(0), self.fe.to(0)))]
     def on_enter(self, e):
@@ -605,7 +616,13 @@ class Nova:
         if k in ("bracketleft", "bracketright") and e.state & Gdk.ModifierType.SUPER_MASK:   # build 14b: fold a column
             self.toggle_panel("left" if k == "bracketleft" else "right"); return True
         if k in ("j", "J") and e.state & Gdk.ModifierType.SUPER_MASK:          # build 14: Super+J toggles the journal
-            (self.close_journal if self.jv.get_visible() else self.open_journal)(); return True
+            if self.jv.get_visible() and self.jkinds: self.open_journal()        # from the chat view straight to the journal
+            else: (self.close_journal if self.jv.get_visible() else self.open_journal)()
+            return True
+        if k in ("h", "H") and e.state & Gdk.ModifierType.SUPER_MASK:          # build 15: Super+H toggles the conversation view
+            if self.jv.get_visible() and not self.jkinds: self.open_journal(chat=True)
+            else: (self.close_journal if self.jv.get_visible() else lambda: self.open_journal(chat=True))()
+            return True
         if self.jv.get_visible():
             if k == "Escape": self.close_journal(); return True
             if k in ("Page_Up", "Page_Down", "Up", "Down", "Home", "End"):

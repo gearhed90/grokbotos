@@ -11,6 +11,7 @@ E = os.environ.get
 HOME = os.path.expanduser("~")
 DATA_DIR = E("CYPHER_DATA_DIR", os.path.join(E("XDG_DATA_HOME") or os.path.join(HOME, ".local", "share"), "cypher"))
 MAX_LINE = 65536
+FULL = 4000          # build 15: conversations and thoughts are kept and shown in full (was cut at 600 / 300)
 
 _CTRL = re.compile(r"[\x00-\x1f\x7f]")
 _SCRUB = [
@@ -47,13 +48,17 @@ def view(e):
            "host": "alpha" if e.get("host") == "alpha" else "deck"}
     ev = e.get("event")
     if ev == "talk":
-        out.update(kind="talk", what="Zack: %s" % scrub(e.get("user")), result="Cypher: %s" % scrub(e.get("reply")))
+        out.update(kind="talk", what="Zack: %s" % scrub(e.get("user"), FULL), result="Cypher: %s" % scrub(e.get("reply"), FULL))
         tools = [t.get("tool") for t in e.get("tools") or [] if isinstance(t, dict)]
         if tools: out["extra"] = "tools: " + ", ".join(scrub(t, 30) for t in tools)
         return out
     if ev == "talk_action":
         out.update(kind="ask", what="asked on screen: %s %s" % (scrub(e.get("action"), 30), scrub(e.get("arg") or e.get("service") or "", 80)),
                    result=scrub(e.get("validator"), 120) + ("; found: " + scrub(e["found"]) if e.get("found") else ""))
+        return out
+    if ev == "interview":
+        out.update(kind="interview", what="%s: %s" % (scrub(e.get("asker") or "Nova", 10), scrub(e.get("question"), FULL)),
+                   result="Cypher: %s" % scrub(e.get("answer"), FULL), extra=("brain: %s" % scrub(e.get("brain"), 12)) if e.get("brain") else "")
         return out
     if ev:
         bits = []
@@ -73,7 +78,7 @@ def view(e):
     if v.startswith("rejected"):
         out.update(kind="refused", what="tried %s%s" % (scrub(e.get("model_choice") or a, 40), (": " + scrub(arg, 200)) if arg else ""))
     elif a == "journal_thought":
-        out.update(kind="thought", what=scrub(arg))
+        out.update(kind="thought", what=scrub(arg, FULL))
     elif a == "none":
         if (e.get("perception") or {}).get("camera"):
             out.update(kind="camera", what="saw the cameras, let it be")
@@ -101,8 +106,11 @@ def files(data_dir=None):
     except OSError:
         return []
 
-def entries(limit=200, offset=0, data_dir=None):
-    """Readable entries, newest first: `limit` of them after skipping `offset` (for scrolling back)."""
+CHAT_KINDS = ("talk", "ask", "interview")
+
+def entries(limit=200, offset=0, data_dir=None, kinds=None):
+    """Readable entries, newest first: `limit` of them after skipping `offset` (for scrolling back).
+    kinds: only these (e.g. CHAT_KINDS for the conversation view)."""
     out, skip = [], offset
     for path in files(data_dir):
         try:
@@ -118,7 +126,7 @@ def entries(limit=200, offset=0, data_dir=None):
                 v = view(json.loads(l))
             except ValueError:
                 continue
-            if v:
+            if v and (not kinds or v["kind"] in kinds):
                 rows.append(v)
         rows.sort(key=lambda r: r["ts"], reverse=True)   # Alpha's merged entries arrive out of order
         for r in rows:
@@ -134,7 +142,7 @@ def text(v, width=None):
     head = "%s %s  %s%s" % (v["day"], v["time"], v["kind"].upper(), " @alpha" if v["host"] == "alpha" else "")
     lines = [head, "  " + v["what"]]
     if v["reason"]: lines.append("  why: " + v["reason"])
-    if v["result"]: lines.append("  result: " + v["result"])
+    if v["result"]: lines.append(("  " if v["kind"] in ("talk", "interview") else "  result: ") + v["result"])
     if v["extra"]: lines.append("  " + v["extra"])
     if width:
         import textwrap

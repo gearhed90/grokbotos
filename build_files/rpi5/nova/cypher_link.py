@@ -204,7 +204,7 @@ def record_turn(prompt, reply, via="typed", tools=(), kind="turn", now=None):
             args = {k: scrub(str(v), 40) for k, v in (t.get("args") or {}).items() if k in _TOOL_ARGS}
             tl.append({"tool": t["tool"][:30], "outcome": scrub(t.get("outcome"), 40), **({"args": args} if args else {})})
     return _append({"ts": now or time.time(), "kind": kind, "via": "voice" if via == "voice" else "typed",
-                    "user": scrub(prompt, 300), "reply": scrub(reply, 300), "tools": tl[:6]})
+                    "user": scrub(prompt, 4000), "reply": scrub(reply, 4000), "tools": tl[:6]})   # build 15: whole turns (was 300)
 
 # What a conversation may queue (cypherd.TALK_ACTIONS): asks and read-only looks. Never message_zack,
 # notes, limits, tuning or anything that approves; cypherd re-validates every one.

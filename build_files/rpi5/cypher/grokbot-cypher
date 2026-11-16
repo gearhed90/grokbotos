@@ -38,6 +38,19 @@
   grokbot-cypher limits set journal_thought min_gap_s SECONDS
                                    the shortest gap between journal thoughts (build 14)
   grokbot-cypher lessons [flags]   what Cypher learned from mistakes; flags = repeated ones for Nova
+  Build 15:
+  grokbot-cypher chat [-n N]       the conversations (and interviews) in full, newest first (default 10)
+  grokbot-cypher interview [--from zack|nova] [--day YYYY-MM-DD] [--since HH:MM] [--until HH:MM] [--ticks N,N] "QUESTION"
+                                   ask Cypher about his decisions; he answers from what he had then (Alpha's
+                                   free brain; never a message_zack). Saved with the question.
+  grokbot-cypher interview --note "TEXT"   leave him a note (information, never an approval)
+  grokbot-cypher interviews [N]    past interviews
+  grokbot-cypher features [on|off|default NAME]   the build 15 switches (pino_post: limits file only)
+  grokbot-cypher codex [show ID|queue]   his Cyberpunk lore codex: entries, sources, his own takes
+  grokbot-cypher library [stats|search WORDS|wander [old]]   his library on Alpha
+  grokbot-cypher beliefs | loops | made   what experience taught him, his open loops, things he made
+  grokbot-cypher character         his approved character additions and pending ones (approve with tuning)
+  grokbot-cypher migrate15 [--dry-run]   one-time move of memories/lessons/threads into the new mind (cypherd does it at start)
 """
 import json, os, shutil, subprocess, sys, time
 E = os.environ.get
@@ -129,6 +142,14 @@ def main(argv):
             rows = J.entries(limit=n, data_dir=DATA)
             if not rows: print("nothing journaled yet")
             print("\n\n".join(J.text(v, width) for v in rows))
+    elif cmd == "chat":
+        args = argv[2:]
+        n = int(args[1]) if len(args) > 1 and args[0] == "-n" and args[1].isdigit() else 10
+        J = journal_mod()
+        width = min(100, max(40, shutil.get_terminal_size((100, 24)).columns))
+        rows = J.entries(limit=n, data_dir=DATA, kinds=getattr(J, "CHAT_KINDS", ("talk",)))
+        if not rows: print("no conversations journaled yet")
+        print("\n\n".join(J.text(v, width) for v in rows))
     elif cmd == "mute": touch("muted"); print("notes muted")
     elif cmd == "unmute": rm("muted"); print("notes on")
     elif cmd == "pause":
@@ -156,12 +177,14 @@ def main(argv):
         return subprocess.run([*pre, helper, *argv[3:6]]).returncode
     elif cmd == "panels":
         return subprocess.run([E("CYPHER_PANELS_TOGGLE", "/usr/local/bin/grokbot-cypher-panels"), *argv[2:]]).returncode
-    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests", "inbox", "ntfy-qr", "tuning", "grid", "limits", "asks", "code", "lessons"):
+    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests", "inbox", "ntfy-qr", "tuning", "grid", "limits", "asks", "code", "lessons",
+                 "features", "interview", "interviews", "codex", "library", "beliefs", "loops", "made", "character", "migrate15"):
         if cmd == "prefs" and len(argv) > 3 and argv[2] == "rollback":
             args = ["prefs-rollback", argv[3]]
         elif cmd == "limits":
             args = ["limits"]
-        elif cmd in ("requests", "inbox", "ntfy-qr", "tuning", "grid", "asks", "code", "lessons"):
+        elif cmd in ("requests", "inbox", "ntfy-qr", "tuning", "grid", "asks", "code", "lessons", "features", "interview", "interviews",
+                     "codex", "library", "beliefs", "loops", "made", "character", "migrate15"):
             args = [cmd, *argv[2:]]
         else:
             args = [cmd]
