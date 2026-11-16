@@ -135,7 +135,7 @@ PX["queue"] = [J({"action": "journal_thought", "params": {"text": "Pino's kiwi i
 e = tick_at(st)
 check("fallback: twice false -> rewritten without the false sentence", e["choice"] == {"action": "journal_thought", "params": {"text": "Pino's kiwi is odd."}}
       and e["note"].startswith("rewrote"), e)
-st = C.new_state()
+st = C.new_state(); st["drives"]["energy"] = 0.3   # build 14: low energy, so none is not steered elsewhere
 PX["queue"] = [J({"action": "journal_thought", "params": {}, "reason": "Reflect on current state"})] * 2
 e = tick_at(st)
 check("fallback: 'needs text' twice -> a clean none (not a refusal on the HUD)", e["choice"]["action"] == "none" and e["validator"] == "ok"
@@ -202,7 +202,7 @@ check("none no longer called 'often right'", "often right" not in C.build_messag
 st = C.new_state(); st["recent"] = [[SUN - 300, "journal_thought"]]
 check("journal: refused 5 min after the last", "journal thought" in (C.blocked(L, st, PS, "journal_thought", SUN) or ""))
 check("journal: fine after 15 min", C.blocked(L, st, PS, "journal_thought", SUN + 700) is None)
-check("limits: journal 3 an hour, every 15 min", L["actions"]["journal_thought"]["per_hour"] == 3 and L["actions"]["journal_thought"]["min_gap_s"] == 900)
+check("limits: journal 4 an hour, every 10 min (build 14)", L["actions"]["journal_thought"]["per_hour"] == 4 and L["actions"]["journal_thought"]["min_gap_s"] == 600)
 st = C.new_state(); st["drives"]["energy"] = 0.85
 check("eat refused when not hungry", "not hungry" in (C.blocked(L, st, PS, "eat", SUN) or ""))
 st["drives"]["energy"] = 0.5

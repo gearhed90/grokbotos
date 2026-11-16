@@ -1,0 +1,11 @@
+// Build 14: Cypher's chat-triggered power_off. The kiosk user (grokbot), in its local active
+// session, may power the deck off (logind power-off, also while an SSH session is open) without a
+// password. Only these two logind actions; nothing else is granted, and there is no sudo entry.
+// novad runs it only after Zack clicks Confirm in the on-screen dialog (docs/CYPHER.md, power_off).
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.login1.power-off" ||
+         action.id == "org.freedesktop.login1.power-off-multiple-sessions") &&
+        subject.user == "grokbot" && subject.local && subject.active) {
+        return polkit.Result.YES;
+    }
+});

@@ -243,8 +243,12 @@ def render_panels(cr, w, h, snap, now=None):
     text(cr, W - cr.text_extents(clock).x_advance, 104, clock, TXT, 17, True)
     tick = "TICK %s" % safe(str(s.get("tick", 0)), 8)
     text(cr, 0, 103, tick, DIM, 11)
+    lc = s.get("lesson_count")
+    if isinstance(lc, int) and not isinstance(lc, bool) and lc > 0:      # build 14: lessons learned so far
+        text(cr, 96, 103, "LESSONS %d" % min(lc, 999), AMBER, 11)
 
     panel(cr, 0, 124, W, 226, "JOURNAL", CYAN)
+    text(cr, W - 92, 344, "TAP TO READ \u203a", DIM, 9.5)       # build 14: opens the journal viewer
     rows = [r for r in s.get("journal") or [] if isinstance(r, list) and len(r) == 3][-4:]
     if not rows: text(cr, 14, 156, "nothing journaled yet", DIM, 12)
     y = 150
@@ -301,6 +305,26 @@ def bar_width(w, h):
     """How wide the avatar's text bar may be so it never runs under a column."""
     k = h / 720.0
     return int(max(360, w - 2 * (MARGIN + COL_W + 18) * k))
+
+def text_column(w, h, panels=True):
+    """(x, width) of the centre column for the chat bar and Cypher's replies (build 14): between the two
+    columns with a gap, at most 720 px and 80% of the window. The avatar app pins its text bar to exactly
+    this box (side margins, not a minimum width), so long input and replies wrap instead of running under a panel."""
+    bw = min(720, int(w * .8))
+    if panels:
+        k = h / 720.0
+        bw = min(bw, int(w - 2 * (MARGIN + COL_W + 18) * k))
+    bw = max(160, bw)
+    return (w - bw) // 2, bw
+
+def journal_rect(w, h):
+    """(x, y, width, height) of the JOURNAL panel in window pixels (build 14): a tap there opens the viewer."""
+    k = h / 720.0
+    return (w - (MARGIN + COL_W) * k, 124 * k, COL_W * k, 226 * k)
+
+def in_journal(w, h, x, y):
+    jx, jy, jw, jh = journal_rect(w, h)
+    return jx <= x <= jx + jw and jy <= y <= jy + jh
 
 AVATAR_H = .55   # avatar.py's default body height (fraction of the window height); width is 1.9x that
 

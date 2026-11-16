@@ -60,9 +60,13 @@ try:
     r = tool("wifi_connect", {"ssid": "Neighbor"}); check("wifi secured unsaved -> Settings", "needs_password" in r.get("reply", ""), r)
     r = tool("wifi_connect", {"ssid": "Neighbor", "password": "hunter2hunter2"}); check("wifi password arg refused", "Settings" in r.get("reply", ""), r)
     r = tool("wifi_connect", {"ssid": "Nowhere"}); check("wifi unknown ssid", "not in range" in r.get("reply", ""), r)
+    rs = {}
     for a in ("lock", "restart", "shutdown"):
-        r = tool("power", {"action": a}); check("power %s needs confirm" % a, "confirm" in r, r)
-    c = conf(r["confirm"]["id"]); check("shutdown confirmed (dry run)", "Shutting down" in c.get("reply", ""), c)
+        r = rs[a] = tool("power", {"action": a}); check("power %s needs confirm" % a, "confirm" in r, r)
+    # build 14: shutdown is power_off, which only the on-screen Confirm click (owner-only socket) can run
+    c = conf(rs["shutdown"]["confirm"]["id"]); check("shutdown: a yes over HTTP is refused", c.get("error") == "needs_click", c)
+    check("shutdown dialog is the physical one", rs["shutdown"]["confirm"].get("physical") is True and rs["shutdown"]["confirm"].get("ttl") == 30, rs["shutdown"])
+    c = conf(rs["restart"]["confirm"]["id"]); check("restart confirmed (dry run)", "Restarting" in c.get("reply", ""), c)
     r = tool("power", {"action": "suspend"}); check("power bad action", "lock, restart or shutdown" in r.get("reply", ""), r)
     r = tool("run_shell", {"cmd": "id"}); check("unknown tool refused", "unknown tool" in r.get("reply", ""), r)
     r = tool("power", {"action": "lock"}); time.sleep(2.5)

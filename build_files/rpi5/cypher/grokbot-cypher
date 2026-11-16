@@ -2,7 +2,9 @@
 """grokbot-cypher - look at and steer Cypher's autonomy loop (cypherd).
 
   grokbot-cypher status            drives, mood, brain, last decisions
-  grokbot-cypher journal [-n N]    recent journal lines (default 10)
+  grokbot-cypher journal [-n N]    recent journal entries, newest first, in full: time, what he did
+                                   or thought, why, and the result (default 10; scrubbed)
+  grokbot-cypher journal --raw [-n N]  the old one-line-per-decision view, oldest first
   grokbot-cypher mute | unmute     on-screen notes off / on
   grokbot-cypher pause MINUTES     no model calls for a while (drives still drift)
   grokbot-cypher resume            end a pause
@@ -33,8 +35,11 @@
   grokbot-cypher limits [show]     the locked caps and quiet hours
   grokbot-cypher limits set ACTION per_hour|per_day|per_week N|none
                                    change one cap (sudo; live at cypherd's next loop, no restart)
+  grokbot-cypher limits set journal_thought min_gap_s SECONDS
+                                   the shortest gap between journal thoughts (build 14)
+  grokbot-cypher lessons [flags]   what Cypher learned from mistakes; flags = repeated ones for Nova
 """
-import json, os, subprocess, sys, time
+import json, os, shutil, subprocess, sys, time
 E = os.environ.get
 HOME = os.path.expanduser("~")
 CFG = E("CYPHER_CONFIG_DIR", os.path.join(E("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "cypher"))
@@ -67,6 +72,14 @@ def journal_lines(n):
             out = fh.read().splitlines() + out
         if len(out) >= n: break
     return out[-n:]
+
+def journal_mod():
+    """cypher_journal from the image (or next to this script in a checkout)."""
+    for d in (E("CYPHER_LIB"), "/usr/share/grokbot/cypher", os.path.dirname(os.path.abspath(__file__))):
+        if d and os.path.exists(os.path.join(d, "cypher_journal.py")):
+            sys.path.insert(0, d); break
+    import cypher_journal
+    return cypher_journal
 
 def fmt(line):
     try: j = json.loads(line)
@@ -104,8 +117,18 @@ def main(argv):
         print("last decisions:")
         for l in journal_lines(5): print("  " + fmt(l))
     elif cmd == "journal":
-        n = int(argv[3]) if len(argv) > 3 and argv[2] == "-n" else 10
-        for l in journal_lines(n): print(fmt(l))
+        args = argv[2:]
+        raw = "--raw" in args
+        if raw: args.remove("--raw")
+        n = int(args[1]) if len(args) > 1 and args[0] == "-n" else 10
+        if raw:
+            for l in journal_lines(n): print(fmt(l))
+        else:
+            J = journal_mod()
+            width = min(100, max(40, shutil.get_terminal_size((100, 24)).columns))
+            rows = J.entries(limit=n, data_dir=DATA)
+            if not rows: print("nothing journaled yet")
+            print("\n\n".join(J.text(v, width) for v in rows))
     elif cmd == "mute": touch("muted"); print("notes muted")
     elif cmd == "unmute": rm("muted"); print("notes on")
     elif cmd == "pause":
@@ -133,12 +156,12 @@ def main(argv):
         return subprocess.run([*pre, helper, *argv[3:6]]).returncode
     elif cmd == "panels":
         return subprocess.run([E("CYPHER_PANELS_TOGGLE", "/usr/local/bin/grokbot-cypher-panels"), *argv[2:]]).returncode
-    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests", "inbox", "ntfy-qr", "tuning", "grid", "limits", "asks", "code"):
+    elif cmd in ("prefs", "sleep-now", "ntfy-test", "requests", "inbox", "ntfy-qr", "tuning", "grid", "limits", "asks", "code", "lessons"):
         if cmd == "prefs" and len(argv) > 3 and argv[2] == "rollback":
             args = ["prefs-rollback", argv[3]]
         elif cmd == "limits":
             args = ["limits"]
-        elif cmd in ("requests", "inbox", "ntfy-qr", "tuning", "grid", "asks", "code"):
+        elif cmd in ("requests", "inbox", "ntfy-qr", "tuning", "grid", "asks", "code", "lessons"):
             args = [cmd, *argv[2:]]
         else:
             args = [cmd]

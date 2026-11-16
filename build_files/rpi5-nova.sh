@@ -79,13 +79,15 @@ install -m 0755 "${csrc}/grokbot-set-cypher-limit" /usr/local/sbin/grokbot-set-c
 # nova_native.py; Super+C hides/shows them) and qrencode for grokbot-cypher
 # ntfy-qr (a terminal QR of the topic, on screen only).
 install -m 0644 "${csrc}/cypher_panels.py" "${cypher}/cypher_panels.py"
+# Build 14: readable journal entries for the HUD viewer and `grokbot-cypher journal`.
+install -m 0644 "${csrc}/cypher_journal.py" "${cypher}/cypher_journal.py"
 install -m 0755 "${csrc}/grokbot-cypher-panels" /usr/local/bin/grokbot-cypher-panels
 dnf5 install -y qrencode
 command -v qrencode >/dev/null
 command -v grim >/dev/null
 install -m 0644 "${csrc}/cypherd.service" /usr/lib/systemd/user/cypherd.service
 systemctl --global enable cypherd.service
-python3 -m py_compile "${cypher}/cypherd.py" "${cypher}/cypher_panels.py" "${nova}/cypher_link.py"
+python3 -m py_compile "${cypher}/cypherd.py" "${cypher}/cypher_panels.py" "${cypher}/cypher_journal.py" "${nova}/cypher_link.py"
 [[ ! -e /etc/grokbot/cypher-brain-token ]]
 [[ ! -e /etc/grokbot/cypher-ntfy-topic ]]
 

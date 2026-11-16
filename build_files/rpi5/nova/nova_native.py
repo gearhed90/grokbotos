@@ -6,12 +6,13 @@ hides/shows them). Talking here is talking to Cypher (novad -> cypher_link).
 Client of novad (http://127.0.0.1:8765). The internal names stay (nova_native.py,
 Wayland app_id "nova-shell") so the sway rules, the Super toggle and novad's focus
 watcher keep working. No on-screen keyboard by design."""
-import argparse, json, os, sys, threading, time, urllib.request, urllib.error
+import argparse, json, os, socket, sys, threading, time, urllib.request, urllib.error
 import gi
 gi.require_version("Gtk", "3.0"); gi.require_version("Gdk", "3.0")
 from gi.repository import GLib
 GLib.set_prgname("nova-shell")          # -> xdg app_id "nova-shell" on Wayland, WM_CLASS on X
-from gi.repository import Gtk, Gdk
+gi.require_version("Pango", "1.0")
+from gi.repository import Gtk, Gdk, Pango
 import cairo
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from avatar import Avatar
@@ -24,8 +25,15 @@ try:
     import cypher_panels as CP              # Cypher's HUD; the avatar works without it
 except Exception as _e:
     CP = None; print("cypher panels unavailable:", type(_e).__name__, file=sys.stderr, flush=True)
+try:
+    import cypher_journal as CJ             # build 14: readable entries for the journal viewer (read-only)
+except Exception as _e:
+    CJ = None; print("cypher journal unavailable:", type(_e).__name__, file=sys.stderr, flush=True)
 
 NET_ERR = "I can't reach my voice service right now."
+# Build 14: power_off's Confirm click goes to novad over this owner-only unix socket (HTTP yes is refused).
+CONFIRM_SOCK = os.environ.get("NOVA_CONFIRM_SOCK") or os.path.join(
+    os.environ.get("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid()), "nova", "confirm.sock")
 CSS = b"""
 window, .nova { background: #000; }
 #reply { color: #d1fae5; font-size: 24px; }
@@ -33,10 +41,10 @@ window, .nova { background: #000; }
 #reply.q { color: #fff; font-weight: 600; background: rgba(0,0,0,.72); border-radius: 18px; padding: 8px 18px; }
 #echo { color: #fff; font-size: 18px; }
 #vnote { color: rgba(255,255,255,.55); font-size: 15px; }
-entry#in { font-size: 20px; color: #fff; background: rgba(20,24,22,.85); background-image: none;
-  border: 1px solid rgba(110,231,183,.18); border-radius: 28px; padding: 14px 110px 14px 22px; box-shadow: none; caret-color: #fff; }
-entry#in:focus { border-color: rgba(110,231,183,.45); }
-entry#in placeholder { color: rgba(255,255,255,.4); }
+#inbox { background: rgba(20,24,22,.85); border: 1px solid rgba(110,231,183,.18); border-radius: 28px; }
+#inbox:focus-within { border-color: rgba(110,231,183,.45); }
+textview#in, textview#in text { font-size: 20px; color: #fff; background: transparent; background-image: none; caret-color: #fff; }
+#inph { color: rgba(255,255,255,.4); font-size: 20px; }
 button.cf { font-size: 22px; min-width: 150px; padding: 14px 26px; border-radius: 28px; background-image: none; box-shadow: none; text-shadow: none; }
 button#yes { background: #14C370; color: #04140b; border: 0; font-weight: 700; }
 button#no { background: rgba(20,24,22,.7); color: #fff; border: 1px solid rgba(255,255,255,.25); }
@@ -50,6 +58,16 @@ button#look { min-width: 52px; min-height: 52px; padding: 0; border-radius: 26px
 button#pad { min-width: 52px; min-height: 52px; padding: 0 10px; border-radius: 26px; border: 1px solid rgba(255,255,255,.14);
   background: rgba(20,24,22,.55); background-image: none; box-shadow: none; opacity: .7; color: #d1fae5; font-size: 15px; font-weight: 700; }
 #picker { background: rgba(0,0,0,.94); }
+#jview { background: rgba(0,0,0,.55); }
+#jcard { background: rgba(6,12,14,.95); border: 1px solid rgba(34,211,238,.45); border-radius: 14px; padding: 10px 14px; }
+#jcard label.jttl { color: #22d3ee; font-size: 18px; font-weight: 700; }
+#jcard label.jhead { color: #22d3ee; font-size: 14px; font-weight: 700; }
+#jcard label.jwhat { color: #fff; font-size: 17px; }
+#jcard label.jwhy { color: rgba(255,255,255,.7); font-size: 15px; }
+#jcard label.jres { color: #fcd34d; font-size: 15px; }
+#jcard label.jdim { color: rgba(255,255,255,.45); font-size: 13px; }
+#jcard button#jclose { font-size: 15px; padding: 4px 14px; border-radius: 16px; background: rgba(255,255,255,.1); background-image: none;
+  color: #fff; border: 1px solid rgba(255,255,255,.25); box-shadow: none; text-shadow: none; }
 #picker label.ttl { color: #fff; font-size: 26px; font-weight: 700; }
 #picker label.sub { color: rgba(255,255,255,.55); font-size: 16px; }
 #picker button.pick { padding: 0; border: 0; border-radius: 22px; background: transparent; background-image: none; box-shadow: none; }
@@ -57,6 +75,68 @@ button#pad { min-width: 52px; min-height: 52px; padding: 0 10px; border-radius: 
 #picker button#done { font-size: 20px; min-width: 160px; padding: 12px 26px; border-radius: 26px; background: rgba(255,255,255,.12);
   background-image: none; color: #fff; border: 1px solid rgba(255,255,255,.25); box-shadow: none; text-shadow: none; }
 """
+
+class ChatInput:
+    """Build 14: the text bar wraps. A multi-line TextView (word wrap, up to MAX_LINES tall, then it scrolls)
+    that grows upward from the bottom bar instead of running sideways under the HUD panels. Enter sends,
+    Shift+Enter is a new line. Same small API the app used on the old Gtk.Entry."""
+    MAX_LINES = 4
+    LINE_PX = 28
+    def __init__(self, on_enter, placeholder="Ask Cypher…"):
+        self.on_enter = on_enter
+        tv = self.tv = Gtk.TextView(name="in", wrap_mode=Gtk.WrapMode.WORD_CHAR, accepts_tab=False)
+        tv.set_input_hints(Gtk.InputHints.INHIBIT_OSK)   # never pop an on-screen keyboard
+        tv.set_left_margin(22); tv.set_right_margin(110); tv.set_top_margin(14); tv.set_bottom_margin(14)
+        self.buf = tv.get_buffer()
+        sw = self.sw = Gtk.ScrolledWindow(name="inbox")
+        sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.max_h = self.MAX_LINES * self.LINE_PX + 28; self.fit_src = 0
+        sw.add(tv)
+        self.ph = Gtk.Label(name="inph", label=placeholder, halign=Gtk.Align.START, valign=Gtk.Align.CENTER, margin_start=24)
+        self.widget = Gtk.Overlay(); self.widget.add(sw); self.widget.add_overlay(self.ph)
+        self.widget.set_overlay_pass_through(self.ph, True)
+        self.buf.connect("changed", lambda *_: (self.ph.set_visible(not self.get_text()), self._queue_fit()))
+        tv.connect("size-allocate", lambda *_: self._queue_fit())
+        tv.connect("key-press-event", self._key)
+    def _queue_fit(self):
+        if not self.fit_src: self.fit_src = GLib.idle_add(self._fit)
+    def _fit(self):
+        """Grow upward with the wrapped text, up to MAX_LINES; past that the box scrolls."""
+        self.fit_src = 0
+        y, h = self.tv.get_line_yrange(self.buf.get_end_iter())
+        want = max(self.LINE_PX, y + h) + self.tv.get_top_margin() + self.tv.get_bottom_margin()
+        want = min(self.max_h, want)
+        if want != self.sw.get_min_content_height():
+            self.sw.set_min_content_height(want)
+        return False
+    def height(self): return self.sw.get_min_content_height()
+    def _key(self, w, e):
+        if Gdk.keyval_name(e.keyval) in ("Return", "KP_Enter") and not (e.state & Gdk.ModifierType.SHIFT_MASK):
+            self.on_enter(self); return True
+        return False
+    def get_text(self):
+        return self.buf.get_text(self.buf.get_start_iter(), self.buf.get_end_iter(), False)
+    def set_text(self, t): self.buf.set_text(t or "")
+    def grab_focus(self): self.tv.grab_focus()
+    def grab_focus_without_selecting(self): self.tv.grab_focus()
+    def has_focus(self): return self.tv.has_focus()
+
+def confirm_click(pid, yes, path=None, timeout=10):
+    """Send an on-screen Confirm/Cancel click to novad's owner-only socket; returns novad's JSON answer."""
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(timeout)
+    try:
+        s.connect(path or CONFIRM_SOCK)
+        s.sendall((json.dumps({"id": pid, "yes": bool(yes), "via": "click"}) + "\n").encode())
+        return json.loads(s.makefile("rb").readline() or b"{}")
+    finally:
+        s.close()
+
+def column(W, H, panels):
+    """(x, width) of the centre text column: cypher_panels.text_column when the HUD is up."""
+    if CP is not None:
+        return CP.text_column(W, H, panels)
+    bw = max(160, min(720, int(W * .8)))
+    return (W - bw) // 2, bw
 
 class Fader:
     """Opacity tween for a widget (the CSS transitions in shell.html)."""
@@ -147,22 +227,28 @@ class Nova:
             self.hud.connect("draw", self.on_hud_draw)
             ov.add_overlay(self.hud); ov.set_overlay_pass_through(self.hud, True)
         # bottom bar
-        bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, halign=Gtk.Align.CENTER, valign=Gtk.Align.END); self.bar = bar
-        self.reply = Gtk.Label(name="reply", wrap=True, justify=Gtk.Justification.CENTER, halign=Gtk.Align.CENTER, margin_bottom=12)
-        self.echo = Gtk.Label(name="echo", wrap=True, justify=Gtk.Justification.CENTER, margin_bottom=10)
+        # build 14: the bar fills exactly the centre column (side margins set in on_size), and the reply, the
+        # echo and the input all wrap inside it, so nothing runs under the HUD panels.
+        bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, halign=Gtk.Align.FILL, valign=Gtk.Align.END); self.bar = bar
+        self.reply = Gtk.Label(name="reply", wrap=True, wrap_mode=Pango.WrapMode.WORD_CHAR, justify=Gtk.Justification.CENTER,
+                               halign=Gtk.Align.FILL, xalign=0.5, margin_bottom=12)
+        self.echo = Gtk.Label(name="echo", wrap=True, wrap_mode=Pango.WrapMode.WORD_CHAR, justify=Gtk.Justification.CENTER,
+                              halign=Gtk.Align.FILL, xalign=0.5, margin_bottom=10)
         self.echo.set_size_request(-1, 22)
         self.fr, self.fe = Fader(self.reply, .8), Fader(self.echo, .4)
         self.cf = Gtk.Box(spacing=18, halign=Gtk.Align.CENTER, margin_bottom=14, no_show_all=True)
+        self.cf_lbl = {}; self.pend_phys = False
         for nm, key, yes in (("Yes", "Enter", True), ("No", "Esc", False)):
             b = Gtk.Button(name=nm.lower()); b.get_style_context().add_class("cf"); b.set_can_focus(False)
-            bx = Gtk.Box(orientation=Gtk.Orientation.VERTICAL); bx.add(Gtk.Label(label=nm))
+            lab = Gtk.Label(label=nm); bx = Gtk.Box(orientation=Gtk.Orientation.VERTICAL); bx.add(lab)
             sm = Gtk.Label(label=key); sm.get_style_context().add_class("small"); bx.add(sm); b.add(bx); bx.show_all()
-            b.connect("clicked", lambda _b, y=yes: self.answer(y)); b.show(); self.cf.add(b)
+            self.cf_lbl[yes] = (lab, sm, nm, key)
+            b.connect("clicked", lambda _b, y=yes: self.answer(y, click=True)); b.show(); self.cf.add(b)
         row = Gtk.Overlay()
-        self.inp = Gtk.Entry(name="in", placeholder_text="Ask Cypher…"); self.inp.connect("activate", self.on_enter)
-        self.inp.set_input_hints(Gtk.InputHints.INHIBIT_OSK)   # never pop an on-screen keyboard
-        row.add(self.inp)
-        vb = Gtk.Box(spacing=6, halign=Gtk.Align.END, valign=Gtk.Align.CENTER, margin_end=8)
+        self.inp = ChatInput(self.on_enter)
+        row.add(self.inp.widget)
+        self.inp.widget.connect("size-allocate", lambda *_: self._place_vnote())   # the hint sits above a grown bar
+        vb = Gtk.Box(spacing=6, halign=Gtk.Align.END, valign=Gtk.Align.END, margin_end=8, margin_bottom=7)
         self.mute = self._vbtn("mute", lambda: self.V["muted"]); self.mic = self._vbtn("mic", None)
         self.mute.connect("clicked", lambda *_: self.toggle_mute())
         self.mic.connect("button-press-event", self.mic_down); self.mic.connect("button-release-event", self.mic_up)
@@ -185,10 +271,11 @@ class Nova:
         self.pad.set_can_focus(False); self.pad.set_tooltip_text("Onshape pad")
         self.pad.connect("clicked", lambda *_: self.open_pad()); ov.add_overlay(self.pad)
         self.picker = self._build_picker(); ov.add_overlay(self.picker)
+        self.jv = self._build_journal(); ov.add_overlay(self.jv)          # build 14: read-only journal viewer
         self.cfg_mtime = self._cfg_mtime(); GLib.timeout_add_seconds(2, self._watch_cfg)
         w.connect("size-allocate", self.on_size)
         w.connect("key-press-event", self.on_key); w.connect("key-release-event", self.on_key_up)
-        w.show_all(); self.mute.hide(); self.mic.hide(); self.picker.hide(); self._watch_hud()
+        w.show_all(); self.mute.hide(); self.mic.hide(); self.picker.hide(); self.jv.hide(); self._watch_hud()
         if a.renderer == "gl":
             print("renderer gl:", getattr(self.da, "info", None), "failed:", self.da.failed, file=sys.stderr, flush=True)
             if self.da.failed: os.execv(sys.executable, [sys.executable] + sys.argv + ["--renderer", "cairo"])
@@ -199,6 +286,8 @@ class Nova:
         self.act = time.monotonic(); self.dozing = False
         w.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.TOUCH_MASK | Gdk.EventMask.KEY_PRESS_MASK)
         for sig in ("key-press-event", "button-press-event", "touch-event"): w.connect(sig, self.on_activity)
+        w.connect("button-press-event", self.on_hud_tap)    # the HUD is pass-through: map a tap on its JOURNAL panel
+        if getattr(a, "journal", False): self.open_journal()
         GLib.timeout_add_seconds(5, self.doze_check)
         if a.picker: self.open_picker()
         if a.state: self.av.set_state(a.state)
@@ -243,6 +332,72 @@ class Nova:
         done = Gtk.Button(label="Done", name="done", halign=Gtk.Align.CENTER, margin_top=14); done.set_can_focus(False)
         done.connect("clicked", lambda *_: self.close_picker()); col.add(done)
         eb.add(col); return eb
+    # ---------- journal viewer (build 14): tap the JOURNAL panel, or Super+J; Esc, Close or a tap outside closes ----------
+    JOURNAL_PAGE = 40
+    def _build_journal(self):
+        eb = Gtk.EventBox(name="jview", visible_window=True)
+        eb.connect("button-press-event", lambda w, e: (self.close_journal(), True)[1] if e.window == w.get_window() else False)
+        card = self.jcard = Gtk.Box(name="jcard", orientation=Gtk.Orientation.VERTICAL, spacing=8,
+                                    halign=Gtk.Align.FILL, valign=Gtk.Align.FILL)
+        top = Gtk.Box(spacing=10)
+        t = Gtk.Label(label="JOURNAL \u00b7 newest first", xalign=0); t.get_style_context().add_class("jttl"); top.pack_start(t, True, True, 0)
+        x = Gtk.Button(label="Close  Esc", name="jclose"); x.set_can_focus(False)
+        x.connect("clicked", lambda *_: self.close_journal()); top.pack_end(x, False, False, 0); card.add(top)
+        sw = self.jsw = Gtk.ScrolledWindow(vexpand=True); sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sw.connect("edge-reached", lambda _s, pos: self._journal_more() if pos == Gtk.PositionType.BOTTOM else None)
+        self.jlist = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14); sw.add(self.jlist); card.add(sw)
+        self.jstat = Gtk.Label(xalign=0); self.jstat.get_style_context().add_class("jdim"); card.add(self.jstat)
+        eb.add(card); self.jn, self.jbusy, self.jend = 0, False, False
+        return eb
+    def _jlabel(self, text, cls):
+        l = Gtk.Label(label=text, xalign=0, wrap=True, wrap_mode=Pango.WrapMode.WORD_CHAR, selectable=False)
+        l.get_style_context().add_class(cls); return l
+    def _journal_row(self, v):
+        b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        b.add(self._jlabel("%s  %s%s" % (v["time"], v["kind"].upper().replace("_", " "), "  @alpha" if v["host"] == "alpha" else ""), "jhead"))
+        if v["what"]: b.add(self._jlabel(v["what"], "jwhat"))
+        if v["reason"]: b.add(self._jlabel("why: " + v["reason"], "jwhy"))
+        if v["result"]: b.add(self._jlabel("result: " + v["result"], "jres"))
+        if v["extra"]: b.add(self._jlabel(v["extra"], "jdim"))
+        b.show_all(); return b
+    def _place_journal(self):
+        W, H = self.win.get_allocated_width(), self.win.get_allocated_height()
+        panels = self.hud is not None and not CP.hidden()
+        x, bw = column(W, H, panels)                       # the same centre column as the chat bar (item 1)
+        self.jcard.set_margin_start(x); self.jcard.set_margin_end(W - x - bw)   # margins, not a width: entries wrap inside
+        self.jcard.set_margin_top(int(H * .08))
+        # stop above the chat input so the bar stays visible and usable
+        self.jcard.set_margin_bottom(int(H * .035) + max(48, self.inp.widget.get_allocated_height()) + 16)
+    def open_journal(self):
+        if CJ is None or self.picker.get_visible(): return
+        self._place_journal()
+        for c in self.jlist.get_children(): self.jlist.remove(c)
+        self.jn, self.jend = 0, False; self.jstat.set_text("reading\u2026")
+        self.jv.show_all(); self.jsw.get_vadjustment().set_value(0); self._journal_more()
+    def close_journal(self):
+        if self.jv.get_visible(): self.jv.hide(); self.inp.grab_focus_without_selecting()
+    def journal_open(self): return self.jv.get_visible()
+    def _journal_more(self):                               # older entries as he scrolls down
+        if self.jbusy or self.jend or CJ is None: return
+        self.jbusy = True; off = self.jn
+        def done(rows):
+            self.jbusy = False
+            if isinstance(rows, Exception): self.jstat.set_text("couldn't read the journal"); return
+            for v in rows: self.jlist.add(self._journal_row(v))
+            self.jn += len(rows); self.jend = len(rows) < self.JOURNAL_PAGE
+            self.jstat.set_text(("%d entries" % self.jn) + (" \u00b7 that's all" if self.jend else " \u00b7 scroll for older")
+                                if self.jn else "nothing journaled yet")
+        self.bg(lambda: CJ.entries(limit=self.JOURNAL_PAGE, offset=off), done)
+    def on_hud_tap(self, w, e):
+        if self.hud is None or CP.hidden() or self.picker.get_visible() or self.jv.get_visible(): return False
+        if not (self.hud_key and not self.hud_key[0]): return False
+        gw = w.get_window()
+        if gw is None: return False
+        ox, oy = gw.get_origin()[1:]
+        x, y = e.x_root - ox, e.y_root - oy
+        if CP.in_journal(w.get_allocated_width(), w.get_allocated_height(), x, y):
+            self.open_journal(); return True
+        return False
     def _pick_btn(self, size, draw):
         b = Gtk.Button(); b.get_style_context().add_class("pick"); b.set_can_focus(False)
         d = Gtk.DrawingArea(); d.set_size_request(size, size); d.connect("draw", draw); b.add(d); return b
@@ -293,13 +448,18 @@ class Nova:
     # ---------- layout / rendering ----------
     def on_size(self, w, alloc):
         W, H = alloc.width, alloc.height
-        bw = min(720, int(W * .8))
         panels = self.hud is not None and not CP.hidden()
-        if panels: bw = min(bw, CP.bar_width(W, H))                     # never under a panel
+        x, bw = column(W, H, panels)                                      # never under a panel
         self.av.lay["h"] = CP.avatar_h(W, H) if panels else self.base_h  # avatar fits between the columns
-        self.bar.set_size_request(bw, -1); self.bar.set_margin_bottom(int(H * .035))
-        self.vnote.set_margin_bottom(int(H * .035) + 62)
-        self.reply.set_max_width_chars(60)
+        if (x, bw) != getattr(self, "_col", None):                        # margins, not a minimum width: text wraps inside
+            self._col = (x, bw); self.bar.set_margin_start(x); self.bar.set_margin_end(W - x - bw)
+        self.bar.set_margin_bottom(int(H * .035))
+        self._place_vnote(H)
+
+    def _place_vnote(self, H=None):
+        H = H or self.win.get_allocated_height()
+        m = int(H * .035) + max(48, self.inp.widget.get_allocated_height()) + 14
+        if m != self.vnote.get_margin_bottom(): self.vnote.set_margin_bottom(m)
 
     def on_tick(self, widget, clock):
         now = time.monotonic()
@@ -371,6 +531,7 @@ class Nova:
                     self.later(hold, lambda: (self.fr.to(0), self.fe.to(0)))]
     def on_enter(self, e):
         q = e.get_text().strip()
+        if q: self.close_journal()                    # sending a chat brings the reply back into view
         if self.pend: return self.answer(True)
         if not q or self.busy: return
         self.set_echo(q); e.set_text(""); self.clear_tms()
@@ -392,18 +553,29 @@ class Nova:
             self.busy = False
         self.bg(lambda: self.http("POST", "/api/ask", {"prompt": q, "via": via}, stream=ev), lambda r: GLib.idle_add(lambda: (done(r), False)[1]))
     def ask_confirm(self, c):
+        self.close_journal()                          # a confirm dialog is never hidden behind the viewer
         self.pend = c["id"]; sc = self.reply.get_style_context(); self.reply.set_text(c["text"]); sc.remove_class("err")
+        self.pend_phys = bool(c.get("physical"))      # build 14 power_off: only a click on Confirm says yes
+        for yes, (lab, sm, nm, key) in self.cf_lbl.items():
+            lab.set_text((c.get("yes_label") if yes else c.get("no_label")) or nm if self.pend_phys else nm)
+            sm.set_text(("tap" if yes else "Esc") if self.pend_phys else key)
         self.fr.to(1, instant=True); self.clear_tms(); self.set_state("idle"); sc.add_class("q"); self.cf.show()
         if self.pendT: GLib.source_remove(self.pendT)
         def expire():
             self.pendT = 0
-            if self.pend: self.end_confirm(); self.say("No answer, so I left it.", True)
+            if self.pend:
+                pid, phys = self.pend, self.pend_phys; self.end_confirm(); self.say("No answer, so I left it.", True)
+                if phys and self.live:      # tell novad too, so the request cannot be confirmed late
+                    self.bg(lambda: self.http("POST", "/api/confirm", {"id": pid, "yes": False}), lambda j: None)
         self.pendT = self.later((c.get("ttl") or 60) * 1000, expire)
     def end_confirm(self):
-        self.pend = None; self.reply.get_style_context().remove_class("q"); self.cf.hide()
+        self.pend = None; self.pend_phys = False; self.reply.get_style_context().remove_class("q"); self.cf.hide()
         if self.pendT: GLib.source_remove(self.pendT); self.pendT = 0
-    def answer(self, yes):
+    def answer(self, yes, click=False):
         if not self.pend: return
+        if self.pend_phys and yes and not click:          # Enter, voice or a stray key never confirms power_off
+            self.note("Tap Confirm on the screen to shut down."); return
+        phys = self.pend_phys
         pid = self.pend; self.end_confirm(); self.set_state("working" if yes else "idle")
         def done(j):
             if isinstance(j, Exception): self.say(NET_ERR, True)
@@ -411,6 +583,8 @@ class Nova:
             else: self.say(j.get("text") or "Something went wrong.", True)
             self.fe.to(0)
         if not self.live: return done({"reply": "Okay." if yes else "Okay, I won't."})
+        if phys:
+            return self.bg(lambda: confirm_click(pid, yes), done)
         self.bg(lambda: self.http("POST", "/api/confirm", {"id": pid, "yes": yes}), done)
 
     # ---------- keys ----------
@@ -419,7 +593,15 @@ class Nova:
         if self.picker.get_visible():
             if k in ("Escape", "Return", "KP_Enter"): self.close_picker()
             return True
-        if self.pend and k in ("Return", "KP_Enter"): self.answer(True); return True
+        if k in ("j", "J") and e.state & Gdk.ModifierType.SUPER_MASK:          # build 14: Super+J toggles the journal
+            (self.close_journal if self.jv.get_visible() else self.open_journal)(); return True
+        if self.jv.get_visible():
+            if k == "Escape": self.close_journal(); return True
+            if k in ("Page_Up", "Page_Down", "Up", "Down", "Home", "End"):
+                adj = self.jsw.get_vadjustment(); step = adj.get_page_size() * .9 if k.startswith("Page") else 40
+                v = {"Page_Up": -step, "Up": -step, "Page_Down": step, "Down": step}.get(k)
+                adj.set_value(0 if k == "Home" else adj.get_upper() if k == "End" else adj.get_value() + v); return True
+        if self.pend and k in ("Return", "KP_Enter"): self.answer(True); return True   # power_off: refused in answer()
         if self.pend and k == "Escape": self.answer(False); return True
         if k == "Escape" and self.V["rec"]: self.V["tap"] = False; self.stop_listen(True); return True
         if k == "space" and not self.inp.get_text():
@@ -516,6 +698,7 @@ def main():
     p.add_argument("--shape", choices=AS.SHAPE_IDS, help="show this shape (not saved)")
     p.add_argument("--color", choices=AS.COLOR_IDS, help="show this color (not saved)")
     p.add_argument("--picker", action="store_true", help="open the look picker at startup")
+    p.add_argument("--journal", action="store_true", help="open the journal viewer at startup (tests)")
     p.add_argument("--ask", help="type this prompt at startup (self-test)")
     p.add_argument("--quit-after", type=float, help="exit after N seconds and print frames drawn (tests)")
     p.add_argument("--no-panels", action="store_true", help="avatar only, without Cypher's HUD panels")

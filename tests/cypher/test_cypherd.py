@@ -71,7 +71,7 @@ shipped = C.load_limits(os.path.join(SRC, "cypher-limits.json"))
 check("shipped limits load", shipped["phase_max"] == 6 and shipped["tick_s"] == 45)
 check("phase 6 actions (build 12) are exactly the known set", sorted(C.allowed_actions(shipped)) ==
       ["ask_nova", "check_grid", "eat", "glance_screen", "go_to", "journal_thought", "look_up", "message_zack", "none", "propose_code",
-       "request_account", "rest", "set_avatar_color", "show_note", "speak", "visit_pino", "web_search", "x_lookup"])
+       "request_account", "rest", "review_lessons", "set_avatar_color", "show_note", "speak", "visit_pino", "web_search", "x_lookup"])
 check("quiet hours 11 PM to 6 AM, off Friday and Saturday nights",
       shipped["quiet_hours"] == {"default": ["23:00", "06:00"], "nights": {"fri": None, "sat": None}})
 check("hosted backup capped at $0.50/day", shipped["brain"]["hosted_backup"]["daily_budget_usd"] == 0.5)
@@ -163,10 +163,10 @@ check("note refused in DND", "disturb" in V({"action": "show_note", "params": {"
 check("note refused in quiet hours", "quiet" in V({"action": "show_note", "params": {"text": "yo"}}, dict(P, quiet_hours=True))[2])
 check("note refused when away", "away" in V({"action": "show_note", "params": {"text": "yo"}}, dict(P, presence="locked"))[2])
 check("note over 120 refused", "over" in V({"action": "show_note", "params": {"text": "x" * 121}})[2])
-st["recent"] = [[now - 60 * i, "show_note"] for i in range(3)]
-check("4th note in an hour refused", "hourly cap" in V({"action": "show_note", "params": {"text": "yo"}})[2])
-st["recent"] = [[now - 3700 - 60 * i, "show_note"] for i in range(12)]
-check("13th note in a day refused", "daily cap" in V({"action": "show_note", "params": {"text": "yo"}})[2])
+st["recent"] = [[now - 60 * i, "show_note"] for i in range(6)]
+check("7th note in an hour refused (build 14: 6 an hour)", "hourly cap" in V({"action": "show_note", "params": {"text": "yo"}})[2])
+st["recent"] = [[now - 3700 - 60 * i, "show_note"] for i in range(30)]
+check("31st note in a day refused (build 14: 30 a day)", "daily cap" in V({"action": "show_note", "params": {"text": "yo"}})[2])
 st["recent"] = []
 check("avatar color ok", V({"action": "set_avatar_color", "params": {"color": "purple"}})[:2] == ("set_avatar_color", {"color": "purple"}))
 check("avatar color not in list refused", "not allowed" in V({"action": "set_avatar_color", "params": {"color": "#fff"}})[2])

@@ -122,6 +122,9 @@ def state_lines(now=None):
         th = [scrub(t, 110) for t in s.get("threads") or [] if isinstance(t, str)]
         if th:
             out.append("your threads (ongoing goals): " + " | ".join(th))
+        ls = [scrub(x, 140) for x in s.get("lessons") or [] if isinstance(x, str)][:3]
+        if ls:
+            out.append("lessons from your own mistakes (keep them): " + " | ".join(ls))
         if s.get("activity"):
             out.append("what you were doing: " + scrub(s["activity"], 80))
         j = [r for r in s.get("journal") or [] if isinstance(r, list) and len(r) == 3][-5:]
@@ -156,8 +159,8 @@ RULES = ("This is you talking with Zack on your own screen (typed or by voice). 
          "(service = the site's plain domain, like github.com). You cannot approve your own tuning proposals either; "
          "only Zack can, through Nova. "
          "Never give out your email address.\n"
-         "What you can reach: your journal; your avatar (shape and color); Wikipedia (look_up); a web search "
-         "(web_search); public X accounts by handle (x_lookup: bio and latest posts, read-only); Pino's public feed at "
+         "What you can reach: your journal; your avatar (shape and color); a free search (look_up: your search engine on Alpha, "
+         "then Wikipedia); a paid, budgeted web search for broad or current topics (web_search); public X accounts by handle (x_lookup: bio and latest posts, read-only); Pino's public feed at "
          "pinos.world (visit_pino, read-only); the grid report (check_grid); asking Zack for an account (request_account); "
          "your own life in Night City (walking around, eating at the noodle stall, simulated for now) and proposing your "
          "own body design at your nightly sleep (only Zack approves it); "
@@ -208,6 +211,21 @@ def record_turn(prompt, reply, via="typed", tools=(), kind="turn", now=None):
 QUEUEABLE = {"request_account": ("service", "why"), "look_up": ("topic",), "web_search": ("query",),
              "x_lookup": ("handle",), "visit_pino": (), "check_grid": ()}
 _HANDLE = re.compile(r"^@?[A-Za-z0-9_]{1,15}$")
+
+def request_shutdown(now=None):
+    """Build 14: tell cypherd that Zack confirmed a power_off on the deck screen (it journals it on the way
+    down). Written only by novad after the on-screen Confirm click."""
+    if not enabled():
+        return False
+    try:
+        os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+        p = os.path.join(STATE_DIR, "shutdown-request.json")
+        with open(os.open(p + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+            json.dump({"ts": now or time.time(), "by": "zack", "via": "deck confirm"}, f)
+        os.replace(p + ".tmp", p)
+        return True
+    except OSError:
+        return False
 
 def queue_action(action, params, now=None):
     """Queue an autonomy action for cypherd's validator. Never an approval."""

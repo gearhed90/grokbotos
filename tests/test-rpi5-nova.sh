@@ -142,6 +142,7 @@ python3 tests/cypher/test_cypherd_phase5.py
 python3 tests/cypher/test_cypherd_build12.py
 python3 tests/cypher/test_cypherd_build12b.py
 python3 tests/cypher/test_cypherd_build13.py
+python3 tests/cypher/test_cypherd_build14.py
 python3 -m py_compile "${cy}/grokbot-set-cypher-limit"
 assert_contains build_files/rpi5-nova.sh '/usr/local/sbin/grokbot-set-cypher-limit'
 assert_contains "${cy}/cypher-limits.json" '"message_zack": {"phase": 3, "max_chars": 200, "per_hour": 3, "per_day": null'
@@ -184,6 +185,16 @@ assert_contains "${cy}/cypher-llm.container" '--memory=3g'
 assert_contains "${cy}/cypher-llm.container" 'Image=ghcr.io/ggml-org/llama.cpp@sha256:'
 assert_contains "${cy}/cypher-llm.container" 'DropCapability=all'
 assert_contains "${cy}/cypher-llm-fetch" 'sha256sum -c'
+# Build 14 power_off: one polkit rule, power-off only, for the kiosk user; no sudo grant anywhere.
+pk=system_files/usr/share/polkit-1/rules.d/50-grokbot-cypher-poweroff.rules
+assert_file "$pk"
+assert_contains "$pk" 'action.id == "org.freedesktop.login1.power-off"'
+assert_contains "$pk" 'subject.user == "grokbot"'
+grep -Eq 'reboot|suspend|hibernate|ignore-inhibit|manage-units|halt' "$pk" && fail "power_off polkit rule grants more than power-off"
+[[ $(grep -c 'action.id' "$pk") -eq 2 ]] || fail "power_off polkit rule should name exactly two action ids"
+grep -rqs 'poweroff' system_files/etc/sudoers.d build_files/rpi5 --include='*sudo*' && fail "poweroff must not be a sudo grant"
+python3 -c "import ast,sys; t=ast.parse(open('${cy}/cypherd.py').read()); s=[n.value for n in ast.walk(t) if isinstance(n, ast.Constant) and isinstance(n.value, str)]; sys.exit(any('poweroff' in x and 'systemctl' in x for x in s))" || fail "cypherd runs systemctl poweroff"
+assert_contains "${nova}/novad.py" 'def serve_confirm_socket'
 
 python3 tests/nova/test_units.py
 python3 tests/nova/run_tests.py

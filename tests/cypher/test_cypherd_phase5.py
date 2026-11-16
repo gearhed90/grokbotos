@@ -269,6 +269,8 @@ t1 = C.load_tunables(L)
 check("approve applies exactly the proposal", pr.returncode == 0 and t1["drift_per_hour"]["boredom"] == paths["drift.boredom"]["after"]
       and t1["effect_scale"]["boredom"] == 1.1 and t1["action_bias"]["check_grid"] == 0.25, (pr.stdout + pr.stderr, t1))
 check("approval journaled, limits file still untouched", "tuning_approved" in journal_text() and lim_mtime() == m0)
+# build 14: lessons from earlier ticks take prompt room first (priority 1); start this check without them
+C.save_lessons([])
 check("approved leaning reaches the prompt", "toward check_grid" in C.build_messages(L, C.new_state(), P, now)[1]["content"])
 check("effect weight scales action effects", C.scaled({"boredom": -0.1}, t1)["boredom"] == -0.1 * 1.1)
 check("approve twice refused", C.cli(["tuning", "approve", "1"]) == 1)
@@ -279,13 +281,13 @@ rows = C.load_proposals()
 rec = {"id": 2, "ts": C.iso(now), "epoch": now - 2 * 86400, "day": day, "brain": "alpha", "reason": "fewer notes",
        "changes": C.tuning_changes(L, {"caps": {"show_note": {"per_hour": 2}}})[0], "status": "pending"}
 rows.append(rec); C.save_proposals(rows)
-check("soft cap proposal lowers show_note 3 -> 2", rec["changes"] == [{"path": "cap.show_note.per_hour", "before": 3, "after": 2}], rec["changes"])
+check("soft cap proposal lowers show_note 6 -> 2", rec["changes"] == [{"path": "cap.show_note.per_hour", "before": 6, "after": 2}], rec["changes"])
 with contextlib.redirect_stdout(io.StringIO()): C.cli(["tuning", "approve", "2"])
-check("approved soft cap in force", C.eff_spec(L, "show_note")["per_hour"] == 2 and L["actions"]["show_note"]["per_hour"] == 3)
+check("approved soft cap in force", C.eff_spec(L, "show_note")["per_hour"] == 2 and L["actions"]["show_note"]["per_hour"] == 6)
 st2 = C.new_state(); st2["recent"] = [[now - 100, "show_note"], [now - 200, "show_note"]]
 check("show_note refused at the soft cap", "hourly cap" in C.blocked(L, st2, P, "show_note", now))
 with contextlib.redirect_stdout(io.StringIO()): C.cli(["tuning", "revert", "2"])
-check("revert drops the soft cap", C.eff_spec(L, "show_note")["per_hour"] == 3)
+check("revert drops the soft cap", C.eff_spec(L, "show_note")["per_hour"] == 6)
 raw = json.load(open(TUN)); raw.setdefault("caps", {})["message_zack"] = {"per_hour": 1}; raw["caps"]["look_up"] = {"per_hour": 50}
 C.write_json(TUN, raw)
 check("a hand-edited tunables file cannot cap message_zack or raise a cap", C.eff_spec(L, "message_zack")["per_hour"] == 3

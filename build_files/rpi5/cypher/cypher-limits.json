@@ -5,6 +5,8 @@
   "tick_s": 45,
   "tick_s_bounds": [30, 300],
   "heartbeat_s": 600,
+  "active_heartbeat_s": 180,
+  "_heartbeat_comment": "Build 14: with nothing new, decide at least every active_heartbeat_s while awake with energy (0.35+), heartbeat_s otherwise.",
   "drift_bounds_per_hour": [-0.2, 0.2],
   "_quiet_hours_comment": "Keyed by the night it starts on. Weekdays 11 PM-6 AM; Friday and Saturday nights have none (Zack, Nov 15). null = no quiet hours that night.",
   "quiet_hours": {"default": ["23:00", "06:00"], "nights": {"fri": null, "sat": null}},
@@ -100,12 +102,24 @@
     "timeout_s": 60
   },
   "lookup": {
-    "_comment": "Phase 3: look_up. Read-only Wikipedia summaries from these hosts only, no redirects.",
+    "_comment": "Phase 3: look_up. Build 14: free multi-source search. 1) SearXNG on Alpha (searxng_url, then searxng_alt_urls; JSON API; their hosts must be in hosts; engines: brave, duckduckgo, bing, plus github/arxiv/stackoverflow bangs; its wikipedia engine is empty, hence source 2), top results plus one public result page read as plain text (public http(s) hosts only, no LAN/Tailscale/credential URLs, size and time capped). 2) Wikipedia search, then the best article's summary (hosts only, https, no redirects). 3) Nothing: a lesson and fail_cooldown_s on that topic. If SearXNG is down it falls back to Wikipedia.",
     "enabled": true,
     "phase": 3,
-    "hosts": ["en.wikipedia.org"],
+    "hosts": ["en.wikipedia.org", "192.168.12.126", "100.114.239.111"],
     "timeout_s": 10,
-    "max_result_chars": 300
+    "max_result_chars": 300,
+    "searxng_url": "http://192.168.12.126:8888",
+    "searxng_alt_urls": ["http://100.114.239.111:8888"],
+    "searxng_timeout_s": 6,
+    "searxng_results": 5,
+    "searxng_shown": 3,
+    "fetch_page": true,
+    "page_timeout_s": 8,
+    "page_max_bytes": 262144,
+    "page_max_chars": 300,
+    "snippet_chars": 110,
+    "max_found_chars": 800,
+    "fail_cooldown_s": 21600
   },
   "grid": {
     "_comment": "Phase 5 gridwatch, read-only: proxy /health, /sync/state, the camera feed status, and the latest commit on each repo branch from the public GitHub API (no token). No IPs, links or tokens ever reach the screen or the journal.",
@@ -176,6 +190,11 @@
     "phase": 6,
     "max_pending": 5
   },
+  "threads": {
+    "_comment": "Build 14: ongoing goals (from Pino). max_open 1..10, opens_per_day 0..12; only successful opens count (junk thrown out gives the open back).",
+    "max_open": 5,
+    "opens_per_day": 4
+  },
   "dashboard": {
     "_comment": "Phase 4: cypherd writes a display-only snapshot (~/.local/state/cypher/dash.json) for the HUD panels around the avatar (cypher_panels; Super+C hides/shows) and for the avatar's conversations (cypher_link). Secrets, addresses, links, tokens and house device ids are stripped; camera lines carry first names only.",
     "enabled": true,
@@ -183,23 +202,24 @@
   },
   "actions": {
     "none": {"phase": 1},
-    "journal_thought": {"phase": 1, "max_chars": 280, "per_hour": 3, "min_gap_s": 900, "_comment": "build 13: at most every 15 min (was 20 an hour)"},
-    "show_note": {"phase": 1, "max_chars": 120, "per_hour": 3, "per_day": 12},
+    "journal_thought": {"phase": 1, "max_chars": 280, "per_hour": 4, "min_gap_s": 600, "_comment": "build 14: at most every 10 min, only when something new happened (build 13: 15 min)"},
+    "show_note": {"phase": 1, "max_chars": 120, "per_hour": 6, "per_day": 30},
     "set_avatar_color": {"phase": 1, "per_hour": 2, "_comment": "also only when the mood label changed since the last color, never the same color"},
     "message_zack": {"phase": 3, "max_chars": 200, "per_hour": 3, "per_day": null, "_comment": "never in quiet hours (weeknights). per_day null = no daily cap (Zack, Nov 15)."},
-    "glance_screen": {"phase": 3, "per_hour": 3, "per_day": 12},
-    "look_up": {"phase": 3, "max_chars": 60, "per_hour": 2, "per_day": 6},
+    "glance_screen": {"phase": 3, "per_hour": 6, "per_day": 30},
+    "look_up": {"phase": 3, "max_chars": 60, "per_hour": 4, "per_day": 20},
     "request_account": {"phase": 3, "max_service_chars": 40, "max_why_chars": 160, "per_day": 1, "per_week": 2, "_comment": "never in quiet hours. Service = the site's plain domain with a known TLD; accepted only when the Alpha brain or the hosted backup chose it (never the local 3B). Asks Zack only; Nova creates accounts after he approves. The ntfy ping does not count against message_zack's caps. Cypher must not share its email."},
     "check_grid": {"phase": 5, "per_hour": 2, "per_day": 30, "min_gap_s": 1800, "_comment": "read-only gridwatch report: Alpha, proxy, lease, camera feed, latest grokbotos commits. Build 13: on his own at most every 30 min unless the grid changed since he last looked; Zack asking in a conversation skips the wait"},
-    "x_lookup": {"phase": 5, "per_hour": 2, "per_day": 8, "_comment": "build 12: read-only public X account (bio + latest posts) by handle; deck only; paid from the hosted budget"},
-    "web_search": {"phase": 5, "max_chars": 80, "per_hour": 2, "per_day": 8, "_comment": "build 12: read-only web search; deck only; paid from the hosted budget"},
-    "visit_pino": {"phase": 5, "per_hour": 2, "per_day": 12, "_comment": "build 12: read-only look at Pino's public feed (pinos.world API, no key)"},
-    "go_to": {"phase": 5, "per_hour": 6, "per_day": 60, "_comment": "build 12: walk somewhere in Night City (world.places); allowed in quiet hours"},
+    "x_lookup": {"phase": 5, "per_hour": 4, "per_day": 20, "_comment": "build 12: read-only public X account (bio + latest posts) by handle; deck only; paid from the hosted budget"},
+    "web_search": {"phase": 5, "max_chars": 80, "per_hour": 4, "per_day": 20, "_comment": "build 12: read-only web search; deck only; paid from the hosted budget"},
+    "visit_pino": {"phase": 5, "per_hour": 4, "per_day": 24, "_comment": "build 12: read-only look at Pino's public feed (pinos.world API, no key)"},
+    "go_to": {"phase": 5, "per_hour": 12, "per_day": 100, "_comment": "build 12: walk somewhere in Night City (world.places); allowed in quiet hours"},
     "eat": {"phase": 5, "per_hour": 1, "per_day": 3, "min_gap_s": 10800, "max_energy": 0.8, "_comment": "build 12: a bowl at the noodle stall, +0.20 energy, 3 a day, 3 h apart; build 13: not when energy is 0.8 or more. Simulated trip while world.simulated; otherwise only at the noodle stall"},
     "speak": {"phase": 6, "max_chars": 200, "per_hour": 3, "per_day": 20, "_comment": "phase 6: say it out loud on the deck; Zack at the screen, not quiet hours"},
     "ask_nova": {"phase": 6, "max_chars": 300, "per_day": 3, "_comment": "phase 6: one question to Nova through a local outbox file; 3 a day"},
     "propose_code": {"phase": 6, "max_chars": 600, "max_diff_chars": 4000, "per_day": 1, "per_week": 3, "_comment": "phase 6: local code proposal for Nova to review; never applied automatically"},
-    "rest": {"phase": 5, "per_hour": 4, "per_day": 40, "_comment": "build 12: rest on purpose (+energy). A drained tick that picks none rests instead."}
+    "rest": {"phase": 5, "per_hour": 4, "per_day": 40, "_comment": "build 12: rest on purpose (+energy). A drained tick that picks none rests instead."},
+    "review_lessons": {"phase": 6, "per_hour": 3, "per_day": 24, "_comment": "build 14: go over one lesson (free, local file); only when he has lessons"}
   },
   "avatar_colors": ["white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray"]
 }

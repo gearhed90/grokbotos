@@ -2,6 +2,7 @@
 """grokbot-set-cypher-limit - change one cap in Cypher's locked limits (root only).
 
   sudo grokbot-set-cypher-limit ACTION per_hour|per_day|per_week N|none
+  sudo grokbot-set-cypher-limit journal_thought min_gap_s SECONDS        (build 14)
 
 Usually run through `grokbot-cypher limits set ...`. Checks the value against
 cypherd's LIMIT_BOUNDS (e.g. message_zack per_hour 0..10, per_day 0..50 or none;
@@ -49,7 +50,11 @@ def main(argv):
     except (OSError, ValueError) as e:
         die("cannot read %s: %s" % (DEST, type(e).__name__), 1)
     if action not in L.get("actions", {}):
-        die("%s is not in %s" % (action, DEST), 1)
+        # build 14: an action added in a later image (bootc keeps the edited /etc file) comes from the image copy
+        img = C.image_limits().get("actions", {}).get(action)
+        if not isinstance(img, dict):
+            die("%s is not in %s" % (action, DEST), 1)
+        L.setdefault("actions", {})[action] = img
     before = L["actions"][action].get(key, "unset")
     L["actions"][action][key] = value
     try:

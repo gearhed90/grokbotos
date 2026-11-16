@@ -308,18 +308,24 @@ def t_updates_status():
 # ---------- confirmations ----------
 PENDING = {}; plock = threading.Lock(); CONFIRM_TTL = int(os.environ.get("NOVA_CONFIRM_TTL", "60"))
 
-def make_pending(tool, args, text, run):
+def make_pending(tool, args, text, run, physical=False, ttl=None):
+    """A Yes/No the user answers on the deck. physical=True (power_off): only a click on Confirm in the
+    avatar app, sent over the owner-only confirm socket, can say yes; HTTP, voice and Enter cannot."""
     import secrets
     pid = secrets.token_urlsafe(12)
+    ttl = int(ttl or CONFIRM_TTL)
     with plock:
         now = time.time()
         for k in [k for k, v in PENDING.items() if v["exp"] < now]: del PENDING[k]
-        PENDING[pid] = {"tool": tool, "args": args, "text": text, "run": run, "exp": now + CONFIRM_TTL}
+        PENDING[pid] = {"tool": tool, "args": args, "text": text, "run": run, "exp": now + ttl, "physical": bool(physical)}
     audit(tool, args, "pending")
-    return {"ok": False, "pending": True, "confirm_id": pid, "question": text}
+    r = {"ok": False, "pending": True, "confirm_id": pid, "question": text, "ttl": ttl}
+    if physical:
+        r.update(physical=True, yes_label="Confirm", no_label="Cancel")
+    return r
 
-def confirm(pid, yes):
-    r = _confirm(pid, yes)
+def confirm(pid, yes, physical=False):
+    r = _confirm(pid, yes, physical)
     try:
         cypher_link.record_turn("yes" if yes else "no", r.get("reply") or r.get("text") or "", "typed",
                                 [{"tool": r.pop("_tool", "?"), "args": r.pop("_args", {}), "outcome": r.get("error") or ("ok" if yes else "declined")}],
@@ -329,8 +335,15 @@ def confirm(pid, yes):
     r.pop("_tool", None); r.pop("_args", None)
     return r
 
-def _confirm(pid, yes):
+def _confirm(pid, yes, physical=False):
     with plock:
+        p = PENDING.get(str(pid))
+        if p and p.get("physical") and yes and not physical:
+            # build 14: power_off needs the Confirm click on the deck; a yes from anywhere else is refused and
+            # the dialog stays up (Cancel or the 30 s timeout still close it).
+            audit(p["tool"], p["args"], "refused: needs the on-screen Confirm")
+            return {"error": "needs_click", "text": "Only the Confirm button on Cypher's screen can do that.",
+                    "_tool": p["tool"], "_args": p["args"]}
         p = PENDING.pop(str(pid), None)   # single use
     if not p:
         return {"error": "gone", "text": "That request expired or was already answered."}
@@ -348,6 +361,68 @@ def _confirm(pid, yes):
     except (GbdError, subprocess.SubprocessError, OSError) as e:
         audit(p["tool"], p["args"], "error: " + str(e)[:80], via="confirmed")
         return {"error": "action", "text": "That didn't work: " + str(e)[:120], **tag}
+
+# ---------- power_off (build 14) ----------
+# Zack: "power down" in the deck chat -> the model calls power_off -> a Confirm/Cancel dialog on the deck's
+# own screen (30 s, then it cancels itself) -> only a click on Confirm, sent by the avatar app over
+# CONFIRM_SOCK (owner-only unix socket, peer uid checked), runs it. Then: a shutdown request file for
+# cypherd (it journals "shutdown requested by Zack" on its way down), a clean `systemctl --user stop
+# cypherd` (state saved, lease released as deck_stopped so Alpha takes over), and `systemctl poweroff`,
+# allowed for the grokbot user by one polkit rule (50-grokbot-cypher-poweroff.rules: power-off only).
+# cypherd itself has no power action, so autonomous ticks and the Alpha standby can never reach this.
+POWER_OFF_TTL = int(os.environ.get("NOVA_POWER_OFF_TTL", "30"))
+POWER_OFF_Q = "Shut Cypher down now?"
+CONFIRM_SOCK = os.environ.get("NOVA_CONFIRM_SOCK") or os.path.join(
+    os.environ.get("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid()), "nova", "confirm.sock")
+
+def power_off_pending():
+    return make_pending("power_off", {"action": "poweroff"}, POWER_OFF_Q, do_power_off, physical=True, ttl=POWER_OFF_TTL)
+
+def _sysctl(argv, timeout):
+    if DRY_RUN:
+        log("DRY-RUN", " ".join(argv)); return 0
+    return subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout).returncode
+
+def do_power_off():
+    cypher_link.request_shutdown()
+    _sysctl(["systemctl", "--user", "stop", "cypherd.service"], 45)     # saves state, journals, hands off to Alpha
+    rc = _sysctl(["systemctl", "poweroff"], 20)
+    if rc != 0:
+        _sysctl(["systemctl", "--user", "start", "cypherd.service"], 20)  # never leave him off without a shutdown
+        raise OSError("the shutdown was refused (rc %d)" % rc)
+    return "Shutting down. Alpha keeps me going until the deck is back."
+
+def serve_confirm_socket():
+    """The avatar app's Confirm/Cancel clicks: one JSON line {"id", "yes", "via": "click"} per connection.
+    Owner-only (0700 dir, 0600 socket, peer uid must be ours)."""
+    import socketserver, socket as _s, struct
+    d = os.path.dirname(CONFIRM_SOCK)
+    os.makedirs(d, mode=0o700, exist_ok=True); os.chmod(d, 0o700)
+    try: os.unlink(CONFIRM_SOCK)
+    except FileNotFoundError: pass
+    class CH(socketserver.StreamRequestHandler):
+        def handle(self):
+            try:
+                cred = self.request.getsockopt(_s.SOL_SOCKET, _s.SO_PEERCRED, struct.calcsize("3i"))
+                if struct.unpack("3i", cred)[1] != os.getuid():
+                    return
+                b = json.loads(self.rfile.readline(1024) or b"{}")
+                if b.get("via") != "click":
+                    r = {"error": "bad", "text": "clicks only"}
+                else:
+                    r = confirm(str(b.get("id"))[:64], b.get("yes") is True, physical=True)
+            except (ValueError, OSError, TypeError) as e:
+                r = {"error": "bad", "text": type(e).__name__}
+            try: self.wfile.write((json.dumps(r) + "\n").encode())
+            except OSError: pass
+    old = os.umask(0o177)
+    try:
+        srv = socketserver.ThreadingUnixStreamServer(CONFIRM_SOCK, CH)
+    finally:
+        os.umask(old)
+    os.chmod(CONFIRM_SOCK, 0o600)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
 
 # ---------- tool dispatch ----------
 def _int(v, lo, hi, name):
@@ -436,6 +511,8 @@ def call_tool(name, a):
         elif name in cypher_link.QUEUEABLE:
             # Only queued for cypherd: its validator and locked caps decide. Never an approval.
             r = cypher_link.queue_action(name, {k: a.get(k) for k in cypher_link.QUEUEABLE[name]})
+        elif name == "power_off" or (name == "power" and a.get("action") == "shutdown"):
+            r = power_off_pending()
         elif name == "power":
             act = a.get("action")
             m = {"lock": ("lock", "Lock the screen?", "Locking."), "restart": ("reboot", "Restart the Pi?", "Restarting."),
@@ -475,13 +552,15 @@ def tool_schema():
           {"ssid": {"type": "string", "maxLength": 32}}, ["ssid"]),
         f("set_avatar", "Change how you (the on-screen avatar) look: shape and/or color.",
           {"shape": {"type": "string", "enum": avatar_shapes.SHAPE_IDS}, "color": {"type": "string", "enum": avatar_shapes.COLOR_IDS}}),
-        f("power", "Lock the screen, restart or shut down. Asks the user first.", {"action": {"type": "string", "enum": ["lock", "restart", "shutdown"]}}, ["action"]),
+        f("power", "Lock the screen or restart. Asks the user first. (To shut down use power_off.)", {"action": {"type": "string", "enum": ["lock", "restart", "shutdown"]}}, ["action"]),
+        f("power_off", "Shut yourself (this deck) down, only when Zack asks you in this chat to power down or shut down. "
+          "It puts a Confirm/Cancel dialog on your screen; nothing happens unless he clicks Confirm there within 30 seconds.", {}),
         f("request_account", "Ask Zack for an account on a website, given as its plain domain like github.com (queued; your locked limits check it; Zack approves only through Nova). "
           "Never include your email address or a password.",
           {"service": {"type": "string", "maxLength": 40}, "why": {"type": "string", "maxLength": 160}}, ["service", "why"]),
-        f("look_up", "Look a topic up on Wikipedia (queued; the summary reaches you in a minute or two).",
+        f("look_up", "Free search for a subject: SearXNG on Alpha, then Wikipedia (queued; what he found reaches you in a minute or two).",
           {"topic": {"type": "string", "maxLength": 60}}, ["topic"]),
-        f("web_search", "Search the web, read-only (queued; a short summary reaches you in a minute or two).",
+        f("web_search", "Paid, budgeted web search for broad or current topics, read-only (queued; a short summary reaches you in a minute or two).",
           {"query": {"type": "string", "maxLength": 80}}, ["query"]),
         f("x_lookup", "Read a public X account's bio and latest posts by handle, read-only; you cannot post, follow or message "
           "(queued; the summary reaches you in a minute or two).", {"handle": {"type": "string", "maxLength": 16}}, ["handle"]),
@@ -544,7 +623,9 @@ def handle_prompt(prompt, emit, via="typed"):
                 with hlock:
                     history.extend([{"role": "user", "content": prompt}, {"role": "assistant", "content": pend["question"]}])
                     del history[:-HISTORY_MAX]
-                emit({"confirm": {"id": pend["confirm_id"], "text": pend["question"], "ttl": CONFIRM_TTL}})
+                cf = {"id": pend["confirm_id"], "text": pend["question"], "ttl": pend.get("ttl") or CONFIRM_TTL}
+                if pend.get("physical"): cf.update(physical=True, yes_label=pend.get("yes_label"), no_label=pend.get("no_label"))
+                emit({"confirm": cf})
                 turn(pend["question"], "asks_confirm"); return
             m = chat(convo, key)
             calls = m.get("tool_calls") or []
@@ -1153,5 +1234,9 @@ if __name__ == "__main__":
     watch_focus()
     if not DRY_RUN:
         wake_word_hook()          # local wake word, only if turned on and a detector + mic exist
+    try:
+        serve_confirm_socket()    # build 14: on-screen Confirm clicks (power_off)
+    except OSError as e:
+        log("confirm socket:", type(e).__name__)
     log(f"novad on http://127.0.0.1:{PORT}/ model={MODEL} dry_run={DRY_RUN}")
     ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()

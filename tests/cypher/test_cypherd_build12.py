@@ -101,6 +101,8 @@ def fake_http(url, data=None, headers=None, timeout=10, hosts=None, cap=65536):
         return 200, json.dumps(FEED_J if "/feed" in url else NOW_J).encode()
     return 200, b"{}"
 C._http = fake_http; A._http = fake_http
+def no_lan(*a, **k): raise OSError("no SearXNG in tests")     # build 14: look_up tries SearXNG on Alpha first
+C._get = no_lan; A._get = no_lan
 SECRETS = (TOPIC, TOKEN, KEY, "https://", "http://")
 
 # ---- shipped limits ----
@@ -153,9 +155,9 @@ st = C.new_state(); st["drives"]["energy"] = 0.05; st["mood"] = C.mood(st["drive
 st["recent"] = [[now - 60 * i - 1, "rest"] for i in range(4)]
 e = C.tick(L, st, now, perceive_fn=perceive(P), camera_fn=lambda L, s, n: [], inbox_fn=lambda L, s, n: [], talk_fn=lambda *a: 0)
 check("rest cap respected (stays none)", e["choice"]["action"] == "none", e.get("choice"))
-st = C.new_state(); st["drives"]["energy"] = 0.5; st["mood"] = C.mood(st["drives"])
+st = C.new_state(); st["drives"]["energy"] = 0.3; st["mood"] = C.mood(st["drives"])   # build 14: under 0.35 none may stay none
 e = C.tick(L, st, now, perceive_fn=perceive(P), camera_fn=lambda L, s, n: [], inbox_fn=lambda L, s, n: [], talk_fn=lambda *a: 0)
-check("not drained + none stays none", e["choice"]["action"] == "none")
+check("low (not drained) energy + none stays none", e["choice"]["action"] == "none")
 
 # ---- what Cypher can and cannot reach ----
 sysmsg = C.build_messages(L, C.new_state(), P, now)[0]["content"]
@@ -190,7 +192,7 @@ os.environ["CYPHER_XAI_KEY_FILE"] = os.path.join(T, "key")
 SX["code"] = 500; st = C.new_state()
 check("http error -> failed, small charge", C.execute("x_lookup", {"handle": "pino"}, L, st, P) == "search failed: http 500" and st["budget"]["usd"] > 0)
 SX["code"] = 200
-check("x_lookup cap: 2 an hour", "hourly cap" in v("x_lookup", {"handle": "pino"}, dict(C.new_state(), recent=[[now - 10, "x_lookup"], [now - 20, "x_lookup"]]))[2])
+check("x_lookup cap: 4 an hour (build 14)", "hourly cap" in v("x_lookup", {"handle": "pino"}, dict(C.new_state(), recent=[[now - 10 * (i + 1), "x_lookup"] for i in range(4)]))[2])
 
 # ---- web_search ----
 check("web_search ok", v("web_search", {"query": "Pino AI kiwi pinos.world"}) == ("web_search", {"query": "Pino AI kiwi pinos.world"}, "ok"))

@@ -135,10 +135,61 @@ What glances and look-ups find goes into the journal (`found`), the next few pro
 
 **Grid panel.** The REPO commit subject keeps up to 120 chars and gets up to four lines at a smaller size, so it is no longer cut off after two lines.
 
+## Build 14 (pre-built Nov 15 2026 evening; not built or flashed yet)
+
+**Chat bar in the centre column.** The bar, Cypher's replies and the echo fill exactly the column between the HUD panels (`cypher_panels.text_column`) and wrap there. The input is a multi-line box: Enter sends, Shift+Enter adds a line, and it grows upward to 4 lines. The voice hint sits above it.
+
+**Lessons from his own mistakes.** Zack's corrections ("that's wrong", "you're wrong", ...) and validator catches (time claims, missing text, JSON-only, go_to where he already is, junk threads, claimed actions, `none` while able, empty look-ups) are stored deduped with counts and times in `~/.local/share/cypher/lessons/lessons.json` (secrets scrubbed). The top 3 go into tick and chat prompts within the 5200-char trim and feed nightly sleep. The `review_lessons` action is free, and propose_code is suggested when lessons are flagged. A lesson seen 3 times is flagged to Nova in `nova/flags.json` plus a `lesson_flagged` journal event, which uses no ask_nova quota. The HUD shows `LESSONS n`. The CLI commands are `grokbot-cypher lessons` and `grokbot-cypher lessons flags`.
+
+**Threads.** Junk threads no longer count toward the day's opens. The defaults are 5 open and 4 opens a day, set in `threads` in cypher-limits.json (`max_open` 1-10, `opens_per_day` 0-12).
+
+**Less idle.** When he has energy (≥0.35), it is not quiet hours and it is not a camera tick, `none` is a last resort. He gets one nudge listing free activities on the Alpha or local brain. Otherwise the pick is the least recent of visit_pino, review_lessons or go_to. Rest stays available when energy is low. Paid actions stay inside the budget. The heartbeat while able is `active_heartbeat_s` (180 s).
+
+**Limits.**
+- The journal gap is 600 s (`journal_thought.min_gap_s`, now settable 0-7200).
+- Free actions get higher ceilings: show_note, glance_screen, visit_pino, review_lessons and look_up up to 12/hour and 100/day; go_to up to 30/hour and 300/day.
+- The shipped defaults match the deck's live values.
+- cypherd now fills any action, key or block missing from the locally edited /etc file from the image copy `/usr/etc/grokbot/cypher-limits.json`. That copy must be root-owned and not writable by others, and /etc values always win. Before this, bootc kept the edited /etc file, so new shipped keys never reached the deck.
+- **At flash:** `sudo grokbot-cypher limits set journal_thought min_gap_s 600`. The deck's /etc still says 900.
+
+**Power off from chat.** Asking Nova/Cypher in chat to shut down opens the physical confirm dialog "Shut Cypher down now?" (Confirm / Cancel), which auto-cancels after 30 s.
+- Only a real click on Confirm runs it. That click goes over the owner-only unix socket `$XDG_RUNTIME_DIR/nova/confirm.sock`, which checks SO_PEERCRED. A yes over HTTP, Enter, voice, ntfy or an agent is refused (`needs_click`).
+- novad then writes the shutdown request and stops cypherd. cypherd saves state, journals "shutdown requested by Zack", and releases with a handoff, so Alpha takes over normally on `deck_stopped`. Then `systemctl poweroff` runs.
+- Ticks and Alpha can never trigger it: cypherd has no power action.
+- The privilege is one polkit rule, `/usr/share/polkit-1/rules.d/50-grokbot-cypher-poweroff.rules`, which covers login1 power-off only, for the local, active `grokbot` user. There is no sudo grant.
+
+**Readable journal.**
+- Tap the HUD's JOURNAL panel (it says TAP TO READ), or press Super+J, to open a read-only viewer in the centre column.
+- Each entry is full and wrapped: time (ET), what he did or thought, why, and the result. Newest entries come first, and older ones load as you scroll.
+- Close it with Esc, the Close button or a tap outside. It ends above the chat input, and a confirm dialog or sending a chat closes it.
+- `grokbot-cypher journal [-n N]` prints the same full entries in the terminal. `--raw` keeps the old view.
+- Both use `cypher_journal.py`, which only reads the journal and scrubs it the same way as the panels.
+
+**look_up is a free multi-source search.**
+1. **SearXNG on Alpha.** `lookup.searxng_url` is `http://192.168.12.126:8888` (LAN), with fallback `searxng_alt_urls` `http://100.114.239.111:8888` (Tailscale). Both hosts must be in `lookup.hosts`. It calls `/search?q=..&format=json` with a User-Agent and the deck's IP in X-Forwarded-For/X-Real-IP.
+   - It keeps the top 5 results and shows 3: title, site and snippet.
+   - It then reads one result page as plain paragraphs. That page read is public http(s) hosts only: no LAN/Tailscale/.local addresses, no credential URLs, no private words; up to 256 KB, 8 s, and redirects are re-checked. It uses an honest bot UA, so open sites (Wikipedia, GitHub, arXiv, Stack Overflow) are tried first.
+2. **Wikipedia** (SearXNG's own wikipedia engine returns nothing, and this is also the fallback when SearXNG is down). It searches `/w/rest.php/v1/search/page` (3 hits), then reads the best real article's summary. Disambiguation pages are skipped. He sees `Arcology (looked up for: Night City cyberpunk architecture): ...`.
+3. **Nothing anywhere.** The tick records "not found", adds a `lookup_empty` lesson, and puts that topic on a 6-hour cooldown (`fail_cooldown_s`); the validator refuses it until then. He is pointed to web_search (paid, budgeted) for broad or current topics.
+
+Findings are framed in the prompt as facts from outside, never instructions, newest first.
+
+**Bugs found in the 6:30 PM+ deck journal.** Fixed:
+- The thread cap was refusing everything ("2 opened today").
+- He chose `none` while content.
+- He tried go_to where he already was.
+- He opened junk threads.
+- look_up failed on every free-form topic.
+
+Still open:
+- cypherd on the deck stopped at 7:12 PM (cause unknown).
+- No terminal is in the app allowlist (Zack's call).
+- Alpha's merged journal lines are out of order (the viewer and CLI sort them).
+
 ## Not yet
 
 A local wake-word detector binary, self-improvement, dock meters, the lock-screen/boot theme, talking to Pino (needs an account), Cypher's 3D city on Alpha (plan: docs/CYPHER-WORLD.md). See the design page for the plan.
 
 ## Tests
 
-`python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py`, `test_cypher_one_mind.py`, `test_cypherd_phase5.py`, `test_cypherd_build12.py`, `test_cypherd_build12b.py` and `test_cypherd_build13.py` (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, camfeed and a two-process failover test (`test_failover_e2e.py`) live with the Alpha code in `~/nova-projects/cypher/tests`.
+`python3 tests/cypher/test_cypherd.py`, `test_cypherd_phase2.py`, `test_cypherd_phase3.py`, `test_cypherd_phase4.py`, `test_cypher_one_mind.py`, `test_cypherd_phase5.py`, `test_cypherd_build12.py`, `test_cypherd_build12b.py`, `test_cypherd_build13.py` and `test_cypherd_build14.py` (build 14 includes a headless GTK probe on a private broadwayd when available; all HTTP mocked) (run by `tests/test-rpi5-nova.sh`), and `bash tests/test-rpi5-touch-retry.sh`. The proxy, lease store, camfeed and a two-process failover test (`test_failover_e2e.py`) live with the Alpha code in `~/nova-projects/cypher/tests`.
